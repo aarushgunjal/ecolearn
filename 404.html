@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ecoLearn | Redirecting…</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta http-equiv="refresh" content="0; url=/" />
+    <script>
+      // SPA fallback for GitHub Pages
+      (function() {
+        var redirect = sessionStorage.getItem('ghspa:redirect');
+        sessionStorage.removeItem('ghspa:redirect');
+        if (redirect) {
+          var parts = JSON.parse(redirect);
+          var path = parts.path || '/';
+          var query = parts.query || '';
+          var hash = parts.hash || '';
+          var newUrl = '/' + path.replace(/^\//, '') + query + hash;
+          window.location.replace(newUrl);
+        } else {
+          // For direct hits, save state then go to root
+          var l = window.location;
+          sessionStorage.setItem(
+            'ghspa:redirect',
+            JSON.stringify({ path: l.pathname, query: l.search, hash: l.hash })
+          );
+          window.location.replace('/');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    Redirecting…
+  </body>
+</html>
