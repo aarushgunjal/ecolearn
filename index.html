@@ -6,6 +6,27 @@
     <title>EcoLearn - Learn to Save Our Planet</title>
     <link rel="icon" type="image/x-icon" href="/public/favicon.ico">
     <meta name="description" content="Gamified eco-friendly learning app inspired by Duolingo. Complete challenges, earn badges, and learn sustainable practices to help save our planet." />
+    <script>
+      // Handle redirect from 404.html (spa-github-pages)
+      (function() {
+        var l = window.location;
+        var params = new URLSearchParams(l.search);
+        var p = params.get('p'); // original path
+        var q = params.get('q'); // original search without leading '?'
+        var h = params.get('h'); // original hash without leading '#'
+        if (p) {
+          var newPath = '/' + decodeURIComponent(p);
+          var newSearch = q ? ('?' + decodeURIComponent(q)) : '';
+          var newHash = h ? ('#' + decodeURIComponent(h)) : '';
+          var newUrl = newPath + newSearch + newHash;
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', newUrl);
+          } else {
+            l.replace(newUrl);
+          }
+        }
+      })();
+    </script>
   </head>
 
   <body>

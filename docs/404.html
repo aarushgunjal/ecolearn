@@ -6,14 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script type="text/javascript">
       // https://github.com/rafrex/spa-github-pages
-      // Redirects all 404s to index.html with the original path in the query
       (function() {
         var l = window.location;
         l.replace(
           l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
-          '/?p=' +
-          // preserve path, search, and hash
-          encodeURIComponent(l.pathname.replace(/^\//, '')) +
+          '/?p=' + encodeURIComponent(l.pathname.replace(/^\//, '')) +
           (l.search ? '&q=' + encodeURIComponent(l.search.substring(1)) : '') +
           (l.hash ? '&h=' + encodeURIComponent(l.hash.substring(1)) : '')
         );
