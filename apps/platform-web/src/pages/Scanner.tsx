@@ -22,6 +22,7 @@ import { useAchievements } from "@/hooks/useAchievements";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { openRouterJson } from "@/lib/openrouter";
+import { ScanFeedback } from "@/components/ScanFeedback";
 
 type ScanResult = {
   item: string;
@@ -88,6 +89,7 @@ export default function Scanner() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const { addXP, incrementScans, updateStreak, progress, refreshProgress } =
@@ -136,7 +138,12 @@ export default function Scanner() {
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (!user) {
+      toast({ title: "Sign in to scan", description: "An account keeps scans private and protects the classifier service.", variant: "destructive" });
+      return;
+    }
     setUploadedImage(URL.createObjectURL(file));
+    setImageFile(file);
     setResult(null);
     setIsScanning(true);
     const delayedNotice = setTimeout(
@@ -150,12 +157,8 @@ export default function Scanner() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const response = await fetch(
-        "https://aarugunj-waste-classifier.hf.space/predict",
-        { method: "POST", body: formData },
-      );
-      if (!response.ok) throw new Error("Analysis failed");
-      const data = await response.json();
+      const { data, error } = await supabase.functions.invoke("classify-scan", { body: formData });
+      if (error) throw error;
       clearTimeout(delayedNotice);
       await finish({
         item: data.item || "Unknown item",
@@ -200,6 +203,7 @@ export default function Scanner() {
   const reset = () => {
     setResult(null);
     setUploadedImage(null);
+    setImageFile(null);
     setSearchQuery("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -322,7 +326,7 @@ export default function Scanner() {
                   </p>
                 </div>
               )}
-              {result && <ResultCard result={result} reset={reset} />}
+              {result && <><ResultCard result={result} reset={reset} /><ScanFeedback result={result} imageFile={imageFile} /></>}
             </div>
           </div>
         </div>
