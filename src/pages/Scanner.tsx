@@ -20,6 +20,7 @@ import { useProgress } from "@/hooks/useProgress";
 import { useAchievements } from "@/hooks/useAchievements";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { ScanFeedback } from "@/components/ScanFeedback";
 
 const compressImage = (
   file: File,
@@ -73,6 +74,7 @@ export default function Scanner() {
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -111,6 +113,11 @@ export default function Scanner() {
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (!user) {
+      toast({ title: "Sign in to scan", description: "An account keeps scans private and protects the classifier service.", variant: "destructive" });
+      return;
+    }
+    setImageFile(file);
 
     toast({
       title: "Analyzing image...",
@@ -134,17 +141,9 @@ export default function Scanner() {
         new File([compressedBlob as Blob], file.name, { type: "image/jpeg" })
       );
 
-      const response = await fetch(
-        "https://aarugunj-waste-classifier.hf.space/predict",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
       clearTimeout(coldStartTimeout);
-
-      const data = await response.json();
+      const { data, error } = await supabase.functions.invoke("classify-scan", { body: formData });
+      if (error) throw error;
       const scanResult = {
         item: data.item || "Unknown Item",
         recyclable: data.recyclable || false,
@@ -371,11 +370,13 @@ export default function Scanner() {
                 <Button
                   onClick={() => {
                     setResult(null);
+                    setImageFile(null);
                   }}
                   className="w-full bg-gradient-to-r from-eco-primary to-eco-secondary text-white"
                 >
                   Scan Another Item
                 </Button>
+                <ScanFeedback result={result} imageFile={imageFile} />
               </div>
             )}
           </div>
