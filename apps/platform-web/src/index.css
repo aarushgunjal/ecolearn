@@ -1,0 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root { --background: 80 20% 97%; --foreground: 145 22% 12%; --card: 0 0% 100%; --card-foreground: 145 22% 12%; --popover: 0 0% 100%; --popover-foreground: 145 22% 12%; --primary: 141 52% 29%; --primary-foreground: 0 0% 100%; --secondary: 96 45% 91%; --secondary-foreground: 145 22% 12%; --muted: 90 18% 94%; --muted-foreground: 145 10% 43%; --accent: 96 45% 91%; --accent-foreground: 145 22% 12%; --destructive: 0 70% 52%; --destructive-foreground: 0 0% 100%; --border: 90 18% 88%; --input: 90 18% 88%; --ring: 141 52% 29%; --success: 141 52% 40%; --success-foreground: 0 0% 100%; --warning: 38 88% 54%; --warning-foreground: 145 22% 12%; --eco-primary: 141 52% 29%; --eco-secondary: 96 45% 78%; --eco-tertiary: 38 80% 65%; --radius: 1rem; }
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground antialiased; font-family: 'DM Sans', sans-serif; }
+  button, input { font: inherit; }
+}
+.display-serif { font-family: 'Playfair Display', Georgia, serif; }

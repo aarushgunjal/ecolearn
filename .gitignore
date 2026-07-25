@@ -10,6 +10,13 @@ lerna-debug.log*
 node_modules
 dist-ssr
 *.local
+.expo/
+apps/*/android/
+apps/*/ios/
+apps/*/.expo/
+apps/*/.claude/
+apps/*/CLAUDE.md
+apps/*/AGENTS.md
 
 # Editor directories and files
 .vscode/*
