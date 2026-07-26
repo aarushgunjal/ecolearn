@@ -2,6 +2,10 @@
 
 User feedback is a measurement and data-collection loop, not an automatic retraining trigger.
 
+## Kaggle-ready export
+
+An admin can now use **Profile → Admin review → Export for Kaggle**. The server exports only consented, approved rows with an exact reviewer label and issues one-hour private image links. Run `training/prepare_kaggle_dataset.py` immediately after the download; it creates grouped `train`, `valid`, and `test` folders for a private Kaggle dataset. This deliberately automates collection and dataset preparation, but not model promotion: a human must review metrics before a new model can replace production.
+
 1. Export only `scan_feedback` rows with `training_consent = true` and `review_status = 'approved'`.
 2. A reviewer verifies the image, item label, and disposal correction. Reject duplicates, unclear photos, personal information, and examples outside the model label set.
 3. Download the matching object from the private `training-feedback` bucket into an offline review workspace. Keep the database row ID as the example ID; do not use email addresses or user IDs in the training manifest.

@@ -8,3 +8,21 @@ verify_jwt = true
 
 [functions.review-feedback]
 verify_jwt = true
+
+[functions.export-training-manifest]
+verify_jwt = true
+
+[functions.lookup-barcode]
+verify_jwt = true
+
+[functions.find-disposal-sites]
+verify_jwt = true
+
+[functions.read-label]
+verify_jwt = true
+
+[functions.claim-training-batch]
+verify_jwt = false
+
+[functions.complete-training-batch]
+verify_jwt = false

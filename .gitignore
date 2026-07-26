@@ -19,6 +19,12 @@ apps/*/.claude/
 apps/*/CLAUDE.md
 apps/*/AGENTS.md
 
+# Local ML automation outputs
+__pycache__/
+*.py[cod]
+.training-work/
+apps/platform-web/training/ecolearn-feedback-dataset/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

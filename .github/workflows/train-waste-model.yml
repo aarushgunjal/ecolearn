@@ -1,0 +1,35 @@
+name: Train EcoLearn classifier
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  train-approved-batch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      TRAINING_AUTOMATION_TOKEN: ${{ secrets.TRAINING_AUTOMATION_TOKEN }}
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      KAGGLE_FEEDBACK_DATASET: ${{ vars.KAGGLE_FEEDBACK_DATASET }}
+      KAGGLE_BASE_DATASET: ${{ vars.KAGGLE_BASE_DATASET }}
+      KAGGLE_KERNEL: ${{ vars.KAGGLE_KERNEL }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_SPACE_REPO: ${{ vars.HF_SPACE_REPO }}
+      HF_SPACE_MODEL_PATH: ${{ vars.HF_SPACE_MODEL_PATH }}
+      MIN_MACRO_F1: "0.80"
+      MIN_HAZARDOUS_RECALL: "0.90"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install automation dependencies
+        run: python -m pip install --upgrade pip requests kaggle kagglehub huggingface_hub
+      - name: Claim, train, safety-check, and promote one queued batch
+        run: python apps/platform-web/training/automate_training.py

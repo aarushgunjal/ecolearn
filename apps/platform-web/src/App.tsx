@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
 import {
-  Bell,
   BookOpen,
   Flame,
   Leaf,
-  MoreHorizontal,
   ScanLine,
   Trophy,
   UserRound,
@@ -21,17 +19,7 @@ import {
   Profile,
 } from "@/components/EcoExperience";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  Admin,
-  Community,
-  LocalRules,
-  Notifications,
-  Organization,
-  ScannerTools,
-  Schools,
-} from "@/components/PlatformHubs";
 import { useProgress } from "@/hooks/useProgress";
-import { AdminReview } from "@/components/AdminReview";
 
 const navigation = [
   { label: "Home", icon: Leaf },
@@ -45,23 +33,13 @@ const navigation = [
 function AppShell() {
   const [active, setActive] = useState("Home");
   const [authOpen, setAuthOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const { user } = useAuth();
   const { progress } = useProgress();
 
   useEffect(() => {
-    const handleOpenNotifications = () => setActive("Notifications");
     const handleOpenLearn = () => setActive("Learn");
-    window.addEventListener(
-      "ecolearn-open-notifications",
-      handleOpenNotifications,
-    );
     window.addEventListener("ecolearn-open-learn", handleOpenLearn);
     return () => {
-      window.removeEventListener(
-        "ecolearn-open-notifications",
-        handleOpenNotifications,
-      );
       window.removeEventListener("ecolearn-open-learn", handleOpenLearn);
     };
   }, []);
@@ -96,25 +74,11 @@ function AppShell() {
                 {label}
               </button>
             ))}
-            <button
-              onClick={() => setMoreOpen(!moreOpen)}
-              className={`grid h-8 w-8 place-items-center rounded-full ${moreOpen ? "bg-[#e8f3df] text-[#173d2a]" : "text-[#66746a]"}`}
-              aria-label="More EcoLearn tools"
-            >
-              <MoreHorizontal size={18} />
-            </button>
           </nav>
           <div className="flex items-center gap-3">
             <button className="hidden items-center gap-1.5 rounded-full bg-[#fff3d5] px-3 py-2 text-sm font-semibold text-[#976700] sm:flex">
               <Flame size={16} fill="currentColor" />{" "}
               {progress?.streak_days ?? 0} day streak
-            </button>
-            <button
-              onClick={() => setActive("Notifications")}
-              className="grid h-10 w-10 place-items-center rounded-full bg-white text-[#5f6d63] ring-1 ring-[#e5e9e1]"
-              aria-label="Notifications"
-            >
-              <Bell size={18} />
             </button>
             {user ? (
               <button
@@ -147,13 +111,6 @@ function AppShell() {
           ) : (
             <SignInPrompt onSignIn={() => setAuthOpen(true)} />
           ))}
-        {active === "Rules" && <LocalRules />}
-        {active === "Community" && <Community />}
-        {active === "Schools" && <Schools />}
-        {active === "Organization" && <Organization />}
-        {active === "Admin" && <AdminReview />}
-        {active === "Tools" && <ScannerTools />}
-        {active === "Notifications" && <Notifications />}
       </main>
 
       <nav
@@ -171,26 +128,6 @@ function AppShell() {
           </button>
         ))}
       </nav>
-      {moreOpen && (
-        <div className="fixed inset-x-4 top-[84px] z-40 mx-auto grid max-w-xl grid-cols-2 gap-2 rounded-2xl border border-[#dfe6dc] bg-white p-3 shadow-2xl sm:grid-cols-3">
-          {[
-            ["Admin", "Admin portal"],
-            ["Tools", "Scan tools"],
-            ["Notifications", "Notifications"],
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => {
-                setActive(key);
-                setMoreOpen(false);
-              }}
-              className="rounded-xl px-3 py-3 text-left text-sm font-semibold text-[#476151] hover:bg-[#f0f7ed]"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
       {authOpen && <AuthDialog close={() => setAuthOpen(false)} />}
     </div>
   );

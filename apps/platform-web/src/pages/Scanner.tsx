@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { openRouterJson } from "@/lib/openrouter";
 import { ScanFeedback } from "@/components/ScanFeedback";
+import { ScanUtilities } from "@/components/ScanUtilities";
 
 type ScanResult = {
   item: string;
@@ -130,7 +131,12 @@ export default function Scanner() {
     const file = event.target.files?.[0];
     if (!file) return;
     if (!user) {
-      toast({ title: "Sign in to scan", description: "An account keeps scans private and protects the classifier service.", variant: "destructive" });
+      toast({
+        title: "Sign in to scan",
+        description:
+          "An account keeps scans private and protects the classifier service.",
+        variant: "destructive",
+      });
       return;
     }
     setUploadedImage(URL.createObjectURL(file));
@@ -148,7 +154,9 @@ export default function Scanner() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const { data, error } = await supabase.functions.invoke("classify-scan", { body: formData });
+      const { data, error } = await supabase.functions.invoke("classify-scan", {
+        body: formData,
+      });
       if (error) throw error;
       clearTimeout(delayedNotice);
       await finish({
@@ -317,7 +325,12 @@ export default function Scanner() {
                   </p>
                 </div>
               )}
-              {result && <><ResultCard result={result} reset={reset} /><ScanFeedback result={result} imageFile={imageFile} /></>}
+              {result && (
+                <>
+                  <ResultCard result={result} reset={reset} />
+                  <ScanFeedback result={result} imageFile={imageFile} />
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -381,6 +394,7 @@ export default function Scanner() {
           </div>
         </aside>
       </section>
+      <ScanUtilities />
     </div>
   );
 }

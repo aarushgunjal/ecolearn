@@ -12,6 +12,9 @@ import {
   Lock,
   Play,
   Recycle,
+  Save,
+  Settings,
+  ShieldCheck,
   Sparkles,
   Target,
   Trophy,
@@ -25,6 +28,7 @@ import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { useProgress } from "@/hooks/useProgress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { AdminReview } from "@/components/AdminReview";
 
 const lessons = [
   {
@@ -439,7 +443,9 @@ export function Learn() {
       });
       return;
     }
-    const { error } = await supabase.rpc("complete_lesson", { p_lesson_id: lesson.id });
+    const { error } = await supabase.rpc("complete_lesson", {
+      p_lesson_id: lesson.id,
+    });
     if (error) {
       toast({
         title: "Couldn’t save completion",
@@ -828,6 +834,74 @@ export function Profile() {
   const { user, signOut } = useAuth();
   const { progress } = useProgress();
   const { achievements, userAchievements } = useAchievements();
+  const { toast } = useToast();
+  const [displayName, setDisplayName] = useState(
+    user?.user_metadata?.full_name || user?.user_metadata?.name || "",
+  );
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    let live = true;
+    void Promise.all([
+      supabase
+        .from("user_settings")
+        .select("display_name, notifications_enabled")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      supabase.rpc("is_app_admin"),
+    ]).then(([settingsResult, adminResult]) => {
+      if (!live) return;
+      if (settingsResult.data) {
+        setDisplayName(
+          settingsResult.data.display_name ||
+            user.user_metadata?.full_name ||
+            "",
+        );
+        setNotificationsEnabled(
+          settingsResult.data.notifications_enabled ?? true,
+        );
+      }
+      setIsAdmin(adminResult.data === true);
+    });
+    return () => {
+      live = false;
+    };
+  }, [user]);
+
+  const saveSettings = async () => {
+    if (!user) return;
+    setSavingSettings(true);
+    try {
+      const cleanName = displayName.trim().slice(0, 80);
+      const [{ error: settingsError }, { error: authError }] =
+        await Promise.all([
+          supabase.from("user_settings").upsert({
+            user_id: user.id,
+            display_name: cleanName || null,
+            notifications_enabled: notificationsEnabled,
+            updated_at: new Date().toISOString(),
+          }),
+          supabase.auth.updateUser({ data: { full_name: cleanName } }),
+        ]);
+      if (settingsError || authError) throw settingsError || authError;
+      toast({
+        title: "Profile updated",
+        description: "Your preferences are saved.",
+      });
+    } catch (error) {
+      console.error("Unable to save profile settings", error);
+      toast({
+        title: "Couldn't save settings",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingSettings(false);
+    }
+  };
   const unlockedAchievements = userAchievements
     .map((entry) => entry.achievements ?? entry.achievement ?? entry)
     .filter(Boolean);
@@ -870,17 +944,25 @@ export function Profile() {
           </span>
         </div>
         <div className="mt-5 flex flex-wrap gap-4">
-          {unlockedAchievements.slice(0, 3).map((achievement: { id?: string; achievement_id?: string; title?: string }) => (
-            <Badge
-              key={
-                achievement.id ||
-                achievement.achievement_id ||
-                achievement.title
-              }
-              icon={<Trophy />}
-              label={achievement.title || "Unlocked"}
-            />
-          ))}
+          {unlockedAchievements
+            .slice(0, 3)
+            .map(
+              (achievement: {
+                id?: string;
+                achievement_id?: string;
+                title?: string;
+              }) => (
+                <Badge
+                  key={
+                    achievement.id ||
+                    achievement.achievement_id ||
+                    achievement.title
+                  }
+                  icon={<Trophy />}
+                  label={achievement.title || "Unlocked"}
+                />
+              ),
+            )}
           {unlockedAchievements.length === 0 ? (
             <>
               <Badge icon={<Recycle />} label="First scan" muted />
@@ -890,6 +972,62 @@ export function Profile() {
           ) : null}
         </div>
       </section>
+      <section className="mt-7 rounded-[1.5rem] border border-[#e0e7dc] bg-white p-6">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#edf7e8] text-[#347e45]">
+            <Settings size={19} />
+          </span>
+          <div>
+            <h2 className="font-semibold">Profile & settings</h2>
+            <p className="text-sm text-[#718076]">
+              Choose how EcoLearn recognizes you.
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+          <label className="block text-sm font-semibold text-[#405346]">
+            Display name
+            <input
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              maxLength={80}
+              placeholder="How should we call you?"
+              className="mt-2 w-full rounded-xl border border-[#dce5d9] bg-[#fbfcfa] px-4 py-3 font-normal outline-none focus:border-[#4b9656]"
+            />
+          </label>
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#e0e7dc] px-4 py-3 text-sm text-[#526257]">
+            <input
+              type="checkbox"
+              checked={notificationsEnabled}
+              onChange={(event) =>
+                setNotificationsEnabled(event.target.checked)
+              }
+              className="h-4 w-4 accent-[#347e45]"
+            />
+            Product updates
+          </label>
+        </div>
+        <p className="mt-3 text-xs leading-5 text-[#7c897f]">
+          Your sign-in stays private. Product updates are off until EcoLearn
+          sends real account notifications.
+        </p>
+        <button
+          onClick={() => void saveSettings()}
+          disabled={savingSettings}
+          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#173d2a] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          <Save size={16} /> {savingSettings ? "Saving…" : "Save settings"}
+        </button>
+      </section>
+      {isAdmin && (
+        <section className="mt-7">
+          <div className="mb-4 flex items-center gap-2 text-[#2d7040]">
+            <ShieldCheck size={19} />
+            <h2 className="font-semibold">Admin review</h2>
+          </div>
+          <AdminReview />
+        </section>
+      )}
     </div>
   );
 }
@@ -956,7 +1094,14 @@ export function AuthDialog({ close }: { close: () => void }) {
             placeholder="Email address"
             className="w-full rounded-xl border border-[#dce3d9] px-4 py-3 outline-none focus:border-[#4c9856]"
           />
-          <label className="flex items-center gap-2 px-1 text-sm text-[#65756a]"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> Remember me on this device</label>
+          <label className="flex items-center gap-2 px-1 text-sm text-[#65756a]">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(event) => setRemember(event.target.checked)}
+            />{" "}
+            Remember me on this device
+          </label>
           <input
             required
             minLength={6}
