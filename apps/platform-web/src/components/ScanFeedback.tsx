@@ -24,7 +24,7 @@ export function ScanFeedback({ result, imageFile }: Props) {
       const { error } = await supabase.storage.from("training-feedback").upload(imagePath, imageFile, { contentType: imageFile.type, upsert: false });
       if (error) { setSaving(false); return; }
     }
-    const { error } = await supabase.from("scan_feedback").insert({ user_id: user.id, predicted_label: result.item, predicted_recyclable: result.recyclable, verdict, issue, corrected_disposal: disposal, training_consent: Boolean(imagePath), image_path: imagePath });
+    const { error } = await supabase.from("scan_feedback").insert({ user_id: user.id, predicted_label: result.item, predicted_recyclable: result.recyclable, verdict, issue, corrected_disposal: disposal, training_consent: Boolean(imagePath), ai_review_consent: Boolean(imagePath), image_path: imagePath, retention_expires_at: imagePath ? new Date(Date.now() + 730 * 24 * 60 * 60 * 1000).toISOString() : null });
     setSaving(false);
     if (!error) setSent(true);
   };
