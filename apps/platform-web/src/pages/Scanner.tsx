@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProgress } from "@/hooks/useProgress";
-import { useAchievements } from "@/hooks/useAchievements";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { openRouterJson } from "@/lib/openrouter";
@@ -66,9 +65,7 @@ const lookup = async (query: string): Promise<ScanResult> => {
   if (!item) return fallbackLookup(query);
 
   const result = await openRouterJson<ScanResult>({
-    system:
-      "You classify consumer items for recycling guidance. Return only JSON with item, recyclable, confidence, category, instructions, tips, and optional top_predictions. Use confidence as a percentage from 0 to 100.",
-    user: `Classify this item by name: ${item}`,
+    item,
     fallback: fallbackLookup(query),
   });
 
@@ -92,9 +89,7 @@ export default function Scanner() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
-  const { addXP, incrementScans, updateStreak, progress, refreshProgress } =
-    useProgress();
-  const { checkAndAwardAchievements } = useAchievements();
+  const { progress, refreshProgress } = useProgress();
   const { toast } = useToast();
   const avoidedKg = ((progress?.total_scans ?? 0) * 0.18).toFixed(1);
   const communityRank = Math.max(
@@ -105,19 +100,15 @@ export default function Scanner() {
   const saveScanToHistory = async (scanResult: ScanResult) => {
     if (!user) return;
     try {
-      await supabase.from("scan_history").insert({
-        user_id: user.id,
-        item_name: scanResult.item,
-        is_recyclable: scanResult.recyclable,
-        confidence_score: scanResult.confidence,
-        category: scanResult.category,
-        instructions: scanResult.instructions,
+      const { error } = await supabase.rpc("record_scan", {
+        p_item_name: scanResult.item,
+        p_is_recyclable: scanResult.recyclable,
+        p_confidence: scanResult.confidence,
+        p_category: scanResult.category,
+        p_instructions: scanResult.instructions,
       });
-      await incrementScans();
-      await updateStreak();
-      await addXP(10);
-      const latestProgress = await refreshProgress();
-      if (latestProgress) await checkAndAwardAchievements(latestProgress);
+      if (error) throw error;
+      await refreshProgress();
     } catch (error) {
       console.error("Error saving scan:", error);
     }

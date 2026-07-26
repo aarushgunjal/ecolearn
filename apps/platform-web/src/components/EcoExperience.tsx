@@ -420,14 +420,13 @@ export function Learn() {
   >(null);
   const { user } = useAuth();
   const { toast } = useToast();
-  const { addXP, incrementLessons, refreshProgress } = useProgress();
+  const { refreshProgress } = useProgress();
   const {
     completedLessonIds,
     loading,
     refreshCompletedLessons,
     markLessonsChanged,
   } = useLessonProgress();
-  const { checkAndAwardAchievements } = useAchievements();
   const completeLesson = async (lesson: (typeof lessons)[number]) => {
     if (completedLessonIds.includes(lesson.id)) {
       setActiveLesson(null);
@@ -440,12 +439,7 @@ export function Learn() {
       });
       return;
     }
-    const { error } = await supabase.from("lesson_progress").upsert({
-      user_id: user.id,
-      lesson_id: lesson.id,
-      status: "completed",
-      completed_at: new Date().toISOString(),
-    });
+    const { error } = await supabase.rpc("complete_lesson", { p_lesson_id: lesson.id });
     if (error) {
       toast({
         title: "Couldn’t save completion",
@@ -454,9 +448,7 @@ export function Learn() {
       });
       return;
     }
-    await Promise.all([addXP(lesson.xp), incrementLessons()]);
-    const latestProgress = await refreshProgress();
-    if (latestProgress) await checkAndAwardAchievements(latestProgress);
+    await refreshProgress();
     await refreshCompletedLessons();
     markLessonsChanged();
     toast({
@@ -878,7 +870,7 @@ export function Profile() {
           </span>
         </div>
         <div className="mt-5 flex flex-wrap gap-4">
-          {unlockedAchievements.slice(0, 3).map((achievement: any) => (
+          {unlockedAchievements.slice(0, 3).map((achievement: { id?: string; achievement_id?: string; title?: string }) => (
             <Badge
               key={
                 achievement.id ||

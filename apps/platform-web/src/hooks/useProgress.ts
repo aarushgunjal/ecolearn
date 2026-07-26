@@ -4,11 +4,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
 const PROGRESS_CHANGED_EVENT = "ecolearn-progress-changed";
+export type UserProgress = {
+  xp: number; level: number; total_scans: number; total_lessons_completed: number;
+  streak_days: number; last_activity_date: string | null;
+};
 
 export function useProgress() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [progress, setProgress] = useState<any>(null);
+  const [progress, setProgress] = useState<UserProgress | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

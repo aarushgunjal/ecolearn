@@ -2,12 +2,16 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import type { UserProgress } from "@/hooks/useProgress";
+
+type Achievement = { id: string; title: string; icon: string; requirement_type: "scans" | "lessons" | "streak" | "level"; requirement_value: number };
+type UserAchievement = { achievement_id: string; achievements?: Achievement };
 
 export function useAchievements() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [achievements, setAchievements] = useState<any[]>([]);
-  const [userAchievements, setUserAchievements] = useState<any[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [userAchievements, setUserAchievements] = useState<UserAchievement[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,7 +35,7 @@ export function useAchievements() {
     setLoading(false);
   };
 
-  const checkAndAwardAchievements = async (progress: any) => {
+  const checkAndAwardAchievements = async (progress: UserProgress) => {
     if (!user || !progress) return;
 
     const earnedIds = userAchievements.map((ua) => ua.achievement_id);

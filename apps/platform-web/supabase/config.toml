@@ -2,3 +2,6 @@ project_id = "YOUR_SUPABASE_PROJECT_ID"
 
 [functions.classify-scan]
 verify_jwt = true
+
+[functions.generate-guidance]
+verify_jwt = true
