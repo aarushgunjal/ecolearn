@@ -17,7 +17,8 @@ serve(async (req) => {
     if (typeof feedbackId !== "string") return Response.json({ error: "feedbackId is required" }, { status: 400, headers: cors });
     const service = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: feedback } = await service.from("scan_feedback").select("*").eq("id", feedbackId).single();
-    if (!feedback || feedback.user_id !== user.id || !feedback.ai_review_consent || !feedback.image_path) return Response.json({ error: "Feedback is not eligible for AI review" }, { status: 403, headers: cors });
+    const { data: admin } = await service.from("app_admins").select("user_id").eq("user_id", user.id).maybeSingle();
+    if (!feedback || (feedback.user_id !== user.id && !admin) || !feedback.ai_review_consent || !feedback.image_path) return Response.json({ error: "Feedback is not eligible for AI review" }, { status: 403, headers: cors });
     const { data: image, error: imageError } = await service.storage.from("training-feedback").download(feedback.image_path);
     if (imageError || !image) throw new Error("Private image unavailable");
     const base64 = btoa(String.fromCharCode(...new Uint8Array(await image.arrayBuffer())));

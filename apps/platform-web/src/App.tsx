@@ -31,6 +31,7 @@ import {
   Schools,
 } from "@/components/PlatformHubs";
 import { useProgress } from "@/hooks/useProgress";
+import { AdminReview } from "@/components/AdminReview";
 
 const navigation = [
   { label: "Home", icon: Leaf },
@@ -150,7 +151,7 @@ function AppShell() {
         {active === "Community" && <Community />}
         {active === "Schools" && <Schools />}
         {active === "Organization" && <Organization />}
-        {active === "Admin" && <Admin />}
+        {active === "Admin" && <AdminReview />}
         {active === "Tools" && <ScannerTools />}
         {active === "Notifications" && <Notifications />}
       </main>
