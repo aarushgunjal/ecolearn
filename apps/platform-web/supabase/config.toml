@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.generate-guidance]
 verify_jwt = true
+
+[functions.review-feedback]
+verify_jwt = true

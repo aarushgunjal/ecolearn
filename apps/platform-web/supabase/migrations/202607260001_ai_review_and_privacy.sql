@@ -11,6 +11,8 @@ alter table public.scan_feedback
   add column if not exists retention_expires_at timestamptz;
 
 create table if not exists public.app_admins (user_id uuid primary key references auth.users(id) on delete cascade, created_at timestamptz not null default now());
+alter table public.app_admins enable row level security;
+revoke all on public.app_admins from anon, authenticated;
 insert into public.app_admins (user_id) select id from auth.users where lower(email) = 'aarushgunjal1@gmail.com' on conflict do nothing;
 create or replace function public.is_app_admin() returns boolean language sql stable security definer set search_path = public as $$ select exists (select 1 from public.app_admins where user_id = auth.uid()); $$;
 create policy "admins review scan feedback" on public.scan_feedback for select using (public.is_app_admin());
