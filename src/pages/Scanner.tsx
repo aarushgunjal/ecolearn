@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,12 +14,8 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-import { useAuth } from "@/contexts/AuthContext";
-import { useProgress } from "@/hooks/useProgress";
-import { useAchievements } from "@/hooks/useAchievements";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { ScanFeedback } from "@/components/ScanFeedback";
 
 const compressImage = (
   file: File,
@@ -76,47 +71,13 @@ export default function Scanner() {
   const [searchQuery, setSearchQuery] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const { addXP, incrementScans, updateStreak, progress } = useProgress();
-  const { checkAndAwardAchievements } = useAchievements();
   const { toast } = useToast();
-
-  const saveScanToHistory = async (result: any) => {
-    // Only save if user is logged in
-    if (!user) return;
-
-    try {
-      await supabase.from("scan_history").insert({
-        user_id: user.id,
-        item_name: result.item,
-        is_recyclable: result.recyclable,
-        confidence_score: result.confidence,
-        category: result.category,
-        instructions: result.instructions,
-      });
-
-      await incrementScans();
-      await updateStreak();
-      await addXP(10);
-
-      if (progress) {
-        await checkAndAwardAchievements(progress);
-      }
-    } catch (error) {
-      console.error("Error saving scan:", error);
-    }
-  };
 
   const handleImageUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!user) {
-      toast({ title: "Sign in to scan", description: "An account keeps scans private and protects the classifier service.", variant: "destructive" });
-      return;
-    }
     setImageFile(file);
 
     toast({
@@ -167,7 +128,6 @@ export default function Scanner() {
       };
 
       setResult(scanResult);
-      await saveScanToHistory(scanResult);
 
       toast({
         title: "Analysis complete!",
@@ -221,7 +181,6 @@ export default function Scanner() {
       };
 
       setResult(searchResult);
-      await saveScanToHistory(searchResult);
       setIsScanning(false);
     }, 1000);
   };
@@ -376,7 +335,6 @@ export default function Scanner() {
                 >
                   Scan Another Item
                 </Button>
-                <ScanFeedback result={result} imageFile={imageFile} />
               </div>
             )}
           </div>
