@@ -174,10 +174,6 @@ function AppShell() {
       {moreOpen && (
         <div className="fixed inset-x-4 top-[84px] z-40 mx-auto grid max-w-xl grid-cols-2 gap-2 rounded-2xl border border-[#dfe6dc] bg-white p-3 shadow-2xl sm:grid-cols-3">
           {[
-            ["Rules", "Local rules"],
-            ["Community", "Community"],
-            ["Schools", "Schools"],
-            ["Organization", "Organizations"],
             ["Admin", "Admin portal"],
             ["Tools", "Scan tools"],
             ["Notifications", "Notifications"],

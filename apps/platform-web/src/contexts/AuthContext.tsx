@@ -7,14 +7,15 @@ import {
 } from "react";
 import { type AuthError, type Session, type User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { setRememberMe } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signInWithGoogle: () => Promise<void>;
+  signIn: (email: string, password: string, remember?: boolean) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string, remember?: boolean) => Promise<{ error: AuthError | null }>;
+  signInWithGoogle: (remember?: boolean) => Promise<void>;
   signInWithGithub: () => Promise<void>;
   signOut: () => Promise<void>;
   loading: boolean;
@@ -50,7 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, remember = true) => {
+    setRememberMe(remember);
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -67,7 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, remember = true) => {
+    setRememberMe(remember);
     const redirectUrl = `${getRedirectUrl()}/`;
 
     const { error } = await supabase.auth.signUp({
@@ -95,7 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (remember = true) => {
+    setRememberMe(remember);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

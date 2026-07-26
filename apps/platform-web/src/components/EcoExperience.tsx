@@ -900,12 +900,13 @@ export function AuthDialog({ close }: { close: () => void }) {
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const { error } =
       mode === "signin"
-        ? await signIn(email, password)
-        : await signUp(email, password);
+        ? await signIn(email, password, remember)
+        : await signUp(email, password, remember);
     if (!error) {
       toast({
         title: mode === "signin" ? "Welcome back" : "Check your inbox",
@@ -936,7 +937,7 @@ export function AuthDialog({ close }: { close: () => void }) {
           Track actions, build habits, and make a measurable difference.
         </p>
         <button
-          onClick={() => void signInWithGoogle()}
+          onClick={() => void signInWithGoogle(remember)}
           className="mt-6 flex w-full items-center justify-center gap-3 rounded-xl border border-[#dce3d9] py-3 text-sm font-semibold"
         >
           <GoogleMark /> Continue with Google
@@ -955,6 +956,7 @@ export function AuthDialog({ close }: { close: () => void }) {
             placeholder="Email address"
             className="w-full rounded-xl border border-[#dce3d9] px-4 py-3 outline-none focus:border-[#4c9856]"
           />
+          <label className="flex items-center gap-2 px-1 text-sm text-[#65756a]"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> Remember me on this device</label>
           <input
             required
             minLength={6}
