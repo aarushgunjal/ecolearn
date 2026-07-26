@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 from collections import Counter
 from pathlib import Path
 
@@ -52,11 +53,22 @@ def collect() -> dict[str, list[tuple[Path, int]]]:
         label = next((part.lower() for part in reversed(file.parts) if part.lower() in LABEL_TO_INDEX), None)
         if label:
             records[split_for(file)].append((file, LABEL_TO_INDEX[label]))
-    # Some base datasets have no validation directory. Keep a reproducible held-out slice.
-    if not records["valid"]:
-        train = records["train"]
-        records["train"] = [sample for index, sample in enumerate(train) if index % 10]
-        records["valid"] = [sample for index, sample in enumerate(train) if not index % 10]
+    # The public base dataset is class-foldered, not necessarily pre-split. Build
+    # reproducible 80/10/10 splits only where a split was not supplied already.
+    needs_valid, needs_test = not records["valid"], not records["test"]
+    if needs_valid or needs_test:
+        retained, generated_valid, generated_test = [], [], []
+        for sample in records["train"]:
+            bucket = int(hashlib.sha256(str(sample[0]).encode()).hexdigest()[:8], 16) % 100
+            if needs_test and bucket < 10:
+                generated_test.append(sample)
+            elif needs_valid and bucket < 20:
+                generated_valid.append(sample)
+            else:
+                retained.append(sample)
+        records["train"] = retained
+        if needs_valid: records["valid"] = generated_valid
+        if needs_test: records["test"] = generated_test
     return records
 
 

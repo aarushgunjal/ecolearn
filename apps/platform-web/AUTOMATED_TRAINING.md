@@ -6,7 +6,7 @@ This is an unattended pipeline once its one-time secrets are connected. It does 
 
 1. A review becomes eligible.
 2. When 20 eligible examples are waiting, Supabase creates an immutable batch. Change this in **Profile → Admin review** to 50, 100, or 500 at any time.
-3. GitHub Actions checks hourly for one queued batch, downloads its one-hour private links, and creates a private Kaggle dataset version.
+3. GitHub Actions checks hourly for one queued batch, downloads its one-hour private links, and creates a Kaggle dataset version marked explicitly private.
 4. Kaggle runs the included GPU training kernel with augmentation and contributor-grouped splits.
 5. The runner rejects a candidate unless it has a test set covering every label, macro F1 ≥ 0.80, and recall ≥ 0.90 for both `battery` and `biological`.
 6. Passing models are archived and promoted to your Hugging Face Space automatically. The batch record stores its metrics and model version.

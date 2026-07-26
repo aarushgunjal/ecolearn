@@ -10,7 +10,6 @@ from pathlib import Path
 
 import requests
 from huggingface_hub import HfApi
-import kagglehub
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -40,7 +39,16 @@ def run(*args: str, cwd: Path | None = None) -> str:
 
 def upload_dataset(dataset_dir: Path, batch_id: str) -> str:
     handle = require("KAGGLE_FEEDBACK_DATASET")
-    kagglehub.dataset_upload(handle, str(dataset_dir), version_notes=f"EcoLearn reviewed feedback batch {batch_id}")
+    (dataset_dir / "dataset-metadata.json").write_text(json.dumps({
+        "title": "EcoLearn private reviewed feedback",
+        "id": handle,
+        "licenses": [{"name": "other"}],
+        "isPrivate": True,
+    }, indent=2), encoding="utf-8")
+    try:
+        run("kaggle", "datasets", "version", "-p", str(dataset_dir), "-m", f"EcoLearn reviewed feedback batch {batch_id}", "-r", "zip")
+    except subprocess.CalledProcessError:
+        run("kaggle", "datasets", "create", "-p", str(dataset_dir), "-r", "zip")
     return handle
 
 
