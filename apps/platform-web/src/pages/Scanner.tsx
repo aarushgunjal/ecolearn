@@ -41,6 +41,13 @@ type ScanResult = {
     rationale?: string;
     model?: string;
   };
+  explanation?: {
+    status: "loading" | "ready" | "unavailable";
+    observedItem?: string;
+    explanation?: string;
+    disposalAction?: string;
+    caution?: string;
+  };
 };
 
 const SECOND_OPINION_THRESHOLD = 0.85;
@@ -210,6 +217,45 @@ export default function Scanner() {
       setResult((current) =>
         current
           ? { ...current, secondOpinion: { status: "unavailable" } }
+          : current,
+      );
+    }
+  };
+
+  const requestAiExplanation = async () => {
+    if (!result || !imageFile) return;
+    setResult((current) =>
+      current ? { ...current, explanation: { status: "loading" } } : current,
+    );
+    try {
+      const image = await readAsDataUrl(imageFile);
+      const { data, error } = await supabase.functions.invoke("explain-scan", {
+        body: {
+          image,
+          predictedLabel: result.item,
+          predictedConfidence: result.confidence,
+        },
+      });
+      if (error) throw error;
+      setResult((current) =>
+        current
+          ? {
+              ...current,
+              explanation: {
+                status: "ready",
+                observedItem: data.observedItem,
+                explanation: data.explanation,
+                disposalAction: data.disposalAction,
+                caution: data.caution,
+              },
+            }
+          : current,
+      );
+    } catch (error) {
+      console.error("AI explanation unavailable", error);
+      setResult((current) =>
+        current
+          ? { ...current, explanation: { status: "unavailable" } }
           : current,
       );
     }
@@ -419,7 +465,12 @@ export default function Scanner() {
               )}
               {result && (
                 <>
-                  <ResultCard result={result} reset={reset} />
+                  <ResultCard
+                    result={result}
+                    reset={reset}
+                    canExplain={Boolean(imageFile)}
+                    onExplain={requestAiExplanation}
+                  />
                   <ScanFeedback
                     result={result}
                     imageFile={imageFile}
@@ -498,9 +549,13 @@ export default function Scanner() {
 function ResultCard({
   result,
   reset,
+  canExplain,
+  onExplain,
 }: {
   result: ScanResult;
   reset: () => void;
+  canExplain: boolean;
+  onExplain: () => void;
 }) {
   const good = result.recyclable;
   const confidence = Math.round(
@@ -510,6 +565,7 @@ function ResultCard({
   const opinionsDisagree =
     secondOpinion?.status === "ready" &&
     secondOpinion.label?.toLowerCase() !== result.item.toLowerCase();
+  const explanation = result.explanation;
   return (
     <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
       <div className="grid gap-5 sm:grid-cols-[150px_1fr] sm:items-center">
@@ -557,6 +613,68 @@ function ResultCard({
           ))}
         </div>
       </div>
+      {canExplain && (
+        <div className="mt-5 rounded-2xl border border-[#dce8d8] bg-[#f7fbf4] p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold text-[#284c34]">Not quite right?</p>
+              <p className="mt-1 text-xs leading-5 text-[#617166]">
+                Ask visual AI to explain what it sees and why the broad label
+                may still apply.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onExplain}
+              disabled={explanation?.status === "loading"}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#6aa574] bg-white px-3.5 py-2.5 text-sm font-semibold text-[#286d3b] transition hover:bg-[#ebf7e7] disabled:cursor-wait disabled:opacity-60"
+            >
+              {explanation?.status === "loading" ? (
+                <LoaderCircle className="animate-spin" size={16} />
+              ) : (
+                <CircleHelp size={16} />
+              )}
+              {explanation?.status === "loading"
+                ? "Explainingâ€¦"
+                : "Explain with AI"}
+            </button>
+          </div>
+          {explanation?.status === "ready" && (
+            <div className="mt-4 border-t border-[#dce8d8] pt-4 text-sm">
+              {explanation.observedItem && (
+                <p className="font-semibold text-[#284c34]">
+                  It appears to be: {explanation.observedItem}
+                </p>
+              )}
+              {explanation.explanation && (
+                <p className="mt-2 leading-6 text-[#526459]">
+                  {explanation.explanation}
+                </p>
+              )}
+              {explanation.disposalAction && (
+                <p className="mt-3 rounded-lg bg-white p-3 font-medium leading-6 text-[#31593c]">
+                  {explanation.disposalAction}
+                </p>
+              )}
+              {explanation.caution && (
+                <p className="mt-2 text-xs leading-5 text-[#7a6740]">
+                  {explanation.caution}
+                </p>
+              )}
+            </div>
+          )}
+          {explanation?.status === "unavailable" && (
+            <p className="mt-3 text-xs leading-5 text-[#7a6740]">
+              AI explanation is temporarily unavailable. Please use the
+              scanner guidance above or try again shortly.
+            </p>
+          )}
+          <p className="mt-3 text-[11px] leading-4 text-[#758277]">
+            Your photo is sent only when you choose this. EcoLearn does not
+            store it or use it for training through this feature.
+          </p>
+        </div>
+      )}
       {secondOpinion && (
         <div
           className={`mt-5 rounded-2xl border p-4 ${opinionsDisagree ? "border-[#f0d59a] bg-[#fff9eb]" : "border-[#dce8d8] bg-[#f5faf2]"}`}
