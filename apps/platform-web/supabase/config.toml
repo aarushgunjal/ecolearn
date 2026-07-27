@@ -21,6 +21,9 @@ verify_jwt = true
 [functions.read-label]
 verify_jwt = true
 
+[functions.second-opinion]
+verify_jwt = true
+
 [functions.claim-training-batch]
 verify_jwt = false
 

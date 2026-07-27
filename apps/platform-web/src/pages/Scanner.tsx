@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
+  Bot,
   Camera,
   Check,
   ChevronRight,
@@ -33,7 +34,25 @@ type ScanResult = {
   image?: string;
   top_predictions?: { class: string; confidence: number }[];
   tips: string[];
+  secondOpinion?: {
+    status: "loading" | "ready" | "unavailable";
+    label?: string;
+    confidence?: number;
+    rationale?: string;
+    model?: string;
+  };
 };
+
+const SECOND_OPINION_THRESHOLD = 0.85;
+const normalizedConfidence = (value: number) =>
+  value <= 1 ? Math.max(0, value) : Math.max(0, Math.min(1, value / 100));
+const readAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read selected image."));
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsDataURL(file);
+  });
 
 const fallbackLookup = (query: string): ScanResult => {
   const term = query.toLowerCase();
@@ -88,6 +107,10 @@ export default function Scanner() {
   const [searchQuery, setSearchQuery] = useState("");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [trainingConsentMode, setTrainingConsentMode] = useState<
+    "always_allow" | "ask_every_time"
+  >("ask_every_time");
+  const [secondOpinionEnabled, setSecondOpinionEnabled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const { progress, refreshProgress } = useProgress();
@@ -97,6 +120,27 @@ export default function Scanner() {
     5,
     50 - Math.min(progress?.total_scans ?? 0, 15) * 2,
   );
+
+  useEffect(() => {
+    if (!user) {
+      setTrainingConsentMode("ask_every_time");
+      setSecondOpinionEnabled(false);
+      return;
+    }
+    void supabase
+      .from("user_settings")
+      .select("training_consent_mode, ai_second_opinion_enabled")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        setTrainingConsentMode(
+          data?.training_consent_mode === "always_allow"
+            ? "always_allow"
+            : "ask_every_time",
+        );
+        setSecondOpinionEnabled(data?.ai_second_opinion_enabled ?? false);
+      });
+  }, [user]);
 
   const saveScanToHistory = async (scanResult: ScanResult) => {
     if (!user) return;
@@ -123,6 +167,52 @@ export default function Scanner() {
       title: "+10 XP earned",
       description: `${scanResult.item} was added to your impact.`,
     });
+  };
+
+  const requestSecondOpinion = async (scanResult: ScanResult, file: File) => {
+    if (
+      !secondOpinionEnabled ||
+      normalizedConfidence(scanResult.confidence) >= SECOND_OPINION_THRESHOLD
+    )
+      return;
+    setResult((current) =>
+      current ? { ...current, secondOpinion: { status: "loading" } } : current,
+    );
+    try {
+      const image = await readAsDataUrl(file);
+      const { data, error } = await supabase.functions.invoke(
+        "second-opinion",
+        {
+          body: {
+            image,
+            predictedLabel: scanResult.item,
+            predictedConfidence: normalizedConfidence(scanResult.confidence),
+          },
+        },
+      );
+      if (error) throw error;
+      setResult((current) =>
+        current
+          ? {
+              ...current,
+              secondOpinion: {
+                status: "ready",
+                label: data.label,
+                confidence: Number(data.confidence ?? 0),
+                rationale: data.rationale,
+                model: data.model,
+              },
+            }
+          : current,
+      );
+    } catch (error) {
+      console.error("Second opinion unavailable", error);
+      setResult((current) =>
+        current
+          ? { ...current, secondOpinion: { status: "unavailable" } }
+          : current,
+      );
+    }
   };
 
   const handleImageUpload = async (
@@ -159,7 +249,7 @@ export default function Scanner() {
       });
       if (error) throw error;
       clearTimeout(delayedNotice);
-      await finish({
+      const scanResult = {
         item: data.item || "Unknown item",
         recyclable: Boolean(data.recyclable),
         confidence: Number(data.confidence || 0),
@@ -179,7 +269,9 @@ export default function Scanner() {
               "Place in regular trash",
               "Check for specialist drop-off options",
             ],
-      });
+      };
+      await finish(scanResult);
+      void requestSecondOpinion(scanResult, file);
     } catch (error) {
       clearTimeout(delayedNotice);
       setIsScanning(false);
@@ -292,19 +384,19 @@ export default function Scanner() {
                     </span>
                     <div className="h-px flex-1 bg-[#e9ece7]" />
                   </div>
-                  <div className="flex gap-2 rounded-xl border border-[#dfe5dc] bg-white p-1.5 shadow-sm">
+                  <div className="flex flex-col gap-2 rounded-xl border border-[#dfe5dc] bg-white p-1.5 shadow-sm sm:flex-row">
                     <Search className="ml-2 mt-2.5 text-[#7a867d]" size={18} />
                     <input
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                       placeholder="Try “plastic water bottle”"
-                      className="min-w-0 flex-1 bg-transparent py-2.5 text-sm outline-none placeholder:text-[#a3aca4]"
+                      className="min-w-0 flex-1 bg-transparent px-1 py-2.5 text-sm outline-none placeholder:text-[#a3aca4]"
                     />
                     <button
                       onClick={handleSearch}
                       disabled={!searchQuery.trim()}
-                      className="rounded-lg bg-[#173d2a] px-4 text-sm font-semibold text-white disabled:opacity-40"
+                      className="rounded-lg bg-[#173d2a] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
                     >
                       Check
                     </button>
@@ -328,7 +420,11 @@ export default function Scanner() {
               {result && (
                 <>
                   <ResultCard result={result} reset={reset} />
-                  <ScanFeedback result={result} imageFile={imageFile} />
+                  <ScanFeedback
+                    result={result}
+                    imageFile={imageFile}
+                    trainingConsentMode={trainingConsentMode}
+                  />
                 </>
               )}
             </div>
@@ -410,6 +506,10 @@ function ResultCard({
   const confidence = Math.round(
     result.confidence * (result.confidence <= 1 ? 100 : 1),
   );
+  const secondOpinion = result.secondOpinion;
+  const opinionsDisagree =
+    secondOpinion?.status === "ready" &&
+    secondOpinion.label?.toLowerCase() !== result.item.toLowerCase();
   return (
     <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
       <div className="grid gap-5 sm:grid-cols-[150px_1fr] sm:items-center">
@@ -457,6 +557,52 @@ function ResultCard({
           ))}
         </div>
       </div>
+      {secondOpinion && (
+        <div
+          className={`mt-5 rounded-2xl border p-4 ${opinionsDisagree ? "border-[#f0d59a] bg-[#fff9eb]" : "border-[#dce8d8] bg-[#f5faf2]"}`}
+        >
+          <div className="flex items-start gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-[#347c44] shadow-sm">
+              <Bot size={18} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">AI second opinion</p>
+              {secondOpinion.status === "loading" && (
+                <p className="mt-1 text-sm text-[#65756a]">
+                  Checking the image independently…
+                </p>
+              )}
+              {secondOpinion.status === "unavailable" && (
+                <p className="mt-1 text-sm text-[#65756a]">
+                  Unavailable right now. Your scanner result is still shown
+                  above.
+                </p>
+              )}
+              {secondOpinion.status === "ready" && (
+                <>
+                  <p className="mt-1 text-sm text-[#405b48]">
+                    {secondOpinion.label} ·{" "}
+                    {Math.round((secondOpinion.confidence ?? 0) * 100)}%
+                    confidence
+                  </p>
+                  <p
+                    className={`mt-2 text-xs font-semibold ${opinionsDisagree ? "text-[#9a6711]" : "text-[#397647]"}`}
+                  >
+                    {opinionsDisagree
+                      ? "The two models disagree — please confirm the result below."
+                      : "Both models agree on the material."}
+                  </p>
+                  {secondOpinion.rationale && (
+                    <p className="mt-1 text-xs leading-5 text-[#6d796f]">
+                      {secondOpinion.rationale}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {result.top_predictions?.length ? (
         <div className="mt-5">
           <p className="text-xs font-bold uppercase tracking-[.14em] text-[#7d8a80]">

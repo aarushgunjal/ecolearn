@@ -202,7 +202,7 @@ export function ScanUtilities() {
             </p>
           </div>
         </div>
-        <div className="mt-5 flex gap-2">
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row">
           <input
             value={barcode}
             onChange={(event) =>
@@ -217,7 +217,7 @@ export function ScanUtilities() {
           <button
             onClick={() => void lookupBarcode()}
             disabled={barcodeLoading}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#173d2a] px-4 text-sm font-semibold text-white disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#173d2a] px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
           >
             {barcodeLoading ? (
               <LoaderCircle className="animate-spin" size={16} />
@@ -331,11 +331,11 @@ export function ScanUtilities() {
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <select
               value={placeType}
               onChange={(event) => setPlaceType(event.target.value)}
-              className="rounded-xl border border-[#dce5d9] bg-white px-3 py-2.5 text-sm"
+              className="min-h-11 rounded-xl border border-[#dce5d9] bg-white px-3 py-2.5 text-sm"
             >
               <option value="recycling">Recycling</option>
               <option value="battery">Batteries</option>
@@ -345,7 +345,7 @@ export function ScanUtilities() {
             <button
               onClick={findPlaces}
               disabled={placesLoading}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#173d2a] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#173d2a] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
             >
               {placesLoading ? (
                 <LoaderCircle className="animate-spin" size={16} />

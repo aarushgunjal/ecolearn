@@ -839,6 +839,10 @@ export function Profile() {
     user?.user_metadata?.full_name || user?.user_metadata?.name || "",
   );
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [trainingConsentMode, setTrainingConsentMode] = useState<
+    "always_allow" | "ask_every_time"
+  >("ask_every_time");
+  const [secondOpinionEnabled, setSecondOpinionEnabled] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -848,7 +852,9 @@ export function Profile() {
     void Promise.all([
       supabase
         .from("user_settings")
-        .select("display_name, notifications_enabled")
+        .select(
+          "display_name, notifications_enabled, training_consent_mode, ai_second_opinion_enabled",
+        )
         .eq("user_id", user.id)
         .maybeSingle(),
       supabase.rpc("is_app_admin"),
@@ -862,6 +868,14 @@ export function Profile() {
         );
         setNotificationsEnabled(
           settingsResult.data.notifications_enabled ?? true,
+        );
+        setTrainingConsentMode(
+          settingsResult.data.training_consent_mode === "always_allow"
+            ? "always_allow"
+            : "ask_every_time",
+        );
+        setSecondOpinionEnabled(
+          settingsResult.data.ai_second_opinion_enabled ?? false,
         );
       }
       setIsAdmin(adminResult.data === true);
@@ -882,6 +896,9 @@ export function Profile() {
             user_id: user.id,
             display_name: cleanName || null,
             notifications_enabled: notificationsEnabled,
+            training_consent_enabled: trainingConsentMode === "always_allow",
+            training_consent_mode: trainingConsentMode,
+            ai_second_opinion_enabled: secondOpinionEnabled,
             updated_at: new Date().toISOString(),
           }),
           supabase.auth.updateUser({ data: { full_name: cleanName } }),
@@ -1011,6 +1028,66 @@ export function Profile() {
           Your sign-in stays private. Product updates are off until EcoLearn
           sends real account notifications.
         </p>
+        <div className="mt-4 space-y-3 border-t border-[#edf1eb] pt-4">
+          <div className="rounded-xl bg-[#f6faf3] p-3 text-sm text-[#526257]">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#dcefd5] text-[#347e45]">
+                <ShieldCheck size={14} />
+              </span>
+              <span>
+                <b className="block text-[#34523d]">
+                  Help train EcoLearn's neural network
+                </b>
+                <span className="mt-1 block text-xs leading-5">
+                  Only eligible hard-scan photos you choose to share are kept
+                  privately for review and future classifier training.
+                </span>
+              </span>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setTrainingConsentMode("always_allow")}
+                className={`rounded-xl border p-3 text-left text-xs font-semibold transition ${trainingConsentMode === "always_allow" ? "border-[#4d9958] bg-[#e7f4e1] text-[#286536]" : "border-[#d9e5d5] bg-white text-[#647368]"}`}
+              >
+                Always allow eligible photos
+                <span className="mt-1 block font-normal leading-5">
+                  No extra prompt when feedback includes a useful photo.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTrainingConsentMode("ask_every_time")}
+                className={`rounded-xl border p-3 text-left text-xs font-semibold transition ${trainingConsentMode === "ask_every_time" ? "border-[#4d9958] bg-[#e7f4e1] text-[#286536]" : "border-[#d9e5d5] bg-white text-[#647368]"}`}
+              >
+                Ask me every time
+                <span className="mt-1 block font-normal leading-5">
+                  You choose for each eligible feedback photo.
+                </span>
+              </button>
+            </div>
+          </div>
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-[#f6faf3] p-3 text-sm text-[#526257]">
+            <input
+              type="checkbox"
+              checked={secondOpinionEnabled}
+              onChange={(event) =>
+                setSecondOpinionEnabled(event.target.checked)
+              }
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[#347e45]"
+            />
+            <span>
+              <b className="block text-[#34523d]">
+                Use AI second opinions on uncertain scans
+              </b>
+              <span className="mt-1 block text-xs leading-5">
+                When EcoLearn is unsure, it sends that scan photo to the
+                approved AI provider for a second classification. It is not
+                stored or used for training by this feature.
+              </span>
+            </span>
+          </label>
+        </div>
         <button
           onClick={() => void saveSettings()}
           disabled={savingSettings}
