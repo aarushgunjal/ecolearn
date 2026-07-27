@@ -3,19 +3,11 @@ import { Check, ShieldCheck, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-type SecondOpinion = {
-  status: "loading" | "ready" | "unavailable";
-  label?: string;
-  confidence?: number;
-  rationale?: string;
-  model?: string;
-};
 type Props = {
   result: {
     item: string;
     recyclable: boolean;
     confidence: number;
-    secondOpinion?: SecondOpinion;
   };
   imageFile: File | null;
   trainingConsentMode: "always_allow" | "ask_every_time";
@@ -25,7 +17,6 @@ type Disposal = "recycle" | "trash" | "special_dropoff" | "not_sure";
 type ActiveLearningReason =
   | "user_correction"
   | "low_confidence"
-  | "model_llm_disagreement"
   | "representative_sample";
 
 const confidenceRatio = (value: number) =>
@@ -47,19 +38,14 @@ export function ScanFeedback({
   const [showConsent, setShowConsent] = useState(false);
 
   const confidence = confidenceRatio(result.confidence);
-  const disagreement =
-    result.secondOpinion?.status === "ready" &&
-    result.secondOpinion.label?.toLowerCase() !== result.item.toLowerCase();
   const activeLearningReason: ActiveLearningReason | null =
     verdict === "incorrect"
       ? "user_correction"
-      : disagreement
-        ? "model_llm_disagreement"
-        : confidence < 0.85
-          ? "low_confidence"
-          : representativeSample
-            ? "representative_sample"
-            : null;
+      : confidence < 0.85
+        ? "low_confidence"
+        : representativeSample
+          ? "representative_sample"
+          : null;
   const eligiblePhoto = Boolean(imageFile && activeLearningReason);
   const alwaysAllow = trainingConsentMode === "always_allow";
 
@@ -114,22 +100,6 @@ export function ScanFeedback({
         ai_review_consent: Boolean(imagePath),
         image_path: imagePath,
         active_learning_reason: imagePath ? activeLearningReason : null,
-        second_opinion_label:
-          result.secondOpinion?.status === "ready"
-            ? (result.secondOpinion.label ?? null)
-            : null,
-        second_opinion_confidence:
-          result.secondOpinion?.status === "ready"
-            ? (result.secondOpinion.confidence ?? null)
-            : null,
-        second_opinion_model:
-          result.secondOpinion?.status === "ready"
-            ? (result.secondOpinion.model ?? null)
-            : null,
-        second_opinion_at:
-          result.secondOpinion?.status === "ready"
-            ? new Date().toISOString()
-            : null,
         retention_expires_at: imagePath
           ? new Date(Date.now() + 730 * 24 * 60 * 60 * 1000).toISOString()
           : null,

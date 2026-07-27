@@ -14,8 +14,6 @@ disposal decisions easier, clearer, and more educational.
   inconvenient.
 - **Clear uncertainty signals:** the scanner shows confidence and alternative
   classes instead of presenting every prediction as certain.
-- **AI second opinion (opt-in):** for uncertain scans, a user may enable an
-  independent AI check. It does not retain the image for model training.
 - **Explain with AI (ready to deploy):** a user-requested explanation can add
   context to broad classifications. For example, it can distinguish a TV
   remote from a loose battery and direct the user toward general e-waste or
@@ -50,7 +48,7 @@ disposal decisions easier, clearer, and more educational.
 - **Email/password and Google sign-in** through Supabase Authentication.
 - **Remember-me session preference** and account/profile settings.
 - **Profile controls:** users can update their display name, notification
-  preference, AI second-opinion preference, and training-photo consent choice.
+  preference, and training-photo consent choice.
 - **Consent-first feedback:** users can quickly mark a result as correct or
   incorrect. Photos are only retained for future training when the user makes
   an explicit choice to allow it.

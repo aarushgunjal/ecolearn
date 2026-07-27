@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
-  Bot,
   Camera,
   Check,
   ChevronRight,
@@ -34,13 +33,6 @@ type ScanResult = {
   image?: string;
   top_predictions?: { class: string; confidence: number }[];
   tips: string[];
-  secondOpinion?: {
-    status: "loading" | "ready" | "unavailable";
-    label?: string;
-    confidence?: number;
-    rationale?: string;
-    model?: string;
-  };
   explanation?: {
     status: "loading" | "ready" | "unavailable";
     observedItem?: string;
@@ -50,9 +42,6 @@ type ScanResult = {
   };
 };
 
-const SECOND_OPINION_THRESHOLD = 0.85;
-const normalizedConfidence = (value: number) =>
-  value <= 1 ? Math.max(0, value) : Math.max(0, Math.min(1, value / 100));
 const readAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -117,7 +106,6 @@ export default function Scanner() {
   const [trainingConsentMode, setTrainingConsentMode] = useState<
     "always_allow" | "ask_every_time"
   >("ask_every_time");
-  const [secondOpinionEnabled, setSecondOpinionEnabled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const { progress, refreshProgress } = useProgress();
@@ -131,12 +119,11 @@ export default function Scanner() {
   useEffect(() => {
     if (!user) {
       setTrainingConsentMode("ask_every_time");
-      setSecondOpinionEnabled(false);
       return;
     }
     void supabase
       .from("user_settings")
-      .select("training_consent_mode, ai_second_opinion_enabled")
+      .select("training_consent_mode")
       .eq("user_id", user.id)
       .maybeSingle()
       .then(({ data }) => {
@@ -145,7 +132,6 @@ export default function Scanner() {
             ? "always_allow"
             : "ask_every_time",
         );
-        setSecondOpinionEnabled(data?.ai_second_opinion_enabled ?? false);
       });
   }, [user]);
 
@@ -174,52 +160,6 @@ export default function Scanner() {
       title: "+10 XP earned",
       description: `${scanResult.item} was added to your impact.`,
     });
-  };
-
-  const requestSecondOpinion = async (scanResult: ScanResult, file: File) => {
-    if (
-      !secondOpinionEnabled ||
-      normalizedConfidence(scanResult.confidence) >= SECOND_OPINION_THRESHOLD
-    )
-      return;
-    setResult((current) =>
-      current ? { ...current, secondOpinion: { status: "loading" } } : current,
-    );
-    try {
-      const image = await readAsDataUrl(file);
-      const { data, error } = await supabase.functions.invoke(
-        "second-opinion",
-        {
-          body: {
-            image,
-            predictedLabel: scanResult.item,
-            predictedConfidence: normalizedConfidence(scanResult.confidence),
-          },
-        },
-      );
-      if (error) throw error;
-      setResult((current) =>
-        current
-          ? {
-              ...current,
-              secondOpinion: {
-                status: "ready",
-                label: data.label,
-                confidence: Number(data.confidence ?? 0),
-                rationale: data.rationale,
-                model: data.model,
-              },
-            }
-          : current,
-      );
-    } catch (error) {
-      console.error("Second opinion unavailable", error);
-      setResult((current) =>
-        current
-          ? { ...current, secondOpinion: { status: "unavailable" } }
-          : current,
-      );
-    }
   };
 
   const requestAiExplanation = async () => {
@@ -317,7 +257,6 @@ export default function Scanner() {
             ],
       };
       await finish(scanResult);
-      void requestSecondOpinion(scanResult, file);
     } catch (error) {
       clearTimeout(delayedNotice);
       setIsScanning(false);
@@ -561,10 +500,6 @@ function ResultCard({
   const confidence = Math.round(
     result.confidence * (result.confidence <= 1 ? 100 : 1),
   );
-  const secondOpinion = result.secondOpinion;
-  const opinionsDisagree =
-    secondOpinion?.status === "ready" &&
-    secondOpinion.label?.toLowerCase() !== result.item.toLowerCase();
   const explanation = result.explanation;
   return (
     <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
@@ -673,52 +608,6 @@ function ResultCard({
             Your photo is sent only when you choose this. EcoLearn does not
             store it or use it for training through this feature.
           </p>
-        </div>
-      )}
-      {secondOpinion && (
-        <div
-          className={`mt-5 rounded-2xl border p-4 ${opinionsDisagree ? "border-[#f0d59a] bg-[#fff9eb]" : "border-[#dce8d8] bg-[#f5faf2]"}`}
-        >
-          <div className="flex items-start gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-[#347c44] shadow-sm">
-              <Bot size={18} />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold">AI second opinion</p>
-              {secondOpinion.status === "loading" && (
-                <p className="mt-1 text-sm text-[#65756a]">
-                  Checking the image independently…
-                </p>
-              )}
-              {secondOpinion.status === "unavailable" && (
-                <p className="mt-1 text-sm text-[#65756a]">
-                  Unavailable right now. Your scanner result is still shown
-                  above.
-                </p>
-              )}
-              {secondOpinion.status === "ready" && (
-                <>
-                  <p className="mt-1 text-sm text-[#405b48]">
-                    {secondOpinion.label} ·{" "}
-                    {Math.round((secondOpinion.confidence ?? 0) * 100)}%
-                    confidence
-                  </p>
-                  <p
-                    className={`mt-2 text-xs font-semibold ${opinionsDisagree ? "text-[#9a6711]" : "text-[#397647]"}`}
-                  >
-                    {opinionsDisagree
-                      ? "The two models disagree — please confirm the result below."
-                      : "Both models agree on the material."}
-                  </p>
-                  {secondOpinion.rationale && (
-                    <p className="mt-1 text-xs leading-5 text-[#6d796f]">
-                      {secondOpinion.rationale}
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
         </div>
       )}
       {result.top_predictions?.length ? (
