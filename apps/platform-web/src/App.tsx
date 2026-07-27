@@ -8,6 +8,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Scanner from "./pages/Scanner";
+import { Legal } from "./pages/Legal";
 import { AuthProvider } from "./contexts/AuthContext";
 import { Toaster } from "@/components/ui/toaster";
 import {
@@ -32,6 +33,9 @@ const navigation = [
 
 function AppShell() {
   const [active, setActive] = useState("Home");
+  const [legalPage, setLegalPage] = useState<"privacy" | "terms" | null>(() =>
+    readLegalPage(),
+  );
   const [authOpen, setAuthOpen] = useState(false);
   const { user } = useAuth();
   const { progress } = useProgress();
@@ -43,6 +47,34 @@ function AppShell() {
       window.removeEventListener("ecolearn-open-learn", handleOpenLearn);
     };
   }, []);
+
+  useEffect(() => {
+    const syncLegalPage = () => setLegalPage(readLegalPage());
+    window.addEventListener("hashchange", syncLegalPage);
+    window.addEventListener("popstate", syncLegalPage);
+    return () => {
+      window.removeEventListener("hashchange", syncLegalPage);
+      window.removeEventListener("popstate", syncLegalPage);
+    };
+  }, []);
+
+  const openLegal = (page: "privacy" | "terms") => {
+    window.history.pushState(null, "", `#${page}`);
+    setLegalPage(page);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const closeLegal = () => {
+    const currentPath = window.location.pathname;
+    const destination =
+      currentPath === "/privacy" || currentPath === "/terms"
+        ? "/"
+        : currentPath;
+    window.history.pushState(null, "", destination);
+    setLegalPage(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  if (legalPage) return <Legal page={legalPage} onBack={closeLegal} />;
 
   return (
     <div className="min-h-screen bg-[#f7f8f4] text-[#16251e]">
@@ -113,6 +145,34 @@ function AppShell() {
           ))}
       </main>
 
+      <footer className="mx-auto flex max-w-7xl flex-col gap-3 border-t border-[#e2e8de] px-5 py-7 text-sm text-[#718076] sm:flex-row sm:items-center sm:justify-between lg:px-8">
+        <p>
+          © {new Date().getFullYear()} EcoLearn. Small choices, real impact.
+        </p>
+        <div className="flex gap-5 font-semibold">
+          <a
+            href="#privacy"
+            onClick={(event) => {
+              event.preventDefault();
+              openLegal("privacy");
+            }}
+            className="hover:text-[#286b3a]"
+          >
+            Privacy Policy
+          </a>
+          <a
+            href="#terms"
+            onClick={(event) => {
+              event.preventDefault();
+              openLegal("terms");
+            }}
+            className="hover:text-[#286b3a]"
+          >
+            Terms of Service
+          </a>
+        </div>
+      </footer>
+
       <nav
         className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[#e5e9e1] bg-white/95 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden"
         aria-label="Mobile navigation"
@@ -131,6 +191,15 @@ function AppShell() {
       {authOpen && <AuthDialog close={() => setAuthOpen(false)} />}
     </div>
   );
+}
+
+function readLegalPage(): "privacy" | "terms" | null {
+  const hash = window.location.hash.replace("#", "").toLowerCase();
+  if (hash === "privacy" || hash === "terms") return hash;
+  const path = window.location.pathname.toLowerCase();
+  if (path === "/privacy" || path === "/terms")
+    return path.slice(1) as "privacy" | "terms";
+  return null;
 }
 
 function SignInPrompt({ onSignIn }: { onSignIn: () => void }) {

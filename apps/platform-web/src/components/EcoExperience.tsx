@@ -1201,6 +1201,25 @@ export function AuthDialog({ close }: { close: () => void }) {
             {mode === "signup" ? "Sign in" : "Create an account"}
           </button>
         </p>
+        <p className="mt-4 text-center text-xs leading-5 text-[#879289]">
+          By continuing, you agree to the{" "}
+          <a
+            href="#terms"
+            onClick={close}
+            className="font-semibold underline underline-offset-2"
+          >
+            Terms of Service
+          </a>{" "}
+          and acknowledge the{" "}
+          <a
+            href="#privacy"
+            onClick={close}
+            className="font-semibold underline underline-offset-2"
+          >
+            Privacy Policy
+          </a>
+          .
+        </p>
       </div>
     </div>
   );

@@ -137,6 +137,9 @@ export function ScanFeedback({
       .select("id")
       .single();
     if (insertError) {
+      if (imagePath) {
+        void supabase.storage.from("training-feedback").remove([imagePath]);
+      }
       setError("We couldn't save your feedback. Please try again.");
       setSaving(false);
       return;
