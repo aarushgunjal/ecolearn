@@ -200,16 +200,30 @@ export function AdminReview() {
   };
   const remove = async (item: Feedback) => {
     if (!window.confirm("Delete this feedback and its opted-in image?")) return;
-    if (item.image_path)
-      await supabase.storage
+    setMessage("");
+    if (item.image_path) {
+      const { error: imageError } = await supabase.storage
         .from("training-feedback")
         .remove([item.image_path]);
+      if (imageError) {
+        setMessage(
+          "Could not delete the opted-in photo, so the feedback was kept. Please refresh and try again.",
+        );
+        return;
+      }
+    }
     const { error } = await supabase
       .from("scan_feedback")
       .delete()
       .eq("id", item.id);
-    if (error) setMessage("Could not delete this contribution.");
-    else void load();
+    if (error) {
+      setMessage(
+        "The photo was removed, but the feedback record could not be deleted. Please refresh and try again.",
+      );
+      return;
+    }
+    setItems((current) => current.filter((currentItem) => currentItem.id !== item.id));
+    setMessage("Feedback and its opted-in photo were deleted.");
   };
   if (loading)
     return (
