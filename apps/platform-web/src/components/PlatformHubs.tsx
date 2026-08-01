@@ -22,16 +22,15 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 const municipalities = [
-  "New York, NY",
-  "Austin, TX",
-  "San Francisco, CA",
-  "Seattle, WA",
-  "Toronto, ON",
+  "Delaware",
+  "New Castle County, DE",
+  "Kent County, DE",
+  "Sussex County, DE",
 ];
 
 export function LocalRules() {
   const [city, setCity] = useState(
-    () => localStorage.getItem("ecolearn-city") || "New York, NY",
+    () => localStorage.getItem("ecolearn-city") || "Delaware",
   );
   const { toast } = useToast();
   const save = () => {
@@ -43,8 +42,8 @@ export function LocalRules() {
   };
   return (
     <Hub
-      title="Local recycling rules"
-      eyebrow="Location-aware guidance"
+      title="Delaware recycling rules"
+      eyebrow="Official DNREC guidance"
       icon={<MapPin />}
     >
       <div className="grid gap-5 lg:grid-cols-[1fr_.8fr]">
@@ -55,8 +54,7 @@ export function LocalRules() {
             onChange={(e) => setCity(e.target.value)}
             className="mt-3 w-full rounded-xl border border-[#dce4d8] bg-white px-4 py-3 outline-none"
           >
-            <option>New York, NY</option>
-            {municipalities.slice(1).map((item) => (
+            {municipalities.map((item) => (
               <option key={item}>{item}</option>
             ))}
           </select>
@@ -69,10 +67,10 @@ export function LocalRules() {
           <button
             onClick={() =>
               navigator.geolocation?.getCurrentPosition(() => {
-                setCity("New York, NY");
+                setCity("Delaware");
                 toast({
                   title: "Location detected",
-                  description: "We selected New York, NY.",
+                  description: "EcoLearn uses Delaware DNREC guidance statewide.",
                 });
               })
             }
@@ -102,6 +100,14 @@ export function LocalRules() {
               Bags, greasy paper, batteries, and cords
             </li>
           </ul>
+          <a
+            href="https://dnrec.delaware.gov/waste-hazardous/recycling/what/"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-5 inline-flex text-sm font-bold text-[#317a45] underline underline-offset-2"
+          >
+            Open Delaware DNREC Recyclopedia ↗
+          </a>
         </section>
       </div>
     </Hub>
@@ -128,8 +134,8 @@ export function Community() {
     >
       <div className="grid gap-5 lg:grid-cols-3">
         <CommunityCard
-          title="Greenpoint neighbors"
-          meta={`${memberCount} members · Brooklyn`}
+          title="Delaware eco learners"
+          meta={`${memberCount} members · Statewide`}
           button={joined ? "Joined" : "Join group"}
           onClick={() => {
             setJoined(true);
@@ -137,8 +143,8 @@ export function Community() {
           }}
         />
         <CommunityCard
-          title="NYC clean streets"
-          meta={`${citywideCount} members · Citywide`}
+          title="Delaware clean spaces"
+          meta={`${citywideCount} members · Statewide`}
           button="View group"
         />
         <CommunityCard
@@ -154,10 +160,10 @@ export function Community() {
               Upcoming event
             </p>
             <h2 className="mt-1 text-xl font-semibold">
-              Riverside e-waste drop-off
+              Find a DNREC drop-off
             </h2>
             <p className="mt-2 text-sm text-[#718076]">
-              Saturday · 10:00 AM · Riverside Park
+              Use the Delaware map to locate a verified solution for your item.
             </p>
           </div>
           <CalendarDays className="text-[#4b9856]" />
@@ -167,13 +173,13 @@ export function Community() {
             setRsvped(true);
             localStorage.setItem("ecolearn-riverside-rsvp", "true");
             toast({
-              title: rsvped ? "RSVP saved" : "You’re going",
-              description: "Riverside e-waste drop-off is in your schedule.",
+              title: rsvped ? "Official map saved" : "Official map reminder saved",
+              description: "Use the official DNREC map to confirm a participating location.",
             });
           }}
           className="mt-5 rounded-xl bg-[#173d2a] px-5 py-3 text-sm font-bold text-white"
         >
-          {rsvped ? "RSVP saved" : "RSVP — I’m going"}
+          {rsvped ? "Map reminder saved" : "Save a map reminder"}
         </button>
       </section>
     </Hub>
@@ -196,19 +202,18 @@ export function Schools() {
   );
   return (
     <Hub
-      title="EcoLearn for schools"
-      eyebrow="Teach sustainability through action"
+      title="EcoLearn for Delaware schools"
+      eyebrow="Primary-school sustainability, through action"
       icon={<GraduationCap />}
     >
       <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
         <section className="rounded-2xl border border-[#e0e7dc] bg-white p-6">
           <p className="text-sm font-bold text-[#4c8c55]">TEACHER WORKSPACE</p>
           <h2 className="mt-2 text-2xl font-semibold">
-            Make sustainability stick.
+            Build Delaware recycling habits early.
           </h2>
           <p className="mt-3 leading-7 text-[#718076]">
-            Create classrooms, assign lessons, and celebrate measurable impact
-            together.
+            Start with short, plain-language lessons for grades 3–5. Teacher or parent-managed accounts keep student participation supervised.
           </p>
           <div className="mt-5 grid grid-cols-2 gap-3">
             <MiniMetric value={`${studentCount}`} label="Students" />
@@ -234,7 +239,7 @@ export function Schools() {
             Ready-to-assign lessons
           </h2>
           <p className="mt-2 text-sm leading-6 text-[#718076]">
-            Plastic, decoded · 6 minutes · 30 XP
+            The recycling loop · 4 minutes · 20 XP
           </p>
           <button
             onClick={() => {
@@ -242,7 +247,7 @@ export function Schools() {
               localStorage.setItem("ecolearn-assignment-created", "true");
               toast({
                 title: "Lesson assigned",
-                description: "Plastic, decoded has been queued for your class.",
+                description: "The recycling loop has been queued for your class.",
               });
             }}
             className="mt-5 flex items-center gap-1 text-sm font-bold text-[#317c45]"

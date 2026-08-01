@@ -18,6 +18,17 @@ verify_jwt = true
 [functions.find-disposal-sites]
 verify_jwt = true
 
+[functions.explain-scan]
+verify_jwt = true
+
+[functions.delaware-guidance]
+verify_jwt = true
+
+# This endpoint is not public: it checks DNREC_SYNC_SECRET itself so a scheduled
+# GitHub workflow can refresh the official data without a user session.
+[functions.sync-delaware-recyclopedia]
+verify_jwt = false
+
 [functions.read-label]
 verify_jwt = true
 

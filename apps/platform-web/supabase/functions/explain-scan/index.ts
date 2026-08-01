@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { DNREC_RECYLOPEDIA_URL, findDelawareGuidance, toGuidancePayload } from "../_shared/dnrec.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
@@ -56,6 +57,18 @@ serve(async (request) => {
       return Response.json({ error: "Unsupported scanner label." }, { status: 400, headers: cors });
     }
 
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data: officialTopics, error: topicsError } = await admin
+      .from("delaware_guidance_items")
+      .select("title")
+      .order("title");
+    if (topicsError || !officialTopics?.length) {
+      throw new Error("The official Delaware guidance catalog has not been synced");
+    }
+    const allowedTitles = officialTopics
+      .map((topic) => String(topic.title ?? "").trim())
+      .filter(Boolean);
+
     const apiKey = Deno.env.get("OPENROUTER_API_KEY");
     const model = Deno.env.get("OPENROUTER_EXPLAIN_MODEL") ?? Deno.env.get("OPENROUTER_SECOND_OPINION_MODEL") ?? Deno.env.get("OPENROUTER_REVIEW_MODEL");
     if (!apiKey || !model) throw new Error("AI explanation is not configured");
@@ -71,12 +84,12 @@ serve(async (request) => {
         messages: [
           {
             role: "system",
-            content: "You explain a waste-scanner result cautiously. Return JSON only with: observed_item (string, max 80 chars), explanation (string, max 320 chars), disposal_action (string, max 220 chars), caution (string, max 180 chars). Explain the visible object and why the classifier label may be broad. For electronics or batteries, say to use an e-waste or battery collection program rather than curbside recycling; do not invent local rules. If the image is unclear, say so. Do not identify people, read private information, or claim certainty.",
+            content: `You are a strict visual matcher for Delaware DNREC Recyclopedia. Return JSON only: {"official_topic_title": string | null}. Inspect the image and select exactly one title from the allowed list only when the visible object clearly matches it. Copy the selected title character-for-character. Return null when the item is unclear, more than one item is visible, or no allowed title is a clear match. Never provide explanation, disposal advice, recycling claims, or a title that is not in the list. Do not identify people or read private information. Allowed official Delaware DNREC titles:\n${allowedTitles.map((title) => `- ${title}`).join("\n")}`,
           },
           {
             role: "user",
             content: [
-              { type: "text", text: `EcoLearn's image classifier returned the broad label "${label}" at ${Number(predictedConfidence) || 0}% confidence. Explain this result and give safe general disposal direction for the visible item. This image was supplied only for this user-requested explanation and must not be stored or used for training.` },
+              { type: "text", text: `An internal image classifier suggested the material family "${label}" at ${Number(predictedConfidence) || 0}% confidence. Treat that only as a weak hint; select an allowed official title only when the pixels support it. This image was supplied only for this user-requested Delaware lookup and must not be stored or used for training.` },
               { type: "image_url", image_url: { url: image } },
             ],
           },
@@ -88,11 +101,27 @@ serve(async (request) => {
     const parsed = typeof raw === "string" ? parseJson(raw) : null;
     if (!parsed || typeof parsed !== "object") throw new Error("AI returned invalid JSON");
 
+    let localLookup: Awaited<ReturnType<typeof findDelawareGuidance>> | null = null;
+    const selectedTitle = typeof parsed.official_topic_title === "string"
+      ? parsed.official_topic_title.trim()
+      : "";
+    try {
+      // The model cannot introduce a new item name: only an exact title from the
+      // server-provided DNREC catalog is eligible for a local rule.
+      if (allowedTitles.includes(selectedTitle)) {
+        localLookup = await findDelawareGuidance(admin, selectedTitle);
+      }
+    } catch (lookupError) {
+      console.warn("DNREC guidance lookup unavailable", lookupError);
+    }
+    const guidance = localLookup?.match?.row.title === selectedTitle
+      ? toGuidancePayload(localLookup.match)
+      : null;
+
     return Response.json({
-      observedItem: String(parsed.observed_item ?? "").slice(0, 80),
-      explanation: String(parsed.explanation ?? "").slice(0, 320),
-      disposalAction: String(parsed.disposal_action ?? "").slice(0, 220),
-      caution: String(parsed.caution ?? "").slice(0, 180),
+      verified: Boolean(guidance),
+      guidance,
+      sourceUrl: DNREC_RECYLOPEDIA_URL,
       model,
     }, { headers: { ...cors, "Cache-Control": "no-store" } });
   } catch (error) {

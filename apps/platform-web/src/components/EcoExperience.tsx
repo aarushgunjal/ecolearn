@@ -138,7 +138,7 @@ const lessonContent: Record<
       },
       {
         title: "Caps stay on",
-        body: "In many modern programs, caps can stay on bottles. Your local guidance is the final authority.",
+        body: "In Delaware, caps and lids can go back on accepted plastic containers. Check DNREC Recyclopedia for the exact item.",
       },
     ],
     question: "What is the safest choice for plastic bags and film?",
@@ -191,8 +191,8 @@ const lessonContent: Record<
         body: "Healthy compost needs moist green material and dry brown material such as leaves or shredded paper.",
       },
       {
-        title: "Use local programs",
-        body: "If you do not have a backyard bin, a municipal or community program may accept food scraps.",
+        title: "Use Delaware programs",
+        body: "If you do not have a backyard bin, use the DNREC Recyclopedia to look for a Delaware food-scrap option.",
       },
     ],
     question: "Which is a useful 'brown' material for a compost pile?",
@@ -215,7 +215,7 @@ const lessonContent: Record<
       },
       {
         title: "Check lids and caps",
-        body: "Small metal lids are often accepted, but local programs can differ on whether they should stay attached.",
+        body: "For Delaware curbside recycling, put caps and lids back on accepted containers and check DNREC guidance for the exact item.",
       },
     ],
     question: "What should you do before recycling a food jar or soda can?",
@@ -794,7 +794,7 @@ export function Leaderboard() {
       <div className="mt-8 max-w-2xl overflow-hidden rounded-[1.5rem] border border-[#e0e7dc] bg-white">
         <div className="flex items-center justify-between border-b border-[#e8ede6] p-5">
           <div>
-            <h2 className="font-semibold">New York City</h2>
+            <h2 className="font-semibold">Delaware</h2>
             <p className="mt-1 text-sm text-[#78857b]">
               This week’s eco champions
             </p>
@@ -842,7 +842,6 @@ export function Profile() {
   const [trainingConsentMode, setTrainingConsentMode] = useState<
     "always_allow" | "ask_every_time"
   >("ask_every_time");
-  const [secondOpinionEnabled, setSecondOpinionEnabled] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -853,7 +852,7 @@ export function Profile() {
       supabase
         .from("user_settings")
         .select(
-          "display_name, notifications_enabled, training_consent_mode, ai_second_opinion_enabled",
+          "display_name, notifications_enabled, training_consent_mode",
         )
         .eq("user_id", user.id)
         .maybeSingle(),
@@ -873,9 +872,6 @@ export function Profile() {
           settingsResult.data.training_consent_mode === "always_allow"
             ? "always_allow"
             : "ask_every_time",
-        );
-        setSecondOpinionEnabled(
-          settingsResult.data.ai_second_opinion_enabled ?? false,
         );
       }
       setIsAdmin(adminResult.data === true);
@@ -898,7 +894,6 @@ export function Profile() {
             notifications_enabled: notificationsEnabled,
             training_consent_enabled: trainingConsentMode === "always_allow",
             training_consent_mode: trainingConsentMode,
-            ai_second_opinion_enabled: secondOpinionEnabled,
             updated_at: new Date().toISOString(),
           }),
           supabase.auth.updateUser({ data: { full_name: cleanName } }),
@@ -1067,26 +1062,6 @@ export function Profile() {
               </button>
             </div>
           </div>
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-[#f6faf3] p-3 text-sm text-[#526257]">
-            <input
-              type="checkbox"
-              checked={secondOpinionEnabled}
-              onChange={(event) =>
-                setSecondOpinionEnabled(event.target.checked)
-              }
-              className="mt-0.5 h-4 w-4 shrink-0 accent-[#347e45]"
-            />
-            <span>
-              <b className="block text-[#34523d]">
-                Use AI second opinions on uncertain scans
-              </b>
-              <span className="mt-1 block text-xs leading-5">
-                When EcoLearn is unsure, it sends that scan photo to the
-                approved AI provider for a second classification. It is not
-                stored or used for training by this feature.
-              </span>
-            </span>
-          </label>
         </div>
         <button
           onClick={() => void saveSettings()}

@@ -33,6 +33,9 @@ type DisposalSite = {
   longitude: number;
   distanceKm: number;
   address?: string;
+  official?: boolean;
+  sourceName?: string;
+  sourceUrl?: string;
 };
 
 const readAsDataUrl = (file: File) =>
@@ -43,7 +46,7 @@ const readAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
-export function ScanUtilities() {
+export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
   const { toast } = useToast();
   const [barcode, setBarcode] = useState("");
   const [barcodeLoading, setBarcodeLoading] = useState(false);
@@ -55,6 +58,7 @@ export function ScanUtilities() {
   const [labelResult, setLabelResult] = useState<LabelResult | null>(null);
   const [placesLoading, setPlacesLoading] = useState(false);
   const [places, setPlaces] = useState<DisposalSite[]>([]);
+  const [placesSource, setPlacesSource] = useState<string | null>(null);
   const [placeType, setPlaceType] = useState("recycling");
   const [mapCenter, setMapCenter] = useState<{
     latitude: number;
@@ -150,16 +154,20 @@ export function ScanUtilities() {
                 latitude: coords.latitude,
                 longitude: coords.longitude,
                 type: placeType,
+                item: verifiedItem,
               },
             },
           );
           if (error) throw error;
           setPlaces((data?.sites || []) as DisposalSite[]);
+          setPlacesSource(data?.sourceName ?? null);
           if (!(data?.sites || []).length)
             toast({
               title: "No nearby matches yet",
               description:
-                "Try another disposal type or check your municipal program.",
+                verifiedItem
+                  ? "DNREC has no nearby mapped solution for this exact item. Open its official protocol for other options."
+                  : "Scan or search an exact item first to use DNREC’s official map.",
             });
         } catch (error) {
           console.error("Disposal lookup failed", error);
@@ -326,8 +334,9 @@ export function ScanUtilities() {
             <div>
               <h2 className="font-semibold">Nearby disposal</h2>
               <p className="text-sm text-[#718076]">
-                Find local drop-off options. Your approximate location is used
-                only for this search.
+                {verifiedItem
+                  ? `Official DNREC solutions for ${verifiedItem}. Your approximate location is used only for this search.`
+                  : "Scan or search an exact item first for official DNREC solutions. Generic nearby results remain available."}
               </p>
             </div>
           </div>
@@ -365,7 +374,9 @@ export function ScanUtilities() {
           />
         )}
         {places.length > 0 && (
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="mt-5">
+            {placesSource && <p className="mb-3 text-xs font-semibold text-[#52755a]">Source: {placesSource}</p>}
+            <div className="grid gap-3 sm:grid-cols-2">
             {places.map((site) => (
               <a
                 key={site.id}
@@ -386,6 +397,7 @@ export function ScanUtilities() {
                 </p>
               </a>
             ))}
+            </div>
           </div>
         )}
       </div>

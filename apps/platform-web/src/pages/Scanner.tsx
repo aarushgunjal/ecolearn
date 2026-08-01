@@ -20,7 +20,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useProgress } from "@/hooks/useProgress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { openRouterJson } from "@/lib/openrouter";
 import { ScanFeedback } from "@/components/ScanFeedback";
 import { ScanUtilities } from "@/components/ScanUtilities";
 
@@ -39,7 +38,23 @@ type ScanResult = {
     explanation?: string;
     disposalAction?: string;
     caution?: string;
+    guidance?: DelawareGuidance | null;
+    sourceUrl?: string;
   };
+  dnrec?: DelawareGuidance | null;
+};
+
+type DelawareGuidance = {
+  title: string;
+  seoName: string;
+  matchConfidence: number;
+  category: string;
+  curbside: boolean;
+  instructions: string;
+  tags: string[];
+  sourceName: string;
+  sourceUrl: string;
+  sourceUpdatedAt?: string | null;
 };
 
 const readAsDataUrl = (file: File) =>
@@ -51,28 +66,13 @@ const readAsDataUrl = (file: File) =>
   });
 
 const fallbackLookup = (query: string): ScanResult => {
-  const term = query.toLowerCase();
-  const recyclable = /(bottle|can|jar|cardboard|paper|aluminum|tin)/.test(term);
-  const item = query.trim().replace(/\b\w/g, (c) => c.toUpperCase());
   return {
-    item,
-    recyclable,
-    confidence: recyclable ? 91 : 76,
-    category: recyclable ? "Mixed recycling" : "Landfill",
-    instructions: recyclable
-      ? "Empty, rinse, and place loose in your recycling bin."
-      : "Keep this out of recycling to prevent contamination.",
-    tips: recyclable
-      ? [
-          "Empty all contents",
-          "Give it a quick rinse",
-          "Keep it loose — never bag recyclables",
-        ]
-      : [
-          "Place it in your trash bin",
-          "Do not place it in recycling",
-          "Check for a specialty drop-off option",
-        ],
+    item: "Official Delaware protocol unavailable",
+    recyclable: false,
+    confidence: 0,
+    category: "Verification required",
+    instructions: "EcoLearn could not verify this as an official Delaware DNREC item. Take a clearer one-item photo or search for the exact item name.",
+    tips: ["No disposal advice is shown without a DNREC match", "Retake the photo with one item in good light", "Use the official DNREC Recyclopedia search"],
   };
 };
 
@@ -80,21 +80,22 @@ const lookup = async (query: string): Promise<ScanResult> => {
   const item = query.trim();
   if (!item) return fallbackLookup(query);
 
-  const result = await openRouterJson<ScanResult>({
-    item,
-    fallback: fallbackLookup(query),
-  });
-
-  const fallback = fallbackLookup(query);
-  return {
-    ...fallback,
-    ...result,
-    item: result.item?.trim() || fallback.item,
-    confidence: Number.isFinite(result.confidence)
-      ? Math.max(0, Math.min(100, Number(result.confidence)))
-      : fallback.confidence,
-    tips: result.tips?.length > 0 ? result.tips : fallback.tips,
-  };
+  try {
+    const { data, error } = await supabase.functions.invoke("delaware-guidance", { body: { item } });
+    if (error || !data?.verified || !data.guidance) return fallbackLookup(item);
+    const guidance = data.guidance as DelawareGuidance;
+    return {
+      item: guidance.title,
+      recyclable: guidance.curbside,
+      confidence: guidance.matchConfidence,
+      category: guidance.category,
+      instructions: guidance.instructions,
+      tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the full item protocol below", "Use the Delaware map for nearby solutions"],
+      dnrec: guidance,
+    };
+  } catch {
+    return fallbackLookup(item);
+  }
 };
 
 export default function Scanner() {
@@ -154,12 +155,14 @@ export default function Scanner() {
 
   const finish = async (scanResult: ScanResult) => {
     setResult(scanResult);
-    await saveScanToHistory(scanResult);
+    if (scanResult.dnrec) await saveScanToHistory(scanResult);
     setIsScanning(false);
-    toast({
-      title: "+10 XP earned",
-      description: `${scanResult.item} was added to your impact.`,
-    });
+    if (scanResult.dnrec) {
+      toast({
+        title: "+10 XP earned",
+        description: `${scanResult.item} was added to your impact.`,
+      });
+    }
   };
 
   const requestAiExplanation = async () => {
@@ -177,20 +180,38 @@ export default function Scanner() {
         },
       });
       if (error) throw error;
-      setResult((current) =>
-        current
-          ? {
-              ...current,
-              explanation: {
-                status: "ready",
-                observedItem: data.observedItem,
-                explanation: data.explanation,
-                disposalAction: data.disposalAction,
-                caution: data.caution,
-              },
-            }
-          : current,
-      );
+      const guidance = data.guidance as DelawareGuidance | null;
+      setResult((current) => current
+        ? {
+            ...current,
+            ...(guidance
+              ? {
+                  item: guidance.title,
+                  recyclable: guidance.curbside,
+                  confidence: guidance.matchConfidence,
+                  category: guidance.category,
+                  instructions: guidance.instructions,
+                  tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the full official item protocol", "Use Delaware locations for nearby options"],
+                  dnrec: guidance,
+                }
+              : {}),
+            explanation: { status: "ready", guidance, sourceUrl: data.sourceUrl },
+          }
+        : current);
+      if (guidance) {
+        const verified: ScanResult = {
+          ...result,
+          item: guidance.title,
+          recyclable: guidance.curbside,
+          confidence: guidance.matchConfidence,
+          category: guidance.category,
+          instructions: guidance.instructions,
+          tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the full official item protocol", "Use Delaware locations for nearby options"],
+          dnrec: guidance,
+        };
+        await saveScanToHistory(verified);
+        toast({ title: "+10 XP earned", description: "Official Delaware guidance verified." });
+      }
     } catch (error) {
       console.error("AI explanation unavailable", error);
       setResult((current) =>
@@ -235,27 +256,22 @@ export default function Scanner() {
       });
       if (error) throw error;
       clearTimeout(delayedNotice);
-      const scanResult = {
-        item: data.item || "Unknown item",
-        recyclable: Boolean(data.recyclable),
-        confidence: Number(data.confidence || 0),
-        category: data.category || "Unknown",
-        instructions:
-          data.instructions || "Check local guidance before disposal.",
-        image: data.image,
-        top_predictions: data.top_predictions,
-        tips: data.recyclable
-          ? [
-              "Empty all contents",
-              "Rinse before recycling",
-              "Check your local program",
-            ]
-          : [
-              "Keep this out of recycling",
-              "Place in regular trash",
-              "Check for specialist drop-off options",
-            ],
-      };
+      const classifierItem = String(data.item || "Unknown item").trim();
+      const broadLabels = new Set(["battery", "biological", "cardboard", "clothes", "glass", "metal", "paper", "plastic", "shoes", "trash"]);
+      const localResult = broadLabels.has(classifierItem.toLowerCase())
+        ? null
+        : await lookup(classifierItem);
+      const scanResult: ScanResult = localResult?.dnrec
+        ? { ...localResult, image: data.image, top_predictions: data.top_predictions }
+        : {
+            item: "Official Delaware protocol unavailable",
+            recyclable: false,
+            confidence: Number(data.confidence || 0),
+            category: "Verification required",
+            instructions: "EcoLearn only displays disposal guidance that matches an official Delaware DNREC item. Ask it to check the photo against the DNREC catalog, or retake a clear photo of one item.",
+            image: data.image,
+            tips: ["No general recycling advice is being shown", "Use the Delaware catalog check", "Retake a clear one-item photo if it cannot verify the item"],
+          };
       await finish(scanResult);
     } catch (error) {
       clearTimeout(delayedNotice);
@@ -296,8 +312,8 @@ export default function Scanner() {
               Know where it goes. <em className="text-[#4c9a59]">Do better.</em>
             </h1>
             <p className="mt-4 max-w-lg text-base leading-7 text-[#68766c]">
-              Scan an item for clear, local disposal guidance and make every
-              choice count.
+              Scan an item for clear, Delaware-specific disposal guidance from
+              DNREC and make every choice count.
             </p>
           </div>
 
@@ -315,7 +331,7 @@ export default function Scanner() {
                 </div>
               </div>
               <span className="hidden items-center gap-1.5 rounded-full bg-[#fff5dc] px-3 py-1.5 text-xs font-semibold text-[#987018] sm:flex">
-                <MapPin size={13} /> New York, NY
+              <MapPin size={13} /> Delaware-first
               </span>
             </div>
             <div className="p-5 sm:p-6">
@@ -362,6 +378,9 @@ export default function Scanner() {
                     onChange={handleImageUpload}
                     className="hidden"
                   />
+                  <p className="rounded-xl bg-[#fff8e8] px-3 py-2 text-xs leading-5 text-[#725c24]">
+                    Student-safe scanning: photograph the item only. Do not include people, faces, names, schoolwork, or personal information.
+                  </p>
                   <div className="relative flex items-center">
                     <div className="h-px flex-1 bg-[#e9ece7]" />
                     <span className="px-3 text-xs font-medium uppercase tracking-wider text-[#9aa39b]">
@@ -398,7 +417,7 @@ export default function Scanner() {
                     Looking closely…
                   </h3>
                   <p className="mt-2 text-sm text-[#748176]">
-                    Matching materials with local guidance
+                    Checking the item against Delaware guidance
                   </p>
                 </div>
               )}
@@ -410,11 +429,11 @@ export default function Scanner() {
                     canExplain={Boolean(imageFile)}
                     onExplain={requestAiExplanation}
                   />
-                  <ScanFeedback
+                  {result.dnrec && <ScanFeedback
                     result={result}
                     imageFile={imageFile}
                     trainingConsentMode={trainingConsentMode}
-                  />
+                  />}
                 </>
               )}
             </div>
@@ -480,7 +499,7 @@ export default function Scanner() {
           </div>
         </aside>
       </section>
-      <ScanUtilities />
+      <ScanUtilities verifiedItem={result?.dnrec?.title} />
     </div>
   );
 }
@@ -496,7 +515,7 @@ function ResultCard({
   canExplain: boolean;
   onExplain: () => void;
 }) {
-  const good = result.recyclable;
+  const good = Boolean(result.dnrec?.curbside);
   const confidence = Math.round(
     result.confidence * (result.confidence <= 1 ? 100 : 1),
   );
@@ -507,7 +526,7 @@ function ResultCard({
         {result.image ? (
           <img
             src={`data:image/jpeg;base64,${result.image}`}
-            alt={`Analyzed ${result.item}`}
+            alt={result.dnrec ? `Verified ${result.item}` : "Item awaiting official Delaware verification"}
             className="aspect-square w-full rounded-2xl object-cover"
           />
         ) : (
@@ -518,23 +537,22 @@ function ResultCard({
           </div>
         )}
         <div>
-          <p className="text-sm font-semibold text-[#6d796f]">We found</p>
+          <p className="text-sm font-semibold text-[#6d796f]">{result.dnrec ? "Official DNREC match" : "Delaware verification"}</p>
           <h3 className="mt-1 text-2xl font-semibold tracking-[-.04em]">
-            {result.item}
+            {result.dnrec ? result.item : "No verified item yet"}
           </h3>
           <div
             className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-bold ${good ? "bg-[#e5f4df] text-[#287540]" : "bg-[#fff0ed] text-[#c84c40]"}`}
           >
             {good ? <Recycle size={16} /> : <Trash2 size={16} />}
-            {good ? "Recyclable" : "Not recyclable"}
-            <span className="h-3 w-px bg-current opacity-25" />
-            {confidence}% sure
+            {result.dnrec ? (good ? "DNREC: curbside recycling" : result.dnrec.category) : "DNREC verification required"}
+            {result.dnrec && <><span className="h-3 w-px bg-current opacity-25" />{confidence}% official-title match</>}
           </div>
         </div>
       </div>
       <div className="mt-6 rounded-2xl border border-[#e4e9e1] bg-[#fafcf9] p-5">
         <p className="text-xs font-bold uppercase tracking-[.14em] text-[#7d8a80]">
-          What to do
+          {result.dnrec ? "Official Delaware protocol" : "What happens next"}
         </p>
         <p className="mt-2 font-medium leading-6 text-[#274033]">
           {result.instructions}
@@ -548,14 +566,24 @@ function ResultCard({
           ))}
         </div>
       </div>
+      {result.dnrec && (
+        <a
+          href={result.dnrec.sourceUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex text-xs font-bold text-[#287640] underline underline-offset-2"
+        >
+          Verified source: Delaware DNREC Recyclopedia ↗
+        </a>
+      )}
       {canExplain && (
         <div className="mt-5 rounded-2xl border border-[#dce8d8] bg-[#f7fbf4] p-4 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="font-semibold text-[#284c34]">Not quite right?</p>
+              <p className="font-semibold text-[#284c34]">Get an official Delaware match</p>
               <p className="mt-1 text-xs leading-5 text-[#617166]">
-                Ask visual AI to explain what it sees and why the broad label
-                may still apply.
+                Visual AI can select only from the official DNREC item catalog.
+                EcoLearn shows a protocol only when that match is verified.
               </p>
             </div>
             <button
@@ -570,38 +598,28 @@ function ResultCard({
                 <CircleHelp size={16} />
               )}
               {explanation?.status === "loading"
-                ? "Explainingâ€¦"
-                : "Explain with AI"}
+                ? "Checking DNREC…"
+                : "Check official Delaware item"}
             </button>
           </div>
           {explanation?.status === "ready" && (
             <div className="mt-4 border-t border-[#dce8d8] pt-4 text-sm">
-              {explanation.observedItem && (
-                <p className="font-semibold text-[#284c34]">
-                  It appears to be: {explanation.observedItem}
-                </p>
+              {explanation.guidance && (
+                <a
+                  href={explanation.guidance.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex text-xs font-bold text-[#287640] underline underline-offset-2"
+                >
+                  Verified against Delaware DNREC Recyclopedia ↗
+                </a>
               )}
-              {explanation.explanation && (
-                <p className="mt-2 leading-6 text-[#526459]">
-                  {explanation.explanation}
-                </p>
-              )}
-              {explanation.disposalAction && (
-                <p className="mt-3 rounded-lg bg-white p-3 font-medium leading-6 text-[#31593c]">
-                  {explanation.disposalAction}
-                </p>
-              )}
-              {explanation.caution && (
-                <p className="mt-2 text-xs leading-5 text-[#7a6740]">
-                  {explanation.caution}
-                </p>
-              )}
+              {!explanation.guidance && <p className="rounded-lg bg-white p-3 leading-6 text-[#526459]">No official DNREC item could be verified from this photo. Please retake a clear photo with one item, or use the exact-item search.</p>}
             </div>
           )}
           {explanation?.status === "unavailable" && (
             <p className="mt-3 text-xs leading-5 text-[#7a6740]">
-              AI explanation is temporarily unavailable. Please use the
-              scanner guidance above or try again shortly.
+              The Delaware item check is temporarily unavailable. Please try again shortly.
             </p>
           )}
           <p className="mt-3 text-[11px] leading-4 text-[#758277]">
@@ -610,23 +628,6 @@ function ResultCard({
           </p>
         </div>
       )}
-      {result.top_predictions?.length ? (
-        <div className="mt-5">
-          <p className="text-xs font-bold uppercase tracking-[.14em] text-[#7d8a80]">
-            Also considered
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {result.top_predictions.slice(0, 3).map((pred) => (
-              <span
-                key={pred.class}
-                className="rounded-lg bg-[#f0f3ee] px-3 py-1.5 text-xs text-[#68766c]"
-              >
-                {pred.class} · {Math.round(pred.confidence * 100)}%
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : null}
       <button
         onClick={reset}
         className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#173d2a] py-3.5 text-sm font-semibold text-white transition hover:bg-[#245139]"

@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
@@ -20,6 +21,15 @@ serve(async (request) => {
   if (request.method !== "POST") return Response.json({ error: "Method not allowed" }, { status: 405, headers: corsHeaders });
 
   try {
+    const authorization = request.headers.get("Authorization") ?? "";
+    const client = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authorization } } },
+    );
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) return Response.json({ error: "Authentication required" }, { status: 401, headers: corsHeaders });
+
     const { item } = await request.json();
     if (typeof item !== "string" || !item.trim() || item.length > 120) {
       return Response.json({ error: "Provide an item name up to 120 characters." }, { status: 400, headers: corsHeaders });
@@ -37,7 +47,7 @@ serve(async (request) => {
         temperature: 0.1,
         response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: "Return valid JSON only with item (string), recyclable (boolean), confidence (number 0-100), category (string), instructions (string), and tips (array of 2-4 short strings). Give cautious, non-local disposal guidance and never invent municipal rules." },
+          { role: "system", content: "Return valid JSON only with item (string), recyclable (boolean), confidence (number 0-100), category (string), instructions (string), and tips (array of 2-4 short strings). Give cautious, non-local educational information only. Never make a municipal, state, curbside-acceptance, or disposal claim. The app will use Delaware DNREC Recyclopedia for local disposal rules." },
           { role: "user", content: `Classify this household item: ${item.trim()}` },
         ],
       }),

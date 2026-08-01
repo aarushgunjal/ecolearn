@@ -4,10 +4,15 @@
     "slug": "ecoscan-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
+    "scheme": "ecolearn-scanner",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "EcoScan uses your camera to identify a disposal item.",
+        "NSPhotoLibraryUsageDescription": "EcoScan lets you choose an item photo to identify it."
+      },
       "bundleIdentifier": "com.ecolearn.ecoscan"
     },
     "android": {

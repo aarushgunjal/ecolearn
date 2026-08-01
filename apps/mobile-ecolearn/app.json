@@ -4,10 +4,16 @@
     "slug": "ecolearn-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
+    "scheme": "ecolearn-mobile",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "EcoLearn uses your camera to identify a disposal item.",
+        "NSPhotoLibraryUsageDescription": "EcoLearn lets you choose item and package-label photos.",
+        "NSLocationWhenInUseUsageDescription": "EcoLearn uses your location to find nearby disposal sites."
+      },
       "bundleIdentifier": "com.ecolearn.mobile"
     },
     "android": {
@@ -22,6 +28,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-web-browser"
+    ]
   }
 }
