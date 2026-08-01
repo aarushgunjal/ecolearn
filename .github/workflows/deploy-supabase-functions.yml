@@ -2,6 +2,12 @@ name: Deploy EcoLearn Supabase functions
 
 on:
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Git branch whose Supabase function source should be deployed
+        required: true
+        default: platform-rebuild
+        type: string
 
 permissions:
   contents: read
@@ -11,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
       - uses: supabase/setup-cli@v1
         with:
           version: latest
