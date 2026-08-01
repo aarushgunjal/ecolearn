@@ -1,0 +1,33 @@
+name: Deploy EcoLearn Supabase functions
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Git branch whose Supabase function source should be deployed
+        required: true
+        default: platform-rebuild
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Deploy functions
+        working-directory: apps/platform-web
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          for function_name in sync-delaware-recyclopedia delaware-guidance explain-scan find-disposal-sites generate-guidance; do
+            supabase functions deploy "$function_name" --project-ref "$SUPABASE_PROJECT_REF" --use-api
+          done

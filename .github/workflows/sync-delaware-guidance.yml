@@ -1,0 +1,32 @@
+name: Refresh official Delaware recycling guidance
+
+on:
+  schedule:
+    - cron: "37 5 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Re-download every official DNREC topic, even if it is unchanged
+        required: false
+        default: false
+        type: boolean
+
+permissions: {}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Import the current DNREC Recyclopedia topics
+        env:
+          SUPABASE_FUNCTIONS_URL: ${{ secrets.SUPABASE_FUNCTIONS_URL }}
+          DNREC_SYNC_SECRET: ${{ secrets.DNREC_SYNC_SECRET }}
+          FORCE: ${{ inputs.force || 'false' }}
+        run: |
+          test -n "$SUPABASE_FUNCTIONS_URL"
+          test -n "$DNREC_SYNC_SECRET"
+          curl --fail-with-body --retry 3 --retry-all-errors --retry-delay 5 \
+            -X POST "$SUPABASE_FUNCTIONS_URL/sync-delaware-recyclopedia" \
+            -H "Content-Type: application/json" \
+            -H "x-dnrec-sync-secret: $DNREC_SYNC_SECRET" \
+            --data "{\"force\":$FORCE}"
