@@ -112,7 +112,7 @@ serve(async (request) => {
         errors.push(`${topic.topic}: ${error instanceof Error ? error.message : "unable to fetch"}`);
         return null;
       }
-    }))).filter(Boolean);
+    })).filter(Boolean);
 
     for (let index = 0; index < rows.length; index += 50) {
       const { error } = await admin
