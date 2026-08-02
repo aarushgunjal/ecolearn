@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { DNREC_RECYLOPEDIA_URL, findDelawareGuidance, toGuidancePayload } from "../_shared/dnrec.ts";
+import { DNREC_RECYLOPEDIA_URL, findDelawareGuidance, findLiveDelawareGuidance, toGuidancePayload } from "../_shared/dnrec.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
@@ -109,7 +109,12 @@ serve(async (request) => {
       // The model cannot introduce a new item name: only an exact title from the
       // server-provided DNREC catalog is eligible for a local rule.
       if (allowedTitles.includes(selectedTitle)) {
-        localLookup = await findDelawareGuidance(admin, selectedTitle);
+        try {
+          localLookup = await findLiveDelawareGuidance(selectedTitle);
+        } catch (liveError) {
+          console.warn("Live DNREC lookup unavailable; using mirrored official data", liveError);
+          localLookup = await findDelawareGuidance(admin, selectedTitle);
+        }
       }
     } catch (lookupError) {
       console.warn("DNREC guidance lookup unavailable", lookupError);

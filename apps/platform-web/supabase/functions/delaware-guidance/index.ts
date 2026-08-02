@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import {
   DNREC_RECYLOPEDIA_URL,
   findDelawareGuidance,
+  findLiveDelawareGuidance,
   toGuidancePayload,
 } from "../_shared/dnrec.ts";
 
@@ -30,7 +31,15 @@ serve(async (request) => {
     }
 
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const lookup = await findDelawareGuidance(admin, item.trim());
+    // Query DNREC's live official catalog first. The local mirror is retained as
+    // a resilient fallback if the public catalog is temporarily unavailable.
+    let lookup: Awaited<ReturnType<typeof findDelawareGuidance>>;
+    try {
+      lookup = await findLiveDelawareGuidance(item.trim());
+    } catch (liveError) {
+      console.warn("Live DNREC lookup unavailable; using mirrored official data", liveError);
+      lookup = await findDelawareGuidance(admin, item.trim());
+    }
     return Response.json({
       query: item.trim(),
       verified: Boolean(lookup.match),

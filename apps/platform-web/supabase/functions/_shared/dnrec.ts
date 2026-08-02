@@ -65,6 +65,14 @@ const scoreTerm = (query: string, term: string) => {
   return shared ? shared / Math.max(queryWords.size, termWords.size) : 0;
 };
 
+const rankGuidance = (rows: DelawareGuidanceRow[], item: string) => {
+  const query = normalizeDnrecText(item);
+  return rows
+    .map((row) => ({ row, score: Math.max(...termsFor(row).map((term) => scoreTerm(query, term)), 0) }))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score || left.row.title.localeCompare(right.row.title));
+};
+
 export const guidanceCategory = (tags: DnrecTag[]) => {
   const names = tags.map((tag) => (tag.tag ?? "").toLowerCase());
   if (names.some((name) => name.includes("acceptable to recycle curbside"))) return "Curbside recycling";
@@ -79,17 +87,67 @@ export const isCurbside = (tags: DnrecTag[]) =>
   tags.some((tag) => (tag.tag ?? "").toLowerCase().includes("acceptable to recycle curbside") && !(tag.tag ?? "").toLowerCase().includes("not acceptable"));
 
 export async function findDelawareGuidance(client: SupabaseClient, item: string) {
-  const query = normalizeDnrecText(item);
   const { data, error } = await client
     .from("delaware_guidance_items")
     .select("source_topic_id,title,seo_name,content_text,tags,synonyms,search_terms,source_updated_at,source_url");
   if (error) throw error;
-  const ranked = ((data ?? []) as DelawareGuidanceRow[])
-    .map((row) => ({ row, score: Math.max(...termsFor(row).map((term) => scoreTerm(query, term)), 0) }))
-    .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score || left.row.title.localeCompare(right.row.title));
+  const ranked = rankGuidance((data ?? []) as DelawareGuidanceRow[], item);
   const best = ranked[0];
   return { match: best && best.score >= 0.72 ? best : null, candidates: ranked.slice(0, 5) };
+}
+
+type LiveTopic = {
+  topic_id: number;
+  topic: string;
+  seo_name: string;
+  updated_at?: string;
+  content_body?: string;
+  tags?: DnrecTag[];
+  synonyms?: DnrecSynonym[];
+};
+
+const fetchDnrecJson = async <T,>(url: string) => {
+  const response = await fetch(url, {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) throw new Error(`DNREC Recyclopedia returned ${response.status}`);
+  return await response.json() as T;
+};
+
+const liveTopicToRow = (topic: LiveTopic): DelawareGuidanceRow => ({
+  source_topic_id: topic.topic_id,
+  title: topic.topic,
+  seo_name: topic.seo_name,
+  content_text: stripHtml(topic.content_body ?? ""),
+  tags: topic.tags ?? [],
+  synonyms: topic.synonyms ?? [],
+  search_terms: Array.from(new Set([
+    topic.topic,
+    topic.seo_name.replace(/-/g, " "),
+    ...(topic.synonyms ?? []).map((entry) => entry.synonym ?? ""),
+  ].map(normalizeDnrecText).filter(Boolean))),
+  source_updated_at: topic.updated_at ?? null,
+  source_url: `${DNREC_RECYLOPEDIA_URL}#/topic/${topic.seo_name}`,
+});
+
+// The mirrored table keeps lookups fast, but a live fallback prevents a failed or
+// delayed sync from turning a known DNREC item into an unsafe generic answer.
+export async function findLiveDelawareGuidance(item: string) {
+  const listing = await fetchDnrecJson<{ data: LiveTopic[] }>(
+    `${DNREC_API_BASE}/topic?_with=tags,synonyms&_sort=topic&per_page=1000`,
+  );
+  const ranked = rankGuidance((listing.data ?? []).map(liveTopicToRow), item);
+  const best = ranked[0];
+  if (!best || best.score < 0.72) return { match: null, candidates: ranked.slice(0, 5) };
+
+  const detail = await fetchDnrecJson<LiveTopic>(
+    `${DNREC_API_BASE}/topic/${best.row.source_topic_id}?_with=tags,synonyms&_sort=tags.tag&tags-system-not=1`,
+  );
+  return {
+    match: { row: liveTopicToRow(detail), score: best.score },
+    candidates: ranked.slice(0, 5),
+  };
 }
 
 export const toGuidancePayload = (entry: { row: DelawareGuidanceRow; score: number }) => ({
