@@ -75,11 +75,13 @@ const rankGuidance = (rows: DelawareGuidanceRow[], item: string) => {
 
 export const guidanceCategory = (tags: DnrecTag[]) => {
   const names = tags.map((tag) => (tag.tag ?? "").toLowerCase());
+  // "NOT Acceptable to Recycle Curbside" contains the positive phrase, so it
+  // must be handled before the curbside-positive category.
+  if (names.some((name) => name.includes("not acceptable to recycle curbside"))) return "Keep out of curbside recycling";
   if (names.some((name) => name.includes("acceptable to recycle curbside"))) return "Curbside recycling";
   if (names.some((name) => name.includes("household hazardous"))) return "Household hazardous waste";
   if (names.some((name) => name.includes("drop-off"))) return "Drop-off or specialty program";
   if (names.some((name) => name.includes("yard waste"))) return "Yard waste";
-  if (names.some((name) => name.includes("not acceptable to recycle curbside"))) return "Keep out of curbside recycling";
   return "Delaware-specific guidance";
 };
 
@@ -115,6 +117,20 @@ const fetchDnrecJson = async <T,>(url: string) => {
   return await response.json() as T;
 };
 
+let liveTopicCache: { expiresAt: number; topics: LiveTopic[] } | null = null;
+
+const loadLiveTopics = async () => {
+  if (liveTopicCache && liveTopicCache.expiresAt > Date.now()) {
+    return liveTopicCache.topics;
+  }
+  const listing = await fetchDnrecJson<{ data: LiveTopic[] }>(
+    `${DNREC_API_BASE}/topic?_with=tags,synonyms&_sort=topic&per_page=1000`,
+  );
+  const topics = listing.data ?? [];
+  liveTopicCache = { topics, expiresAt: Date.now() + 5 * 60_000 };
+  return topics;
+};
+
 const liveTopicToRow = (topic: LiveTopic): DelawareGuidanceRow => ({
   source_topic_id: topic.topic_id,
   title: topic.topic,
@@ -133,13 +149,11 @@ const liveTopicToRow = (topic: LiveTopic): DelawareGuidanceRow => ({
 
 // The mirrored table keeps lookups fast, but a live fallback prevents a failed or
 // delayed sync from turning a known DNREC item into an unsafe generic answer.
-export async function findLiveDelawareGuidance(item: string) {
-  const listing = await fetchDnrecJson<{ data: LiveTopic[] }>(
-    `${DNREC_API_BASE}/topic?_with=tags,synonyms&_sort=topic&per_page=1000`,
-  );
-  const ranked = rankGuidance((listing.data ?? []).map(liveTopicToRow), item);
+export async function findLiveDelawareGuidance(item: string, includeDetail = true) {
+  const ranked = rankGuidance((await loadLiveTopics()).map(liveTopicToRow), item);
   const best = ranked[0];
   if (!best || best.score < 0.72) return { match: null, candidates: ranked.slice(0, 5) };
+  if (!includeDetail) return { match: best, candidates: ranked.slice(0, 5) };
 
   const detail = await fetchDnrecJson<LiveTopic>(
     `${DNREC_API_BASE}/topic/${best.row.source_topic_id}?_with=tags,synonyms&_sort=tags.tag&tags-system-not=1`,

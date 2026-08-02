@@ -59,7 +59,6 @@ export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
   const [placesLoading, setPlacesLoading] = useState(false);
   const [places, setPlaces] = useState<DisposalSite[]>([]);
   const [placesSource, setPlacesSource] = useState<string | null>(null);
-  const [placeType, setPlaceType] = useState("recycling");
   const [mapCenter, setMapCenter] = useState<{
     latitude: number;
     longitude: number;
@@ -153,7 +152,6 @@ export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
               body: {
                 latitude: coords.latitude,
                 longitude: coords.longitude,
-                type: placeType,
                 item: verifiedItem,
               },
             },
@@ -192,12 +190,13 @@ export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
     );
   };
 
-  const mapUrl = mapCenter
-    ? `https://www.openstreetmap.org/export/embed.html?bbox=${mapCenter.longitude - 0.025}%2C${mapCenter.latitude - 0.018}%2C${mapCenter.longitude + 0.025}%2C${mapCenter.latitude + 0.018}&layer=mapnik&marker=${mapCenter.latitude}%2C${mapCenter.longitude}`
+  const featuredLocation = places[0] ?? mapCenter;
+  const mapUrl = featuredLocation
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${featuredLocation.longitude - 0.025}%2C${featuredLocation.latitude - 0.018}%2C${featuredLocation.longitude + 0.025}%2C${featuredLocation.latitude + 0.018}&layer=mapnik&marker=${featuredLocation.latitude}%2C${featuredLocation.longitude}`
     : "";
 
   return (
-    <section className="mt-8 grid gap-5 lg:grid-cols-2">
+    <section id="available-locations" className="mt-8 grid gap-5 lg:grid-cols-2 scroll-mt-6">
       <div className="rounded-[1.5rem] border border-[#dfe6dc] bg-white p-6">
         <div className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#edf7e8] text-[#337d45]">
@@ -335,25 +334,15 @@ export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
               <h2 className="font-semibold">Nearby disposal</h2>
               <p className="text-sm text-[#718076]">
                 {verifiedItem
-                  ? `Official DNREC solutions for ${verifiedItem}. Your approximate location is used only for this search.`
-                  : "Scan or search an exact item first for official DNREC solutions. Generic nearby results remain available."}
+                  ? `Official DNREC locations and programs for ${verifiedItem}. Your approximate location is used only for this search.`
+                  : "Scan or select an exact Delaware item first. EcoLearn does not show generic disposal locations."}
               </p>
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <select
-              value={placeType}
-              onChange={(event) => setPlaceType(event.target.value)}
-              className="min-h-11 rounded-xl border border-[#dce5d9] bg-white px-3 py-2.5 text-sm"
-            >
-              <option value="recycling">Recycling</option>
-              <option value="battery">Batteries</option>
-              <option value="compost">Compost</option>
-              <option value="textile">Textiles</option>
-            </select>
             <button
               onClick={findPlaces}
-              disabled={placesLoading}
+              disabled={placesLoading || !verifiedItem}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#173d2a] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
             >
               {placesLoading ? (
@@ -361,13 +350,13 @@ export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
               ) : (
                 <Navigation size={16} />
               )}{" "}
-              Find nearby
+              {verifiedItem ? "See available locations" : "Verify an item first"}
             </button>
           </div>
         </div>
         {mapUrl && (
           <iframe
-            title="Your nearby disposal map"
+            title={places.length ? "Nearest official Delaware location" : "Your search area"}
             src={mapUrl}
             className="mt-5 h-64 w-full rounded-xl border border-[#e0e7dc]"
             loading="lazy"
@@ -375,7 +364,7 @@ export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
         )}
         {places.length > 0 && (
           <div className="mt-5">
-            {placesSource && <p className="mb-3 text-xs font-semibold text-[#52755a]">Source: {placesSource}</p>}
+            {placesSource && <p className="mb-3 text-xs font-semibold text-[#52755a]">Source: {placesSource}. The map marker shows the nearest listed official location.</p>}
             <div className="grid gap-3 sm:grid-cols-2">
             {places.map((site) => (
               <a

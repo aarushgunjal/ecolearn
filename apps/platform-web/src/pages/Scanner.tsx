@@ -57,6 +57,8 @@ type DelawareGuidance = {
   sourceUpdatedAt?: string | null;
 };
 
+type DelawareSuggestion = { title: string; category: string };
+
 const readAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -90,7 +92,7 @@ const lookup = async (query: string): Promise<ScanResult> => {
       confidence: guidance.matchConfidence,
       category: guidance.category,
       instructions: guidance.instructions,
-      tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the full item protocol below", "Use the Delaware map for nearby solutions"],
+      tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the full official item protocol", "See available locations for this item"],
       dnrec: guidance,
     };
   } catch {
@@ -102,6 +104,8 @@ export default function Scanner() {
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<DelawareSuggestion[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [trainingConsentMode, setTrainingConsentMode] = useState<
@@ -135,6 +139,32 @@ export default function Scanner() {
         );
       });
   }, [user]);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (query.length < 2) {
+      setSuggestions([]);
+      setSuggestionsLoading(false);
+      return;
+    }
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setSuggestionsLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("delaware-guidance", {
+          body: { item: query, mode: "suggestions" },
+        });
+        if (error) throw error;
+        if (active) setSuggestions((data?.suggestions ?? []) as DelawareSuggestion[]);
+      } catch (error) {
+        console.warn("Delaware suggestions unavailable", error);
+        if (active) setSuggestions([]);
+      } finally {
+        if (active) setSuggestionsLoading(false);
+      }
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [searchQuery]);
 
   const saveScanToHistory = async (scanResult: ScanResult) => {
     if (!user) return;
@@ -287,9 +317,18 @@ export default function Scanner() {
 
   const handleSearch = () => {
     if (!searchQuery.trim()) return;
+    setSuggestions([]);
     setResult(null);
     setIsScanning(true);
     window.setTimeout(() => void lookup(searchQuery).then(finish), 550);
+  };
+
+  const chooseSuggestion = (title: string) => {
+    setSearchQuery(title);
+    setSuggestions([]);
+    setResult(null);
+    setIsScanning(true);
+    window.setTimeout(() => void lookup(title).then(finish), 100);
   };
 
   const reset = () => {
@@ -297,6 +336,7 @@ export default function Scanner() {
     setUploadedImage(null);
     setImageFile(null);
     setSearchQuery("");
+    setSuggestions([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -388,7 +428,7 @@ export default function Scanner() {
                     </span>
                     <div className="h-px flex-1 bg-[#e9ece7]" />
                   </div>
-                  <div className="flex flex-col gap-2 rounded-xl border border-[#dfe5dc] bg-white p-1.5 shadow-sm sm:flex-row">
+                  <div className="relative flex flex-col gap-2 rounded-xl border border-[#dfe5dc] bg-white p-1.5 shadow-sm sm:flex-row">
                     <Search className="ml-2 mt-2.5 text-[#7a867d]" size={18} />
                     <input
                       value={searchQuery}
@@ -404,6 +444,17 @@ export default function Scanner() {
                     >
                       Check
                     </button>
+                    {(suggestionsLoading || suggestions.length > 0) && (
+                      <div className="absolute left-0 right-0 top-[calc(100%+0.45rem)] z-20 overflow-hidden rounded-xl border border-[#dfe5dc] bg-white py-1 shadow-lg">
+                        {suggestionsLoading && <p className="px-4 py-3 text-sm text-[#718076]">Searching official Delaware items…</p>}
+                        {!suggestionsLoading && suggestions.map((suggestion) => (
+                          <button key={suggestion.title} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => chooseSuggestion(suggestion.title)} className="block w-full px-4 py-3 text-left transition hover:bg-[#f2f8ee]">
+                            <span className="block text-sm font-semibold text-[#24412e]">{suggestion.title}</span>
+                            <span className="mt-0.5 block text-xs text-[#718076]">{suggestion.category}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -516,9 +567,6 @@ function ResultCard({
   onExplain: () => void;
 }) {
   const good = Boolean(result.dnrec?.curbside);
-  const confidence = Math.round(
-    result.confidence * (result.confidence <= 1 ? 100 : 1),
-  );
   const explanation = result.explanation;
   return (
     <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
@@ -545,8 +593,7 @@ function ResultCard({
             className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-bold ${good ? "bg-[#e5f4df] text-[#287540]" : "bg-[#fff0ed] text-[#c84c40]"}`}
           >
             {good ? <Recycle size={16} /> : <Trash2 size={16} />}
-            {result.dnrec ? (good ? "DNREC: curbside recycling" : result.dnrec.category) : "DNREC verification required"}
-            {result.dnrec && <><span className="h-3 w-px bg-current opacity-25" />{confidence}% official-title match</>}
+            {result.dnrec ? "Official DNREC record" : "DNREC verification required"}
           </div>
         </div>
       </div>
@@ -566,6 +613,20 @@ function ResultCard({
           ))}
         </div>
       </div>
+      {result.dnrec && (
+        <button
+          type="button"
+          onClick={() => document.getElementById("available-locations")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#a8cc9e] bg-[#f4faef] px-4 py-3 text-sm font-semibold text-[#286d3b] transition hover:bg-[#e9f5e4]"
+        >
+          <MapPin size={17} /> See available locations
+        </button>
+      )}
+      {result.dnrec && /see solutions below/i.test(result.instructions) && (
+        <p className="mt-3 text-xs leading-5 text-[#617166]">
+          DNREC uses “solutions” to mean its mapped facilities and approved programs. Use <span className="font-semibold">See available locations</span> to find nearby options for this item.
+        </p>
+      )}
       {result.dnrec && (
         <a
           href={result.dnrec.sourceUrl}

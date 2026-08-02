@@ -25,7 +25,7 @@ serve(async (request) => {
     const { data: { user } } = await authClient.auth.getUser();
     if (!user) return Response.json({ error: "Authentication required" }, { status: 401, headers: cors });
 
-    const { item } = await request.json();
+    const { item, mode } = await request.json();
     if (typeof item !== "string" || !item.trim() || item.length > 120) {
       return Response.json({ error: "Provide an item name up to 120 characters." }, { status: 400, headers: cors });
     }
@@ -35,11 +35,21 @@ serve(async (request) => {
     // a resilient fallback if the public catalog is temporarily unavailable.
     let lookup: Awaited<ReturnType<typeof findDelawareGuidance>>;
     try {
-      lookup = await findLiveDelawareGuidance(item.trim());
+      lookup = await findLiveDelawareGuidance(item.trim(), mode !== "suggestions");
     } catch (liveError) {
       console.warn("Live DNREC lookup unavailable; using mirrored official data", liveError);
       lookup = await findDelawareGuidance(admin, item.trim());
     }
+    if (mode === "suggestions") {
+      return Response.json({
+        suggestions: lookup.candidates.map((entry) => ({
+          title: entry.row.title,
+          category: entry.row.tags?.map((tag) => tag.tag).filter(Boolean)[0] ?? "Delaware DNREC item",
+        })),
+        sourceName: "Delaware DNREC Recyclopedia",
+      }, { headers: { ...cors, "Cache-Control": "private, max-age=300" } });
+    }
+
     return Response.json({
       query: item.trim(),
       verified: Boolean(lookup.match),
@@ -54,7 +64,7 @@ serve(async (request) => {
   } catch (error) {
     console.error("delaware-guidance failed", error);
     return Response.json({
-      error: "Delaware guidance is unavailable until the official DNREC data sync has run.",
+      error: "Delaware guidance is temporarily unavailable. Please try again shortly.",
       sourceUrl: DNREC_RECYLOPEDIA_URL,
     }, { status: 503, headers: cors });
   }
