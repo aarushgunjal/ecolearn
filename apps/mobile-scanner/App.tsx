@@ -125,7 +125,7 @@ export default function App() {
             <Text style={styles.kicker}>ITEM SCANNER</Text>
             <Text style={styles.title}>Know where it goes.</Text>
             <Text style={styles.description}>
-              Take or choose a clear photo of one household item. EcoScan will suggest the safest next step.
+              Take or choose a clear photo of one household item. This scanner identifies a broad category; official disposal guidance stays in EcoLearn.
             </Text>
             <View style={styles.photoCard}>
               {photo ? <Image source={{ uri: photo.uri }} style={styles.photo} /> : <Text style={styles.cameraGlyph}>⌁</Text>}
@@ -150,15 +150,14 @@ export default function App() {
             {photo && <Image source={{ uri: photo.uri }} style={styles.resultPhoto} />}
             <Text style={styles.kicker}>SCAN RESULT</Text>
             <Text style={styles.title}>{result.item}</Text>
-            <View style={[styles.badge, result.recyclable ? styles.goodBadge : styles.warnBadge]}>
-              <Text style={[styles.badgeText, result.recyclable ? styles.goodText : styles.warnText]}>
-                {result.recyclable ? "Recyclable" : "Keep out of curbside recycling"} · {percent(result.confidence)}% confidence
+            <View style={[styles.badge, styles.warnBadge]}>
+              <Text style={[styles.badgeText, styles.warnText]}>
+                Broad classifier label · {percent(result.confidence)}% confidence
               </Text>
             </View>
             <View style={styles.guidanceCard}>
               <Text style={styles.cardLabel}>DELAWARE RULES ONLY</Text>
               <Text style={styles.guidance}>This standalone scanner does not issue disposal instructions. Use the signed-in EcoLearn app to match an item to an official Delaware DNREC Recyclopedia protocol.</Text>
-              {(result.tips ?? []).map((tip) => <Text key={tip} style={styles.tip}>• {tip}</Text>)}
             </View>
             {!!result.top_predictions?.length && <View style={styles.alternatives}><Text style={styles.cardLabel}>ALSO CONSIDERED</Text>{result.top_predictions.slice(0, 3).map((item) => <Text key={item.class} style={styles.alternative}>{item.class} · {percent(item.confidence)}%</Text>)}</View>}
             <Text style={styles.disclaimer}>Only a verified Delaware DNREC item match can produce a disposal recommendation.</Text>

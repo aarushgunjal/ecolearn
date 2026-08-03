@@ -1,85 +1,52 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
-import type { UserProgress } from "@/hooks/useProgress";
 
-type Achievement = { id: string; title: string; icon: string; requirement_type: "scans" | "lessons" | "streak" | "level"; requirement_value: number };
-type UserAchievement = { achievement_id: string; achievements?: Achievement };
+export type Achievement = {
+  id: string;
+  title: string;
+  description: string | null;
+  icon: string;
+};
+
+export type UserAchievement = {
+  achievement_id: string;
+  achievements?: Achievement | null;
+};
 
 export function useAchievements() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [userAchievements, setUserAchievements] = useState<UserAchievement[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      fetchAchievements();
+  const fetchAchievements = useCallback(async () => {
+    if (!user) {
+      setAchievements([]);
+      setUserAchievements([]);
+      setLoading(false);
+      return;
     }
+    const [{ data: allAchievements }, { data: earned }] = await Promise.all([
+      supabase.from("achievements").select("id, title, description, icon"),
+      supabase
+        .from("user_achievements")
+        .select("achievement_id, achievements(id, title, description, icon)")
+        .eq("user_id", user.id),
+    ]);
+    setAchievements((allAchievements ?? []) as Achievement[]);
+    setUserAchievements((earned ?? []) as unknown as UserAchievement[]);
+    setLoading(false);
   }, [user]);
 
-  const fetchAchievements = async () => {
-    if (!user) return;
-
-    const { data: allAchievements } = await supabase.from("achievements").select("*");
-
-    const { data: earned } = await supabase
-      .from("user_achievements")
-      .select("*, achievements(*)")
-      .eq("user_id", user.id);
-
-    setAchievements(allAchievements || []);
-    setUserAchievements(earned || []);
-    setLoading(false);
-  };
-
-  const checkAndAwardAchievements = async (progress: UserProgress) => {
-    if (!user || !progress) return;
-
-    const earnedIds = userAchievements.map((ua) => ua.achievement_id);
-
-    for (const achievement of achievements) {
-      if (earnedIds.includes(achievement.id)) continue;
-
-      let shouldAward = false;
-
-      switch (achievement.requirement_type) {
-        case "scans":
-          shouldAward = progress.total_scans >= achievement.requirement_value;
-          break;
-        case "lessons":
-          shouldAward = progress.total_lessons_completed >= achievement.requirement_value;
-          break;
-        case "streak":
-          shouldAward = progress.streak_days >= achievement.requirement_value;
-          break;
-        case "level":
-          shouldAward = progress.level >= achievement.requirement_value;
-          break;
-      }
-
-      if (shouldAward) {
-        const { error } = await supabase.from("user_achievements").insert({ user_id: user.id, achievement_id: achievement.id });
-
-        if (!error) {
-          toast({
-            title: "Achievement Unlocked! 🏆",
-            description: `${achievement.icon} ${achievement.title}`,
-          });
-        }
-      }
-    }
-
-    await fetchAchievements();
-  };
+  useEffect(() => {
+    void fetchAchievements();
+  }, [fetchAchievements]);
 
   return {
     achievements,
     userAchievements,
     loading,
-    checkAndAwardAchievements,
     refreshAchievements: fetchAchievements,
   };
 }

@@ -173,7 +173,7 @@ export function ScanFeedback({
       </div>
       {verdict === "incorrect" && (
         <div className="mt-4 space-y-3">
-          <Option
+          <Option<Issue>
             label="What was off?"
             options={[
               ["wrong_item", "Wrong item"],
@@ -183,7 +183,7 @@ export function ScanFeedback({
             value={issue}
             setValue={setIssue}
           />
-          <Option
+          <Option<Disposal>
             label="What should it be?"
             options={[
               ["recycle", "Recycle"],

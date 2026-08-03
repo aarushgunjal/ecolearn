@@ -17,7 +17,14 @@ into Supabase. The visual model receives the official title catalog and can sele
 one exact title only; the app displays a rule only after that title is verified in
 the official mirror. No match means no disposal recommendation.
 
-1. Run `../migrations/202607310001_delaware_guidance.sql` in the Supabase SQL Editor.
+1. Run these migrations in order in the Supabase SQL Editor:
+
+   - `../migrations/202607310001_delaware_guidance.sql`
+   - `../migrations/202608020001_secure_delaware_platform.sql`
+
+   The security migration is rerunnable. It moves XP, lesson grading, rewards,
+   and official scan recording behind authenticated server functions, and adds
+   per-user visual lookup limits.
 2. In Edge Function Secrets, add a long random `DNREC_SYNC_SECRET`.
 3. Deploy these functions together with `_shared/dnrec.ts`. The recommended
    no-local-CLI option is the repository's **Deploy EcoLearn Supabase functions**
@@ -34,8 +41,8 @@ the official mirror. No match means no disposal recommendation.
    ```
 
 4. Invoke `sync-delaware-recyclopedia` once with `POST` and the header
-   `x-dnrec-sync-secret: <your secret>`. The first run imports all 453 DNREC
-   topics; later runs only refresh topics whose DNREC update timestamp changed.
+   `x-dnrec-sync-secret: <your secret>`. The first run imports the current DNREC
+   catalog; later runs only refresh topics whose DNREC update timestamp changed.
 
 The map function uses DNREC's item-filtered solution endpoint when it receives a
 verified item name. Its older OpenStreetMap lookup remains as a clearly separate

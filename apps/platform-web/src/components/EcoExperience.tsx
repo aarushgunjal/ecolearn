@@ -260,7 +260,7 @@ const leaderboard = [
 ];
 
 export function Home() {
-  const { progress, addXP } = useProgress();
+  const { progress, claimReward } = useProgress();
   const { completedLessonIds } = useLessonProgress();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -279,10 +279,24 @@ export function Home() {
   const questComplete = questProgress >= 3;
   const claimQuest = async () => {
     if (!questComplete || questClaimed) return;
-
+    if (!user) {
+      toast({
+        title: "Sign in to claim XP",
+        description: "Create an account to save verified rewards.",
+      });
+      return;
+    }
+    const { error } = await claimReward("daily_three_scans");
+    if (error) {
+      toast({
+        title: "Couldn’t claim this reward",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
     setQuestClaimed(true);
     localStorage.setItem("ecolearn-home-quest-claimed", "true");
-    await addXP(15);
     toast({
       title: "+15 XP earned",
       description: "Today’s quest is complete.",
@@ -431,7 +445,10 @@ export function Learn() {
     refreshCompletedLessons,
     markLessonsChanged,
   } = useLessonProgress();
-  const completeLesson = async (lesson: (typeof lessons)[number]) => {
+  const completeLesson = async (
+    lesson: (typeof lessons)[number],
+    selectedAnswer: number,
+  ) => {
     if (completedLessonIds.includes(lesson.id)) {
       setActiveLesson(null);
       return;
@@ -443,8 +460,9 @@ export function Learn() {
       });
       return;
     }
-    const { error } = await supabase.rpc("complete_lesson", {
+    const { error } = await supabase.rpc("complete_ecolearn_lesson", {
       p_lesson_id: lesson.id,
+      p_selected_answer: selectedAnswer,
     });
     if (error) {
       toast({
@@ -468,7 +486,9 @@ export function Learn() {
       <LessonPlayer
         lesson={activeLesson}
         onClose={() => setActiveLesson(null)}
-        onComplete={() => void completeLesson(activeLesson)}
+        onComplete={(selectedAnswer) =>
+          void completeLesson(activeLesson, selectedAnswer)
+        }
       />
     );
   const unlocked = (index: number) =>
@@ -562,35 +582,15 @@ function LessonPlayer({
 }: {
   lesson: (typeof lessons)[number];
   onClose: () => void;
-  onComplete: () => void;
+  onComplete: (selectedAnswer: number) => void;
 }) {
   const content = lessonContent[lesson.id];
   const [step, setStep] = useState(0);
   const [answer, setAnswer] = useState<number | null>(null);
   const [checked, setChecked] = useState(false);
-  const { user } = useAuth();
-  const { toast } = useToast();
   const lastContentStep = content.facts.length;
   const isQuiz = step > lastContentStep;
   const correct = answer === content.answer;
-  const finish = async () => {
-    if (!checked || !correct) {
-      toast({
-        title: "Answer the question first",
-        description: "Pick the correct answer before finishing this lesson.",
-      });
-      return;
-    }
-
-    if (user)
-      await supabase.from("quiz_attempts").insert({
-        user_id: user.id,
-        lesson_id: lesson.id,
-        answers: { selected: answer },
-        score: 100,
-      });
-    onComplete();
-  };
   return (
     <div className="mx-auto max-w-2xl animate-in fade-in slide-in-from-bottom-3 duration-500">
       <div className="mb-7 flex items-center justify-between">
@@ -678,7 +678,7 @@ function LessonPlayer({
             </button>
           ) : correct ? (
             <button
-              onClick={onComplete}
+              onClick={() => answer !== null && onComplete(answer)}
               className="rounded-xl bg-[#173d2a] px-6 py-3 text-sm font-bold text-white"
             >
               Complete lesson +{lesson.xp} XP
@@ -711,14 +711,29 @@ export function Challenges() {
   const [claimed, setClaimed] = useState(
     () => localStorage.getItem("ecolearn-weekend-bonus-claimed") === "true",
   );
-  const { addXP } = useProgress();
+  const { claimReward } = useProgress();
+  const { user } = useAuth();
   const { toast } = useToast();
   const claimBonus = async () => {
     if (claimed) return;
-
+    if (!user) {
+      toast({
+        title: "Sign in to claim XP",
+        description: "Create an account to save verified rewards.",
+      });
+      return;
+    }
+    const { error } = await claimReward("weekend_reusable_cup");
+    if (error) {
+      toast({
+        title: "Couldn’t claim this reward",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
     setClaimed(true);
     localStorage.setItem("ecolearn-weekend-bonus-claimed", "true");
-    await addXP(40);
     toast({
       title: "+40 XP earned",
       description: "Weekend bonus marked complete.",
@@ -915,8 +930,8 @@ export function Profile() {
     }
   };
   const unlockedAchievements = userAchievements
-    .map((entry) => entry.achievements ?? entry.achievement ?? entry)
-    .filter(Boolean);
+    .map((entry) => entry.achievements)
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
   const earnedCount = unlockedAchievements.length;
   const totalAchievements = achievements.length;
   return (

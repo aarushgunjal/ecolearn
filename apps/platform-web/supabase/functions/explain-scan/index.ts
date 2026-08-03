@@ -52,12 +52,38 @@ serve(async (request) => {
       );
     }
 
-    const label = typeof predictedLabel === "string" ? predictedLabel.toLowerCase() : "";
+    const submittedLabel = typeof predictedLabel === "string" ? predictedLabel.trim() : "";
+    const label = submittedLabel.toLowerCase();
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     if (!labels.has(label)) {
+      // Web and mobile may already have an exact official result from the
+      // catalog lookup. Return that record without spending another AI call.
+      const existing = await findDelawareGuidance(admin, submittedLabel);
+      if (existing.match?.row.title === submittedLabel) {
+        return Response.json({
+          verified: true,
+          guidance: toGuidancePayload(existing.match),
+          sourceUrl: DNREC_RECYLOPEDIA_URL,
+          model: null,
+        }, { headers: { ...cors, "Cache-Control": "no-store" } });
+      }
       return Response.json({ error: "Unsupported scanner label." }, { status: 400, headers: cors });
     }
 
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: recentRequests, error: requestLogError } = await admin
+      .from("ai_request_log")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("request_kind", "delaware_catalog_match")
+      .gte("created_at", since);
+    if (requestLogError) throw requestLogError;
+    if ((recentRequests ?? 0) >= 10) {
+      return Response.json(
+        { error: "Delaware image checks are limited to 10 per hour." },
+        { status: 429, headers: { ...cors, "Retry-After": "3600" } },
+      );
+    }
     const { data: officialTopics, error: topicsError } = await admin
       .from("delaware_guidance_items")
       .select("title")
@@ -72,6 +98,12 @@ serve(async (request) => {
     const apiKey = Deno.env.get("OPENROUTER_API_KEY");
     const model = Deno.env.get("OPENROUTER_EXPLAIN_MODEL") ?? Deno.env.get("OPENROUTER_SECOND_OPINION_MODEL") ?? Deno.env.get("OPENROUTER_REVIEW_MODEL");
     if (!apiKey || !model) throw new Error("AI explanation is not configured");
+
+    const { error: requestInsertError } = await admin.from("ai_request_log").insert({
+      user_id: user.id,
+      request_kind: "delaware_catalog_match",
+    });
+    if (requestInsertError) throw requestInsertError;
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",

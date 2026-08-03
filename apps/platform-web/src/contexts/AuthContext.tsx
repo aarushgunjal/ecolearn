@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- this provider intentionally exports its paired consumer hook. */
 import {
   createContext,
   useContext,
@@ -42,11 +43,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    void supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+      })
+      .catch((error: unknown) => {
+        console.error("Unable to restore session:", error);
+      })
+      .finally(() => setLoading(false));
 
     return () => subscription.unsubscribe();
   }, []);

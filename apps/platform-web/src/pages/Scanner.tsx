@@ -112,6 +112,8 @@ export default function Scanner() {
     "always_allow" | "ask_every_time"
   >("ask_every_time");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageUrlRef = useRef<string | null>(null);
+  const scanRequestIdRef = useRef(crypto.randomUUID());
   const { user } = useAuth();
   const { progress, refreshProgress } = useProgress();
   const { toast } = useToast();
@@ -119,6 +121,13 @@ export default function Scanner() {
   const communityRank = Math.max(
     5,
     50 - Math.min(progress?.total_scans ?? 0, 15) * 2,
+  );
+
+  useEffect(
+    () => () => {
+      if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
+    },
+    [],
   );
 
   useEffect(() => {
@@ -167,27 +176,35 @@ export default function Scanner() {
   }, [searchQuery]);
 
   const saveScanToHistory = async (scanResult: ScanResult) => {
-    if (!user) return;
+    if (!user || !scanResult.dnrec) return false;
     try {
-      const { error } = await supabase.rpc("record_scan", {
+      const { error } = await supabase.rpc("record_ecolearn_scan", {
         p_item_name: scanResult.item,
         p_is_recyclable: scanResult.recyclable,
-        p_confidence: scanResult.confidence,
+        p_confidence_score: scanResult.confidence,
         p_category: scanResult.category,
         p_instructions: scanResult.instructions,
+        p_client_request_id: scanRequestIdRef.current,
       });
       if (error) throw error;
       await refreshProgress();
+      return true;
     } catch (error) {
       console.error("Error saving scan:", error);
+      toast({
+        title: "Guidance shown, progress not saved",
+        description: "Please try again after checking your connection.",
+        variant: "destructive",
+      });
+      return false;
     }
   };
 
   const finish = async (scanResult: ScanResult) => {
     setResult(scanResult);
-    if (scanResult.dnrec) await saveScanToHistory(scanResult);
+    const saved = await saveScanToHistory(scanResult);
     setIsScanning(false);
-    if (scanResult.dnrec) {
+    if (saved) {
       toast({
         title: "+10 XP earned",
         description: `${scanResult.item} was added to your impact.`,
@@ -256,7 +273,16 @@ export default function Scanner() {
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file || isScanning) return;
+    if (!file.type.startsWith("image/") || file.size > 8 * 1024 * 1024) {
+      toast({
+        title: "Choose a valid image",
+        description: "Use an image under 8 MB.",
+        variant: "destructive",
+      });
+      event.target.value = "";
+      return;
+    }
     if (!user) {
       toast({
         title: "Sign in to scan",
@@ -266,7 +292,10 @@ export default function Scanner() {
       });
       return;
     }
-    setUploadedImage(URL.createObjectURL(file));
+    if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
+    imageUrlRef.current = URL.createObjectURL(file);
+    scanRequestIdRef.current = crypto.randomUUID();
+    setUploadedImage(imageUrlRef.current);
     setImageFile(file);
     setResult(null);
     setIsScanning(true);
@@ -316,7 +345,8 @@ export default function Scanner() {
   };
 
   const handleSearch = () => {
-    if (!searchQuery.trim()) return;
+    if (!searchQuery.trim() || isScanning) return;
+    scanRequestIdRef.current = crypto.randomUUID();
     setSuggestions([]);
     setResult(null);
     setIsScanning(true);
@@ -324,6 +354,8 @@ export default function Scanner() {
   };
 
   const chooseSuggestion = (title: string) => {
+    if (isScanning) return;
+    scanRequestIdRef.current = crypto.randomUUID();
     setSearchQuery(title);
     setSuggestions([]);
     setResult(null);
@@ -337,6 +369,9 @@ export default function Scanner() {
     setImageFile(null);
     setSearchQuery("");
     setSuggestions([]);
+    if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
+    imageUrlRef.current = null;
+    scanRequestIdRef.current = crypto.randomUUID();
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 

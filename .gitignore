@@ -24,6 +24,10 @@ __pycache__/
 *.py[cod]
 .training-work/
 apps/platform-web/training/ecolearn-feedback-dataset/
+apps/platform-web/.validation-dist/
+apps/platform-web/test-results/
+apps/platform-web/playwright-report/
+*.tsbuildinfo
 
 # Editor directories and files
 .vscode/*

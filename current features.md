@@ -1,85 +1,58 @@
 # EcoLearn — Current Features
 
-_Snapshot for the Delaware Department of Recycling meeting — July 27, 2026_
+_Platform snapshot — August 2, 2026_
 
-EcoLearn is a gamified sustainable-action platform centered on making waste
-disposal decisions easier, clearer, and more educational.
+EcoLearn is a Delaware-first learning and waste-guidance platform for students,
+beginning with primary-school use cases. The platform combines official DNREC
+Recyclopedia data, guided learning, progress, and privacy-conscious feedback.
 
-## Core user experience
+## Delaware guidance and scanning
 
-- **Image-based waste scanner:** a user can photograph or upload a household
-  item and receive an item class, confidence score, recycling status, disposal
-  guidance, and practical preparation tips.
-- **Text item lookup:** users can search by item name when taking a photo is
-  inconvenient.
-- **Clear uncertainty signals:** the scanner shows confidence and alternative
-  classes instead of presenting every prediction as certain.
-- **Explain with AI (ready to deploy):** a user-requested explanation can add
-  context to broad classifications. For example, it can distinguish a TV
-  remote from a loose battery and direct the user toward general e-waste or
-  battery-collection guidance. The image is only sent after the user presses
-  the button and is not stored by EcoLearn for this feature.
+- Photo classification and exact-item text search.
+- Official DNREC autocomplete, item protocols, source links, and item-specific
+  Delaware locations.
+- A strict verified-result boundary: broad classifier labels never become
+  disposal instructions.
+- A user-requested visual catalog check through OpenRouter. The model may select
+  only an exact title from the official DNREC catalog; the server returns the
+  corresponding official record or no recommendation.
+- Live DNREC lookup with the synchronized Supabase mirror as a resilience
+  fallback.
+- Image type and size validation, student privacy reminders, and no storage of
+  images used only for the visual catalog check.
 
-## Disposal tools
+## Learning, motivation, and accounts
 
-- **Barcode lookup:** supports product identification and material/disposal
-  lookup where product data is available.
-- **Read a label:** uses AI to read visible package material and recycling
-  information from a user-selected image.
-- **Disposal-location finder:** users can search for nearby disposal options by
-  material category. It uses external place data, so results should always be
-  confirmed with the local program before public rollout.
-- **Scan history and personal impact:** signed-in users can review scans and
-  see progress over time.
+- Six Delaware-aware lessons with quizzes, ordered unlocking, and saved
+  completion state.
+- XP, levels, streaks, achievements, quests, and scan history.
+- Email/password and Google authentication with a remember-me preference.
+- Profile, notification, school, organization, community, local-rules, and
+  scanner-tool surfaces.
+- Shareable routes for the main platform areas, privacy policy, and terms.
 
-## Learning and motivation
+## Security and responsible improvement
 
-- **Structured sustainability lessons:** lesson content includes a real lesson
-  experience rather than a one-click completion state.
-- **Progression:** lessons unlock in order and completed lessons persist to the
-  user account.
-- **Quests, XP, streak-style progress, and impact metrics:** the platform makes
-  sustainable habits feel achievable and rewarding.
-- **Leaderboard:** a community-facing ranking view encourages friendly
-  participation.
+- Server-controlled scan, lesson, reward, XP, streak, and achievement updates;
+  the browser cannot directly mint progress.
+- Idempotent scan recording, duplicate protection, and per-user limits for
+  OpenRouter visual catalog checks.
+- Consent-first scan feedback with human admin review before an image can enter
+  the model-improvement pipeline.
+- Admin access controlled by the existing Supabase `app_admins` allow-list.
+- Automated private training batches and promotion gates for model updates.
 
-## Accounts, privacy, and administration
+## Mobile surfaces
 
-- **Email/password and Google sign-in** through Supabase Authentication.
-- **Remember-me session preference** and account/profile settings.
-- **Profile controls:** users can update their display name, notification
-  preference, and training-photo consent choice.
-- **Consent-first feedback:** users can quickly mark a result as correct or
-  incorrect. Photos are only retained for future training when the user makes
-  an explicit choice to allow it.
-- **Admin feedback review:** designated admins can review feedback, approve or
-  reject training examples, and correct the label before examples reach the
-  training pipeline.
-- **Privacy Policy and Terms of Service** are available in the product.
-- **Row Level Security and authenticated backend functions** protect user data
-  and limit sensitive operations to the right user or admin role.
+- Expo EcoLearn companion with authentication, verified scanning, feedback,
+  lessons, quests, profile, and practical tools.
+- Standalone Expo scanner for broad visual identification only; it deliberately
+  does not issue disposal instructions without a signed-in official DNREC match.
 
-## Responsible model-improvement pipeline
+## Deferred or external work
 
-- **Human-reviewed training data:** only consented images with an approved,
-  normalized label are eligible for retraining.
-- **Batch automation:** eligible examples are collected into configurable
-  batches (currently 20). A GitHub Action checks for a queued batch hourly;
-  it only launches training when a full batch exists.
-- **Safety gate before promotion:** a candidate model must meet overall and
-  hazardous-material recall thresholds before it replaces the active model.
-- **Private data flow:** training data is handled as a private dataset, with
-  model artifacts versioned before promotion.
-
-## Important scope notes for the meeting
-
-- The current classifier uses broad material/disposal classes. It is useful for
-  guidance, but it is not a substitute for official local rules or hazardous
-  waste instructions.
-- Local acceptance rules, site hours, and special-program eligibility vary by
-  jurisdiction. EcoLearn should use department-approved data for any Delaware
-  public pilot.
-- Multi-object detection (finding several objects in one photo and classifying
-  each separately) is intentionally deferred until after the meeting.
-- The AI explanation feature is implemented in the codebase and needs its
-  normal backend/frontend deployment before it is shown to users.
+- Multi-object detection remains parked and uncommitted.
+- Production database migrations, Edge Function secrets, and deployments must
+  be applied to the connected Supabase project.
+- A school pilot still requires an agreed youth-privacy, consent, retention,
+  accessibility, and teacher-managed account model.
