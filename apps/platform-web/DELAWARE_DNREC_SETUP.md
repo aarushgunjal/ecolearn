@@ -1,9 +1,10 @@
 # Delaware DNREC guidance: deployment and verification
 
 EcoLearn uses Delaware DNREC's Recyclopedia (location `38`) as the authority for
-local disposal instructions and item-specific locations. Visual AI receives the
-official topic catalog and may select one exact title only; it cannot invent an
-item title or recycling rule. No verified match means no disposal recommendation.
+local disposal instructions and item-specific locations. Visual AI identifies
+one specific visible item but never produces recycling or disposal guidance.
+The server then searches the synchronized official catalog and accepts only a
+strong, unique match. No verified match means no disposal recommendation.
 
 ## 1. Import the database schema
 
@@ -14,6 +15,9 @@ In Supabase **SQL Editor**, run the migrations in order:
 2. [202608020001_secure_delaware_platform.sql](./supabase/migrations/202608020001_secure_delaware_platform.sql)
    moves scans, lesson completion, rewards, XP, and achievements behind
    server-controlled functions. It also creates the visual-check request log.
+3. [202608070001_vision_scanner_feedback.sql](./supabase/migrations/202608070001_vision_scanner_feedback.sql)
+   keeps feedback from the new vision scanner out of the retired ten-class
+   classifier training queue.
 
 The security migration is rerunnable. If the accidental `ecoscan` copy was run
 partially in SQL Editor, run this complete platform copy so the database and the
@@ -26,8 +30,8 @@ In **Edge Functions → Secrets**, configure:
 | Secret | Purpose |
 | --- | --- |
 | `DNREC_SYNC_SECRET` | Authorizes the background catalog importer. Use a new long random value. |
-| `OPENROUTER_API_KEY` | Used only by the protected visual catalog matcher. Never use a `VITE_` or `EXPO_PUBLIC_` name. |
-| `OPENROUTER_EXPLAIN_MODEL` | The OpenRouter vision model used for exact official-title selection. |
+| `OPENROUTER_API_KEY` | Used only by the protected visual item identifier. Never use a `VITE_` or `EXPO_PUBLIC_` name. |
+| `OPENROUTER_EXPLAIN_MODEL` | The OpenRouter vision model used for one-call item identification. |
 | `ALLOWED_ORIGIN` | The deployed EcoLearn web origin, such as `https://app.ecolearn.dev`. |
 
 ## 3. Deploy from GitHub
@@ -67,13 +71,16 @@ while signed in to EcoLearn:
 
 1. Search an exact item such as `Plastic Water Bottles`.
 2. Confirm the result names Delaware DNREC Recyclopedia and opens its source.
-3. Use **Check official Delaware item** on a clear, one-item photo. It must
-   return an official protocol or no recommendation—never generic advice.
-4. Open available locations and confirm the results are filtered for that item.
-5. Repeat a saved request and confirm XP is awarded once only.
-6. Complete a lesson with a correct answer and confirm a direct client-side
+3. Choose or take a clear, one-item photo and use **Identify + check DNREC**.
+   It must return an official protocol or an observed item with an explicit
+   no-match state—never generic disposal advice.
+4. Test a mixed-item photo. It must ask for one item at a time without making
+   separate AI calls for detected crops.
+5. Open available locations and confirm the results are filtered for that item.
+6. Repeat a saved request and confirm XP is awarded once only.
+7. Complete a lesson with a correct answer and confirm a direct client-side
    progress update is rejected.
-7. Trigger more than ten visual checks in an hour with a test account and
+8. Trigger more than ten visual checks in an hour with a test account and
    confirm the function returns rate-limit status `429`.
 
 Do not launch EcoLearn as a child-directed school product until the school or

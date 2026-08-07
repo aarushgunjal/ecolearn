@@ -27,6 +27,17 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "EcoScan lets you choose an item photo to identify it.",
+          "cameraPermission": "EcoScan uses your camera to identify a disposal item.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-status-bar"
+    ]
   }
 }

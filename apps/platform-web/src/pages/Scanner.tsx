@@ -29,19 +29,23 @@ type ScanResult = {
   confidence: number;
   category: string;
   instructions: string;
-  image?: string;
-  top_predictions?: { class: string; confidence: number }[];
   tips: string[];
-  explanation?: {
-    status: "loading" | "ready" | "unavailable";
-    observedItem?: string;
-    explanation?: string;
-    disposalAction?: string;
-    caution?: string;
-    guidance?: DelawareGuidance | null;
-    sourceUrl?: string;
-  };
+  imageStatus?: "single_item" | "multiple_items" | "unclear";
+  material?: string | null;
+  visibleEvidence?: string | null;
   dnrec?: DelawareGuidance | null;
+};
+
+type VisionScanResponse = {
+  verified: boolean;
+  guidance: DelawareGuidance | null;
+  observedItem: string | null;
+  material: string | null;
+  confidence: number;
+  imageStatus: "single_item" | "multiple_items" | "unclear";
+  visibleEvidence: string | null;
+  nextSteps: string[];
+  message: string;
 };
 
 type DelawareGuidance = {
@@ -59,13 +63,63 @@ type DelawareGuidance = {
 
 type DelawareSuggestion = { title: string; category: string };
 
-const readAsDataUrl = (file: File) =>
+const readAsDataUrl = (file: Blob) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Couldn't read selected image."));
     reader.onload = () => resolve(String(reader.result));
     reader.readAsDataURL(file);
   });
+
+const readAsVisionDataUrl = async (file: File) => {
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.decoding = "async";
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Couldn't open selected image."));
+      image.src = sourceUrl;
+    });
+    const maxDimension = 1_600;
+    const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Couldn't prepare selected image.");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const compressed = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(
+        (blob) => blob ? resolve(blob) : reject(new Error("Couldn't prepare selected image.")),
+        "image/jpeg",
+        0.82,
+      ),
+    );
+    return await readAsDataUrl(compressed);
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+};
+
+const functionErrorMessage = async (error: unknown) => {
+  if (error && typeof error === "object" && "context" in error) {
+    const context = (error as { context?: unknown }).context;
+    if (context instanceof Response) {
+      try {
+        const payload = await context.clone().json() as { error?: unknown };
+        if (typeof payload.error === "string" && payload.error.trim()) return payload.error;
+      } catch {
+        // Fall through to the standard client error message.
+      }
+    }
+  }
+  return error instanceof Error && error.message
+    ? error.message
+    : "EcoLearn could not complete the visual item check.";
+};
 
 const fallbackLookup = (query: string): ScanResult => {
   return {
@@ -111,7 +165,8 @@ export default function Scanner() {
   const [trainingConsentMode, setTrainingConsentMode] = useState<
     "always_allow" | "ask_every_time"
   >("ask_every_time");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const imageUrlRef = useRef<string | null>(null);
   const scanRequestIdRef = useRef(crypto.randomUUID());
   const { user } = useAuth();
@@ -212,72 +267,16 @@ export default function Scanner() {
     }
   };
 
-  const requestAiExplanation = async () => {
-    if (!result || !imageFile) return;
-    setResult((current) =>
-      current ? { ...current, explanation: { status: "loading" } } : current,
-    );
-    try {
-      const image = await readAsDataUrl(imageFile);
-      const { data, error } = await supabase.functions.invoke("explain-scan", {
-        body: {
-          image,
-          predictedLabel: result.item,
-          predictedConfidence: result.confidence,
-        },
-      });
-      if (error) throw error;
-      const guidance = data.guidance as DelawareGuidance | null;
-      setResult((current) => current
-        ? {
-            ...current,
-            ...(guidance
-              ? {
-                  item: guidance.title,
-                  recyclable: guidance.curbside,
-                  confidence: guidance.matchConfidence,
-                  category: guidance.category,
-                  instructions: guidance.instructions,
-                  tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the full official item protocol", "Use Delaware locations for nearby options"],
-                  dnrec: guidance,
-                }
-              : {}),
-            explanation: { status: "ready", guidance, sourceUrl: data.sourceUrl },
-          }
-        : current);
-      if (guidance) {
-        const verified: ScanResult = {
-          ...result,
-          item: guidance.title,
-          recyclable: guidance.curbside,
-          confidence: guidance.matchConfidence,
-          category: guidance.category,
-          instructions: guidance.instructions,
-          tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the full official item protocol", "Use Delaware locations for nearby options"],
-          dnrec: guidance,
-        };
-        await saveScanToHistory(verified);
-        toast({ title: "+10 XP earned", description: "Official Delaware guidance verified." });
-      }
-    } catch (error) {
-      console.error("AI explanation unavailable", error);
-      setResult((current) =>
-        current
-          ? { ...current, explanation: { status: "unavailable" } }
-          : current,
-      );
-    }
-  };
-
   const handleImageUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
     if (!file || isScanning) return;
-    if (!file.type.startsWith("image/") || file.size > 8 * 1024 * 1024) {
+    const supportedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+    if (!supportedTypes.has(file.type) || file.size > 8 * 1024 * 1024) {
       toast({
         title: "Choose a valid image",
-        description: "Use an image under 8 MB.",
+        description: "Use a JPG, PNG, or WebP image under 8 MB.",
         variant: "destructive",
       });
       event.target.value = "";
@@ -287,9 +286,10 @@ export default function Scanner() {
       toast({
         title: "Sign in to scan",
         description:
-          "An account keeps scans private and protects the classifier service.",
+          "An account keeps scans private and protects the visual lookup service.",
         variant: "destructive",
       });
+      event.target.value = "";
       return;
     }
     if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
@@ -308,28 +308,44 @@ export default function Scanner() {
       10000,
     );
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const { data, error } = await supabase.functions.invoke("classify-scan", {
-        body: formData,
+      const image = await readAsVisionDataUrl(file);
+      const { data, error } = await supabase.functions.invoke("explain-scan", {
+        body: { image },
       });
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error));
       clearTimeout(delayedNotice);
-      const classifierItem = String(data.item || "Unknown item").trim();
-      const broadLabels = new Set(["battery", "biological", "cardboard", "clothes", "glass", "metal", "paper", "plastic", "shoes", "trash"]);
-      const localResult = broadLabels.has(classifierItem.toLowerCase())
-        ? null
-        : await lookup(classifierItem);
-      const scanResult: ScanResult = localResult?.dnrec
-        ? { ...localResult, image: data.image, top_predictions: data.top_predictions }
+      const identified = data as VisionScanResponse;
+      const guidance = identified.guidance;
+      const scanResult: ScanResult = guidance
+        ? {
+            item: guidance.title,
+            recyclable: guidance.curbside,
+            confidence: guidance.matchConfidence,
+            category: guidance.category,
+            instructions: guidance.instructions,
+            tips: [
+              "Verified against Delaware DNREC Recyclopedia",
+              "Follow the full official item protocol",
+              "Use Delaware locations for nearby options",
+            ],
+            imageStatus: identified.imageStatus,
+            material: identified.material,
+            visibleEvidence: identified.visibleEvidence,
+            dnrec: guidance,
+          }
         : {
-            item: "Official Delaware protocol unavailable",
+            item: identified.observedItem || "Item not identified",
             recyclable: false,
-            confidence: Number(data.confidence || 0),
-            category: "Verification required",
-            instructions: "EcoLearn only displays disposal guidance that matches an official Delaware DNREC item. Ask it to check the photo against the DNREC catalog, or retake a clear photo of one item.",
-            image: data.image,
-            tips: ["No general recycling advice is being shown", "Use the Delaware catalog check", "Retake a clear one-item photo if it cannot verify the item"],
+            confidence: identified.confidence,
+            category: identified.imageStatus === "multiple_items"
+              ? "Multiple items detected"
+              : "No official DNREC match",
+            instructions: identified.message,
+            tips: identified.nextSteps,
+            imageStatus: identified.imageStatus,
+            material: identified.material,
+            visibleEvidence: identified.visibleEvidence,
+            dnrec: null,
           };
       await finish(scanResult);
     } catch (error) {
@@ -337,10 +353,12 @@ export default function Scanner() {
       setIsScanning(false);
       console.error(error);
       toast({
-        title: "We couldn't read that image",
-        description: "Try another photo with better lighting.",
+        title: "Visual item check unavailable",
+        description: await functionErrorMessage(error),
         variant: "destructive",
       });
+    } finally {
+      event.target.value = "";
     }
   };
 
@@ -372,7 +390,8 @@ export default function Scanner() {
     if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
     imageUrlRef.current = null;
     scanRequestIdRef.current = crypto.randomUUID();
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (galleryInputRef.current) galleryInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
 
   return (
@@ -413,9 +432,9 @@ export default function Scanner() {
               {!result && !isScanning && (
                 <div className="space-y-5">
                   <button
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => galleryInputRef.current?.click()}
                     className="group relative flex min-h-[280px] w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed border-[#bcd6b8] bg-[#f6fbf3] px-5 transition hover:border-[#5a9b62] hover:bg-[#f0f9eb]"
-                    aria-label="Upload an item photo"
+                    aria-label="Choose an item photo from your gallery"
                   >
                     {uploadedImage ? (
                       <>
@@ -437,22 +456,47 @@ export default function Scanner() {
                           <Camera size={30} />
                         </span>
                         <span className="mt-4 text-lg font-semibold">
-                          Drop a photo to scan
+                          Choose an item photo
                         </span>
                         <span className="mt-1 text-sm text-[#7c897f]">
-                          or click to browse your gallery
+                          One clear household item works best
                         </span>
                       </>
                     )}
                   </button>
                   <input
-                    ref={fileInputRef}
+                    ref={galleryInputRef}
                     type="file"
                     accept="image/*"
-                    capture="environment"
+                    aria-label="Choose photo from gallery"
                     onChange={handleImageUpload}
                     className="hidden"
                   />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    aria-label="Take a photo with camera"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => galleryInputRef.current?.click()}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#bcd6b8] bg-white px-4 py-3 text-sm font-semibold text-[#286d3b] transition hover:bg-[#f2f8ee]"
+                    >
+                      <ImageUp size={17} /> Choose from gallery
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => cameraInputRef.current?.click()}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#173d2a] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#245139]"
+                    >
+                      <Camera size={17} /> Take a photo
+                    </button>
+                  </div>
                   <p className="rounded-xl bg-[#fff8e8] px-3 py-2 text-xs leading-5 text-[#725c24]">
                     Student-safe scanning: photograph the item only. Do not include people, faces, names, schoolwork, or personal information.
                   </p>
@@ -500,10 +544,10 @@ export default function Scanner() {
                     <span className="absolute -inset-2 rounded-[2.25rem] border border-[#9dcc9b] animate-ping opacity-30" />
                   </div>
                   <h3 className="mt-7 text-xl font-semibold">
-                    Looking closely…
+                    Identifying the item…
                   </h3>
                   <p className="mt-2 text-sm text-[#748176]">
-                    Checking the item against Delaware guidance
+                    One visual check, then a secure Delaware catalog search
                   </p>
                 </div>
               )}
@@ -512,8 +556,7 @@ export default function Scanner() {
                   <ResultCard
                     result={result}
                     reset={reset}
-                    canExplain={Boolean(imageFile)}
-                    onExplain={requestAiExplanation}
+                    imageUrl={uploadedImage}
                   />
                   {result.dnrec && <ScanFeedback
                     result={result}
@@ -593,22 +636,20 @@ export default function Scanner() {
 function ResultCard({
   result,
   reset,
-  canExplain,
-  onExplain,
+  imageUrl,
 }: {
   result: ScanResult;
   reset: () => void;
-  canExplain: boolean;
-  onExplain: () => void;
+  imageUrl: string | null;
 }) {
   const good = Boolean(result.dnrec?.curbside);
-  const explanation = result.explanation;
+  const multipleItems = result.imageStatus === "multiple_items";
   return (
     <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
       <div className="grid gap-5 sm:grid-cols-[150px_1fr] sm:items-center">
-        {result.image ? (
+        {imageUrl ? (
           <img
-            src={`data:image/jpeg;base64,${result.image}`}
+            src={imageUrl}
             alt={result.dnrec ? `Verified ${result.item}` : "Item awaiting official Delaware verification"}
             className="aspect-square w-full rounded-2xl object-cover"
           />
@@ -620,15 +661,22 @@ function ResultCard({
           </div>
         )}
         <div>
-          <p className="text-sm font-semibold text-[#6d796f]">{result.dnrec ? "Official DNREC match" : "Delaware verification"}</p>
+          <p className="text-sm font-semibold text-[#6d796f]">{result.dnrec ? "Official DNREC match" : "Visual identification"}</p>
           <h3 className="mt-1 text-2xl font-semibold tracking-[-.04em]">
-            {result.dnrec ? result.item : "No verified item yet"}
+            {result.item}
           </h3>
+          {!result.dnrec && result.material && (
+            <p className="mt-1 text-sm text-[#68766c]">Likely material: {result.material}</p>
+          )}
           <div
             className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-bold ${good ? "bg-[#e5f4df] text-[#287540]" : "bg-[#fff0ed] text-[#c84c40]"}`}
           >
             {good ? <Recycle size={16} /> : <Trash2 size={16} />}
-            {result.dnrec ? "Official DNREC record" : "DNREC verification required"}
+            {result.dnrec
+              ? "Official DNREC record"
+              : multipleItems
+                ? "Multiple items—retake photo"
+                : "No official DNREC match"}
           </div>
         </div>
       </div>
@@ -639,6 +687,11 @@ function ResultCard({
         <p className="mt-2 font-medium leading-6 text-[#274033]">
           {result.instructions}
         </p>
+        {!result.dnrec && result.visibleEvidence && (
+          <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm leading-6 text-[#617166]">
+            Visible evidence: {result.visibleEvidence}
+          </p>
+        )}
         <div className="mt-4 space-y-2.5">
           {result.tips.map((tip) => (
             <p key={tip} className="flex gap-2 text-sm text-[#627167]">
@@ -672,58 +725,10 @@ function ResultCard({
           Verified source: Delaware DNREC Recyclopedia ↗
         </a>
       )}
-      {canExplain && (
-        <div className="mt-5 rounded-2xl border border-[#dce8d8] bg-[#f7fbf4] p-4 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-semibold text-[#284c34]">Get an official Delaware match</p>
-              <p className="mt-1 text-xs leading-5 text-[#617166]">
-                Visual AI can select only from the official DNREC item catalog.
-                EcoLearn shows a protocol only when that match is verified.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onExplain}
-              disabled={explanation?.status === "loading"}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#6aa574] bg-white px-3.5 py-2.5 text-sm font-semibold text-[#286d3b] transition hover:bg-[#ebf7e7] disabled:cursor-wait disabled:opacity-60"
-            >
-              {explanation?.status === "loading" ? (
-                <LoaderCircle className="animate-spin" size={16} />
-              ) : (
-                <CircleHelp size={16} />
-              )}
-              {explanation?.status === "loading"
-                ? "Checking DNREC…"
-                : "Check official Delaware item"}
-            </button>
-          </div>
-          {explanation?.status === "ready" && (
-            <div className="mt-4 border-t border-[#dce8d8] pt-4 text-sm">
-              {explanation.guidance && (
-                <a
-                  href={explanation.guidance.sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-3 inline-flex text-xs font-bold text-[#287640] underline underline-offset-2"
-                >
-                  Verified against Delaware DNREC Recyclopedia ↗
-                </a>
-              )}
-              {!explanation.guidance && <p className="rounded-lg bg-white p-3 leading-6 text-[#526459]">No official DNREC item could be verified from this photo. Please retake a clear photo with one item, or use the exact-item search.</p>}
-            </div>
-          )}
-          {explanation?.status === "unavailable" && (
-            <p className="mt-3 text-xs leading-5 text-[#7a6740]">
-              The Delaware item check is temporarily unavailable. Please try again shortly.
-            </p>
-          )}
-          <p className="mt-3 text-[11px] leading-4 text-[#758277]">
-            Your photo is sent only when you choose this. EcoLearn does not
-            store it or use it for training through this feature.
-          </p>
-        </div>
-      )}
+      <p className="mt-4 text-[11px] leading-4 text-[#758277]">
+        The image is used for this visual check only. EcoLearn does not store it
+        or use it for training unless you separately choose to share feedback.
+      </p>
       <button
         onClick={reset}
         className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#173d2a] py-3.5 text-sm font-semibold text-white transition hover:bg-[#245139]"

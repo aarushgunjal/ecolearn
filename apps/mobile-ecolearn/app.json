@@ -30,7 +30,16 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "EcoLearn lets you choose item and package-label photos.",
+          "cameraPermission": "EcoLearn uses your camera to identify a disposal item.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-status-bar"
     ]
   }
 }

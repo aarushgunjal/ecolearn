@@ -58,6 +58,19 @@ test.describe("EcoLearn guest journeys", () => {
     expect(dialogOpened).toBe(false);
   });
 
+  test("offers gallery and camera selection as separate mobile-safe controls", async ({ page }) => {
+    const app = new EcoLearnPage(page);
+    await app.goto();
+    await app.openPrimarySection("Scan");
+
+    await expect(page.getByRole("button", { name: "Choose from gallery" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Take a photo" })).toBeVisible();
+    const galleryInput = page.locator('input[aria-label="Choose photo from gallery"]');
+    const cameraInput = page.locator('input[aria-label="Take a photo with camera"]');
+    await expect(galleryInput).not.toHaveAttribute("capture", /.+/);
+    await expect(cameraInput).toHaveAttribute("capture", "environment");
+  });
+
   test("requires valid registration fields", async ({ page }) => {
     const app = new EcoLearnPage(page);
     await app.goto();

@@ -52,7 +52,10 @@ take priority over novelty.
 
 ## Later: advanced vision
 
-- [ ] Train and evaluate multi-object detection as a separate localization model.
-- [ ] Add human review for bounding boxes and per-object corrections.
+- [ ] Reconsider multi-item scanning only after the single-item flow has pilot
+  accuracy and cost data; keep one model request per photo during experiments.
+- [ ] Prefer one structured multi-item response before introducing detection,
+  crops, bounding boxes, or separate per-object model calls.
+- [ ] Add human review for any future per-object corrections.
 - [ ] Validate performance by object size, clutter, lighting, and Delaware pilot
   categories before making any public capability claim.

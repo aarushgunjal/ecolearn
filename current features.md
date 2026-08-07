@@ -1,6 +1,6 @@
 # EcoLearn — Current Features
 
-_Platform snapshot — August 2, 2026_
+_Platform snapshot — August 7, 2026_
 
 EcoLearn is a Delaware-first learning and waste-guidance platform for students,
 beginning with primary-school use cases. The platform combines official DNREC
@@ -8,18 +8,19 @@ Recyclopedia data, guided learning, progress, and privacy-conscious feedback.
 
 ## Delaware guidance and scanning
 
-- Photo classification and exact-item text search.
+- One-call visual item identification and exact-item text search.
 - Official DNREC autocomplete, item protocols, source links, and item-specific
   Delaware locations.
-- A strict verified-result boundary: broad classifier labels never become
-  disposal instructions.
-- A user-requested visual catalog check through OpenRouter. The model may select
-  only an exact title from the official DNREC catalog; the server returns the
-  corresponding official record or no recommendation.
+- A strict verified-result boundary: the vision model identifies a specific
+  visible item but never produces disposal instructions.
+- Deterministic server-side matching of that item name against the synchronized
+  DNREC catalog. Only a strong, unique official match produces a protocol.
+- Mixed, unclear, and unmatched photos return an observed item when possible,
+  safe next steps, and an explicit no-match state instead of generic guidance.
 - Live DNREC lookup with the synchronized Supabase mirror as a resilience
   fallback.
-- Image type and size validation, student privacy reminders, and no storage of
-  images used only for the visual catalog check.
+- Separate gallery and camera controls, image resizing/type validation, student
+  privacy reminders, and no storage of images used only for the visual check.
 
 ## Learning, motivation, and accounts
 
@@ -44,10 +45,11 @@ Recyclopedia data, guided learning, progress, and privacy-conscious feedback.
 
 ## Mobile surfaces
 
+- Both mobile apps target Expo SDK 57 and React Native 0.86.
 - Expo EcoLearn companion with authentication, verified scanning, feedback,
   lessons, quests, profile, and practical tools.
-- Standalone Expo scanner for broad visual identification only; it deliberately
-  does not issue disposal instructions without a signed-in official DNREC match.
+- Standalone Expo scanner aligned with the signed-in one-call visual identifier
+  and the same verified DNREC boundary as the main mobile app.
 
 ## Deferred or external work
 

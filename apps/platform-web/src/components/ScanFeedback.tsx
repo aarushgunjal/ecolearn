@@ -93,6 +93,7 @@ export function ScanFeedback({
         predicted_label: result.item,
         predicted_recyclable: result.recyclable,
         predicted_confidence: confidence,
+        model_version: "openrouter-vision-dnrec-v1",
         verdict,
         issue,
         corrected_disposal: disposal,

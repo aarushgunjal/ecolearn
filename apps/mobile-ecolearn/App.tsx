@@ -27,14 +27,14 @@ import { isConfigured, supabase } from "./src/supabase";
 WebBrowser.maybeCompleteAuthSession();
 
 type Tab = "Home" | "Scan" | "Learn" | "Challenges" | "Ranks" | "Profile";
-type Photo = { uri: string; name: string; mimeType: string };
-type ScanResult = { item: string; recyclable: boolean; confidence: number; category: string; instructions: string; tips?: string[]; top_predictions?: { class: string; confidence: number }[]; dnrec?: DelawareGuidance | null };
+type Photo = { uri: string; name: string; mimeType: string; base64?: string | null };
+type ScanResult = { item: string; recyclable: boolean; confidence: number; category: string; instructions: string; tips?: string[]; imageStatus?: "single_item" | "multiple_items" | "unclear"; material?: string | null; visibleEvidence?: string | null; dnrec?: DelawareGuidance | null };
 type DelawareGuidance = { title: string; category: string; curbside: boolean; instructions: string; sourceName: string; sourceUrl: string; matchConfidence?: number };
+type VisionScanResponse = { verified: boolean; guidance: DelawareGuidance | null; observedItem: string | null; material: string | null; confidence: number; imageStatus: "single_item" | "multiple_items" | "unclear"; visibleEvidence: string | null; nextSteps: string[]; message: string };
 type Progress = { xp: number; level: number; total_scans: number; total_lessons_completed: number; streak_days: number };
 type Site = { id: string; name: string; type: string; latitude: number; longitude: number; distanceKm: number; address?: string };
 type Lesson = { id: string; title: string; topic: string; duration: string; xp: number; summary: string; question: string; choices: string[]; answer: number; explanation: string };
 
-const labels = ["battery", "biological", "cardboard", "clothes", "glass", "metal", "paper", "plastic", "shoes", "trash"];
 const usingExpoGo = Constants.appOwnership === "expo";
 const lessons: Lesson[] = [
   { id: "10000000-0000-4000-8000-000000000001", title: "The Delaware recycling loop", topic: "Recycling basics", duration: "4 min", xp: 20, summary: "Delaware DNREC says accepted curbside items should be loose, empty, clean, and dry.", question: "Which action best helps a recycling facility sort materials?", choices: ["Bag recyclables", "Keep empty items loose", "Recycle every item with a triangle"], answer: 1, explanation: "DNREC's Recyclopedia advises keeping accepted materials loose, empty, clean, and dry." },
@@ -44,7 +44,23 @@ const lessons: Lesson[] = [
 ];
 
 const percent = (value: number) => Math.round(value <= 1 ? value * 100 : Math.min(100, value));
-const photoFromAsset = (asset: ImagePicker.ImagePickerAsset): Photo => ({ uri: asset.uri, name: asset.fileName ?? "ecolearn-photo.jpg", mimeType: asset.mimeType ?? "image/jpeg" });
+const photoFromAsset = (asset: ImagePicker.ImagePickerAsset): Photo => ({ uri: asset.uri, name: asset.fileName ?? "ecolearn-photo.jpg", mimeType: asset.base64 ? "image/jpeg" : asset.mimeType ?? "image/jpeg", base64: asset.base64 });
+const functionErrorMessage = async (error: unknown) => {
+  if (error && typeof error === "object" && "context" in error) {
+    const context = (error as { context?: unknown }).context;
+    if (context instanceof Response) {
+      try {
+        const payload = await context.clone().json() as { error?: unknown };
+        if (typeof payload.error === "string" && payload.error.trim()) return payload.error;
+      } catch {
+        // Fall through to the standard client message.
+      }
+    }
+  }
+  return error instanceof Error && error.message
+    ? error.message
+    : "EcoLearn could not complete the visual item check.";
+};
 const newRequestId = () => {
   const part = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1);
   return `${part()}${part()}-${part()}-4${part().slice(1)}-a${part().slice(1)}-${part()}${part()}${part()}`;
@@ -149,7 +165,7 @@ function EcoLearnApp({ user }: { user: User }) {
 function Home({ progress, onScan, onLearn }: { progress: Progress | null; onScan: () => void; onLearn: () => void }) { return <><Text style={styles.kicker}>GOOD TO SEE YOU</Text><Text style={styles.hero}>Small choices.{"\n"}<Text style={styles.heroAccent}>Real impact.</Text></Text><View style={styles.heroCard}><Text style={styles.cardEyebrow}>YOUR IMPACT</Text><Text style={styles.cardTitle}>{progress?.total_scans ?? 0} items scanned</Text><Text style={styles.cardText}>You are level {progress?.level ?? 1} with a {progress?.streak_days ?? 0}-day activity streak.</Text><Pressable style={styles.lightButton} onPress={onScan}><Text style={styles.lightText}>Scan an item</Text></Pressable></View><Text style={styles.sectionTitle}>Keep going</Text><Pressable style={styles.rowCard} onPress={onLearn}><View style={styles.iconSquare}><Text>◌</Text></View><View style={{ flex: 1 }}><Text style={styles.smallLabel}>LEARN BY DOING</Text><Text style={styles.rowTitle}>Build your eco instinct</Text><Text style={styles.rowMeta}>Short lessons with real-world choices</Text></View><Text style={styles.chevron}>›</Text></Pressable></>; }
 
 function ScanScreen({ user, onRecorded, onTools }: { user: User; onRecorded: () => Promise<void>; onTools: () => void }) {
-  const [photo, setPhoto] = useState<Photo | null>(null); const [result, setResult] = useState<ScanResult | null>(null); const [busy, setBusy] = useState(false); const [explanation, setExplanation] = useState<{ observedItem?: string; explanation?: string; disposalAction?: string; caution?: string; guidance?: DelawareGuidance | null; sourceUrl?: string } | null>(null); const [feedback, setFeedback] = useState<"correct" | "incorrect" | null>(null); const [correctedLabel, setCorrectedLabel] = useState("trash");
+  const [photo, setPhoto] = useState<Photo | null>(null); const [result, setResult] = useState<ScanResult | null>(null); const [busy, setBusy] = useState(false); const [feedback, setFeedback] = useState<"correct" | "incorrect" | null>(null); const [correctedLabel, setCorrectedLabel] = useState("");
   const requestId = useRef(newRequestId());
   const recordOfficial = async (verified: ScanResult) => {
     if (!verified.dnrec) return;
@@ -164,9 +180,27 @@ function ScanScreen({ user, onRecorded, onTools }: { user: User; onRecorded: () 
     if (error) throw error;
     await onRecorded();
   };
-  const choose = async (camera: boolean) => { const permission = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!permission.granted) return Alert.alert("Permission needed", "Allow access to scan an item."); const picked = camera ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 }) : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 }); if (!picked.canceled && picked.assets[0]) { requestId.current = newRequestId(); setPhoto(photoFromAsset(picked.assets[0])); setResult(null); setExplanation(null); setFeedback(null); } };
-  const scan = async () => { if (!photo || busy) return; setBusy(true); try { const form = new FormData(); form.append("file", { uri: photo.uri, type: photo.mimeType, name: photo.name } as unknown as Blob); const { data, error } = await supabase.functions.invoke("classify-scan", { body: form }); if (error) throw error; const classified = data as ScanResult; const broad = labels.includes(String(classified.item ?? "").toLowerCase()); let guidance: DelawareGuidance | null = null; if (!broad) { const { data: guidanceData, error: guidanceError } = await supabase.functions.invoke("delaware-guidance", { body: { item: classified.item } }); if (!guidanceError && guidanceData?.verified && guidanceData.guidance) guidance = guidanceData.guidance as DelawareGuidance; } const verified: ScanResult = guidance ? { ...classified, item: guidance.title, recyclable: guidance.curbside, category: guidance.category, instructions: guidance.instructions, dnrec: guidance } : { ...classified, recyclable: false, category: "Verification required", instructions: "No disposal recommendation is shown until EcoLearn verifies an official Delaware DNREC item.", dnrec: null }; setResult(verified); if (guidance) await recordOfficial(verified); } catch (error) { Alert.alert("We couldn't scan that image", error instanceof Error ? error.message : "Try another clear photo."); } finally { setBusy(false); } };
-  const explain = async () => { if (!photo || !result || busy) return; setBusy(true); try { const base64 = await FileSystem.readAsStringAsync(photo.uri, { encoding: FileSystem.EncodingType.Base64 }); const { data, error } = await supabase.functions.invoke("explain-scan", { body: { image: `data:${photo.mimeType};base64,${base64}`, predictedLabel: result.item, predictedConfidence: result.confidence } }); if (error) throw error; setExplanation(data); const guidance = data?.guidance as DelawareGuidance | null | undefined; if (guidance) { const verified: ScanResult = { ...result, item: guidance.title, recyclable: guidance.curbside, category: guidance.category, instructions: guidance.instructions, dnrec: guidance }; setResult(verified); await recordOfficial(verified); } } catch (error) { Alert.alert("AI explanation unavailable", error instanceof Error ? error.message : "Please try again shortly."); } finally { setBusy(false); } };
+  const choose = async (camera: boolean) => { const permission = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!permission.granted) return Alert.alert("Permission needed", `Allow ${camera ? "camera" : "photo library"} access to scan an item.`); const options: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.6, base64: true }; const picked = camera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options); if (!picked.canceled && picked.assets[0]) { requestId.current = newRequestId(); setPhoto(photoFromAsset(picked.assets[0])); setResult(null); setFeedback(null); setCorrectedLabel(""); } };
+  const scan = async () => {
+    if (!photo || busy) return;
+    setBusy(true);
+    try {
+      const base64 = photo.base64 ?? await FileSystem.readAsStringAsync(photo.uri, { encoding: FileSystem.EncodingType.Base64 });
+      const { data, error } = await supabase.functions.invoke("explain-scan", { body: { image: `data:${photo.mimeType};base64,${base64}` } });
+      if (error) throw new Error(await functionErrorMessage(error));
+      const identified = data as VisionScanResponse;
+      const guidance = identified.guidance;
+      const scanResult: ScanResult = guidance
+        ? { item: guidance.title, recyclable: guidance.curbside, confidence: guidance.matchConfidence ?? identified.confidence, category: guidance.category, instructions: guidance.instructions, tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the complete official item protocol", "Use Delaware locations for nearby options"], imageStatus: identified.imageStatus, material: identified.material, visibleEvidence: identified.visibleEvidence, dnrec: guidance }
+        : { item: identified.observedItem ?? "Item not identified", recyclable: false, confidence: identified.confidence, category: identified.imageStatus === "multiple_items" ? "Multiple items detected" : "No official DNREC match", instructions: identified.message, tips: identified.nextSteps, imageStatus: identified.imageStatus, material: identified.material, visibleEvidence: identified.visibleEvidence, dnrec: null };
+      setResult(scanResult);
+      if (guidance) await recordOfficial(scanResult);
+    } catch (error) {
+      Alert.alert("Visual item check unavailable", await functionErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
   const submitFeedback = async (
     verdict: "correct" | "incorrect",
     includePhoto: boolean,
@@ -197,6 +231,7 @@ function ScanScreen({ user, onRecorded, onTools }: { user: User; onRecorded: () 
           predicted_recyclable: result.recyclable,
           predicted_confidence:
             result.confidence <= 1 ? result.confidence : result.confidence / 100,
+          model_version: "openrouter-vision-dnrec-v1",
           verdict,
           issue: verdict === "incorrect" ? "wrong_item" : null,
           corrected_disposal: verdict === "incorrect" ? "not_sure" : null,
@@ -240,15 +275,44 @@ function ScanScreen({ user, onRecorded, onTools }: { user: User; onRecorded: () 
   if (!result && !photo) return <>
     <Text style={styles.kicker}>ITEM SCANNER</Text>
     <Text style={styles.pageTitle}>Know where it goes.</Text>
-    <Text style={styles.body}>Take a clear photo of one household item for practical, local disposal guidance. Every signed-in scan grows your impact.</Text>
+    <Text style={styles.body}>Choose or take a clear photo of one household item. EcoLearn identifies it once, then checks the official Delaware catalog.</Text>
     <View style={styles.photoBox}><Text style={styles.photoIcon}>SCAN</Text><Text style={extras.photoHint}>Use a well-lit photo with one item in view.</Text></View>
-    <View style={styles.row}><Pressable style={[styles.secondaryButton, styles.half]} onPress={() => void choose(false)}><Text style={styles.secondaryText}>Choose photo</Text></Pressable><Pressable style={[styles.primaryButton, styles.half]} onPress={() => void choose(true)}><Text style={styles.primaryText}>Use camera</Text></Pressable></View>
+    <View style={styles.row}><Pressable style={[styles.secondaryButton, styles.half]} onPress={() => void choose(false)}><Text style={styles.secondaryText}>Choose from gallery</Text></Pressable><Pressable style={[styles.primaryButton, styles.half]} onPress={() => void choose(true)}><Text style={styles.primaryText}>Use camera</Text></Pressable></View>
     <Pressable style={extras.toolsLinkCard} onPress={onTools}><View><Text style={styles.smallLabel}>MORE SCAN TOOLS</Text><Text style={styles.rowTitle}>Barcode, label, and nearby sites</Text><Text style={styles.rowMeta}>Use another way to make the right call.</Text></View><Text style={styles.chevron}>›</Text></Pressable>
   </>;
-  if (!result) return <><Text style={styles.kicker}>ITEM SCANNER</Text><Text style={styles.pageTitle}>Ready to scan?</Text><Text style={styles.body}>This photo will be analyzed only to provide your disposal guidance.</Text><View style={styles.photoBox}><Image source={{ uri: photo!.uri }} style={styles.fullImage} /></View><View style={styles.row}><Pressable style={[styles.secondaryButton, styles.half]} onPress={() => void choose(false)}><Text style={styles.secondaryText}>Choose another</Text></Pressable><Pressable style={[styles.primaryButton, styles.half]} onPress={() => void choose(true)}><Text style={styles.primaryText}>Use camera</Text></Pressable></View><Pressable disabled={busy} style={[styles.scanButton, busy && styles.disabled]} onPress={() => void scan()}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Scan this item</Text>}</Pressable></>;
-  const official = explanation?.guidance ?? result.dnrec;
-  if (!official) return <><Image source={{ uri: photo?.uri }} style={styles.resultImage} /><Text style={styles.kicker}>DELAWARE VERIFICATION</Text><Text style={styles.pageTitle}>No official item match yet.</Text><View style={styles.guidanceCard}><Text style={styles.smallLabel}>DELAWARE RULES ONLY</Text><Text style={styles.guidance}>EcoLearn will not show a disposal recommendation until it matches this photo to an official Delaware DNREC Recyclopedia item.</Text><Text style={styles.tip}>• Retake a clear photo with one item in view.</Text><Text style={styles.tip}>• Or let the Delaware catalog check find an exact official item.</Text></View><Pressable disabled={busy} style={styles.explainButton} onPress={() => void explain()}>{busy ? <ActivityIndicator color="#286d3b" /> : <Text style={styles.explainText}>Check official Delaware item</Text>}</Pressable><Text style={styles.helper}>The visual check can select only from official DNREC item titles. It never creates a Delaware disposal rule.</Text>{explanation && !explanation.guidance && <Text style={styles.helper}>No official DNREC item could be verified from this photo. Try a clearer, one-item photo.</Text>}<Pressable style={styles.scanButton} onPress={() => { setResult(null); setPhoto(null); setExplanation(null); setFeedback(null); }}><Text style={styles.primaryText}>Try another photo</Text></Pressable></>;
-  return <><Image source={{ uri: photo?.uri }} style={styles.resultImage} /><Text style={styles.kicker}>SCAN RESULT</Text><Text style={styles.pageTitle}>{official?.title ?? result.item}</Text><View style={[styles.badge, official?.curbside ? styles.goodBadge : styles.warnBadge]}><Text style={[styles.badgeText, official?.curbside ? styles.goodText : styles.warnText]}>{official ? `DNREC: ${official.category}` : "Needs exact Delaware item check"} · {percent(result.confidence)}% confidence</Text></View><View style={styles.guidanceCard}><Text style={styles.smallLabel}>{official ? "OFFICIAL DELAWARE DNREC PROTOCOL" : "BROAD CLASSIFIER RESULT"}</Text><Text style={styles.guidance}>{official?.instructions ?? "The scanner recognized a broad material category. Choose Explain with AI so EcoLearn can look for the exact item in Delaware DNREC Recyclopedia."}</Text>{official && <Pressable onPress={() => void Linking.openURL(official.sourceUrl)}><Text style={styles.link}>Open Delaware DNREC source</Text></Pressable>}{!official && (result.tips ?? []).map((tip) => <Text key={tip} style={styles.tip}>• {tip}</Text>)}</View><Pressable disabled={busy} style={styles.explainButton} onPress={() => void explain()}>{busy ? <ActivityIndicator color="#286d3b" /> : <Text style={styles.explainText}>Explain with AI + check DNREC</Text>}</Pressable><Text style={styles.helper}>The AI identifies the visible item; Delaware disposal rules and links are supplied only by official DNREC data. Your image is sent to AI only when you choose this and is not stored through this feature.</Text>{explanation && <View style={styles.explanation}><Text style={styles.rowTitle}>{explanation.observedItem}</Text><Text style={styles.body}>{explanation.explanation}</Text><Text style={styles.helper}>{explanation.caution}</Text></View>}<Text style={styles.sectionTitle}>Was this helpful?</Text>{feedback === "incorrect" ? <><Text style={styles.body}>Choose the more accurate broad label, then submit your correction.</Text><View style={styles.chips}>{labels.map((label) => <Pressable key={label} onPress={() => setCorrectedLabel(label)} style={[styles.chip, correctedLabel === label && styles.chipActive]}><Text style={[styles.chipText, correctedLabel === label && styles.chipTextActive]}>{label}</Text></Pressable>)}</View><Pressable style={styles.primaryButton} onPress={() => Alert.alert("Share this photo for training?", "A human reviewer checks consented corrections before they can improve the classifier.", [{ text: "No photo", onPress: () => void submitFeedback("incorrect", false) }, { text: "Share once", onPress: () => void submitFeedback("incorrect", true) }, { text: "Cancel", style: "cancel" }])}><Text style={styles.primaryText}>Submit correction</Text></Pressable></> : <View style={styles.row}><Pressable style={[styles.secondaryButton, styles.half]} onPress={() => askFeedback("correct")}><Text style={styles.secondaryText}>Yes, correct</Text></Pressable><Pressable style={[styles.warnButton, styles.half]} onPress={() => askFeedback("incorrect")}><Text style={styles.warnText}>Needs correction</Text></Pressable></View>}<Pressable style={styles.scanButton} onPress={() => { setResult(null); setPhoto(null); setExplanation(null); setFeedback(null); }}><Text style={styles.primaryText}>Scan another item</Text></Pressable></>;
+  if (!result) return <><Text style={styles.kicker}>ITEM SCANNER</Text><Text style={styles.pageTitle}>Ready to scan?</Text><Text style={styles.body}>One visual check will identify the item, then EcoLearn will search the official Delaware catalog.</Text><View style={styles.photoBox}><Image source={{ uri: photo!.uri }} style={styles.fullImage} /></View><View style={styles.row}><Pressable style={[styles.secondaryButton, styles.half]} onPress={() => void choose(false)}><Text style={styles.secondaryText}>Choose another</Text></Pressable><Pressable style={[styles.primaryButton, styles.half]} onPress={() => void choose(true)}><Text style={styles.primaryText}>Use camera</Text></Pressable></View><Pressable disabled={busy} style={[styles.scanButton, busy && styles.disabled]} onPress={() => void scan()}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Identify + check DNREC</Text>}</Pressable></>;
+  const official = result.dnrec;
+  const resetScan = () => { setResult(null); setPhoto(null); setFeedback(null); setCorrectedLabel(""); };
+  if (!official) return <>
+    <Image source={{ uri: photo?.uri }} style={styles.resultImage} />
+    <Text style={styles.kicker}>VISUAL IDENTIFICATION</Text>
+    <Text style={styles.pageTitle}>{result.item}</Text>
+    <View style={[styles.badge, styles.warnBadge]}><Text style={[styles.badgeText, styles.warnText]}>{result.category} · {percent(result.confidence)}% confidence</Text></View>
+    {!!result.material && <Text style={styles.helper}>Likely material: {result.material}</Text>}
+    <View style={styles.guidanceCard}>
+      <Text style={styles.smallLabel}>NO OFFICIAL DELAWARE MATCH</Text>
+      <Text style={styles.guidance}>{result.instructions}</Text>
+      {!!result.visibleEvidence && <Text style={styles.helper}>Visible evidence: {result.visibleEvidence}</Text>}
+      {(result.tips ?? []).map((tip) => <Text key={tip} style={styles.tip}>• {tip}</Text>)}
+    </View>
+    <Text style={styles.helper}>These are safe next steps, not Delaware disposal instructions. Official guidance appears only after a DNREC catalog match.</Text>
+    <Pressable style={styles.scanButton} onPress={resetScan}><Text style={styles.primaryText}>Try another photo</Text></Pressable>
+  </>;
+  return <>
+    <Image source={{ uri: photo?.uri }} style={styles.resultImage} />
+    <Text style={styles.kicker}>OFFICIAL DELAWARE MATCH</Text>
+    <Text style={styles.pageTitle}>{official.title}</Text>
+    <View style={[styles.badge, official.curbside ? styles.goodBadge : styles.warnBadge]}><Text style={[styles.badgeText, official.curbside ? styles.goodText : styles.warnText]}>DNREC: {official.category} · {percent(result.confidence)}% confidence</Text></View>
+    <View style={styles.guidanceCard}><Text style={styles.smallLabel}>OFFICIAL DELAWARE DNREC PROTOCOL</Text><Text style={styles.guidance}>{official.instructions}</Text><Pressable onPress={() => void Linking.openURL(official.sourceUrl)}><Text style={styles.link}>Open Delaware DNREC source</Text></Pressable></View>
+    <Text style={styles.helper}>The image was used for this visual check only and is not stored unless you separately share feedback.</Text>
+    <Text style={styles.sectionTitle}>Was this identification helpful?</Text>
+    {feedback === "incorrect" ? <>
+      <Text style={styles.body}>Enter the specific item name that would be more accurate.</Text>
+      <TextInput style={styles.input} value={correctedLabel} onChangeText={setCorrectedLabel} placeholder="Example: plastic beverage bottle" autoCapitalize="sentences" />
+      <Pressable disabled={!correctedLabel.trim()} style={[styles.primaryButton, !correctedLabel.trim() && styles.disabled]} onPress={() => Alert.alert("Share this photo for training?", "A human reviewer checks consented corrections before they can improve item identification.", [{ text: "No photo", onPress: () => void submitFeedback("incorrect", false) }, { text: "Share once", onPress: () => void submitFeedback("incorrect", true) }, { text: "Cancel", style: "cancel" }])}><Text style={styles.primaryText}>Submit correction</Text></Pressable>
+    </> : <View style={styles.row}><Pressable style={[styles.secondaryButton, styles.half]} onPress={() => askFeedback("correct")}><Text style={styles.secondaryText}>Yes, correct</Text></Pressable><Pressable style={[styles.warnButton, styles.half]} onPress={() => askFeedback("incorrect")}><Text style={styles.warnText}>Needs correction</Text></Pressable></View>}
+    <Pressable style={styles.scanButton} onPress={resetScan}><Text style={styles.primaryText}>Scan another item</Text></Pressable>
+  </>;
 }
 
 function LearnScreen({ completed, onCompleted }: { completed: string[]; onCompleted: () => Promise<void> }) { const [active, setActive] = useState<Lesson | null>(null); const [choice, setChoice] = useState<number | null>(null); const complete = async () => { if (!active || choice !== active.answer) return; const { error } = await supabase.rpc("complete_ecolearn_lesson", { p_lesson_id: active.id, p_selected_answer: choice }); if (error) return Alert.alert("Could not save lesson", error.message); await onCompleted(); Alert.alert("Lesson complete", `+${active.xp} XP earned.`); setActive(null); setChoice(null); }; if (active) return <><Text style={styles.kicker}>{active.topic.toUpperCase()}</Text><Text style={styles.pageTitle}>{active.title}</Text><Text style={styles.body}>{active.summary}</Text><Text style={styles.question}>{active.question}</Text>{active.choices.map((item, index) => <Pressable key={item} onPress={() => setChoice(index)} style={[styles.answer, choice === index && styles.answerActive]}><Text style={styles.answerText}>{item}</Text></Pressable>)}{choice !== null && <Text style={styles.helper}>{choice === active.answer ? active.explanation : "Not quite—review the lesson and choose again."}</Text>}<Pressable disabled={choice !== active.answer} style={[styles.primaryButton, choice !== active.answer && styles.disabled]} onPress={() => void complete()}><Text style={styles.primaryText}>Complete lesson</Text></Pressable><Pressable onPress={() => { setActive(null); setChoice(null); }}><Text style={styles.link}>Back to lessons</Text></Pressable></>; return <><Text style={styles.kicker}>LEARN BY DOING</Text><Text style={styles.pageTitle}>Build your eco instinct.</Text><Text style={styles.body}>{completed.length} of {lessons.length} lessons complete.</Text>{lessons.map((lesson, index) => { const done = completed.includes(lesson.id); const unlocked = index === 0 || completed.includes(lessons[index - 1].id); return <Pressable key={lesson.id} disabled={!unlocked} onPress={() => setActive(lesson)} style={[styles.lessonCard, !unlocked && styles.disabled]}><View style={styles.number}><Text style={styles.numberText}>{done ? "✓" : index + 1}</Text></View><View style={{ flex: 1 }}><Text style={styles.smallLabel}>{lesson.topic.toUpperCase()} · {lesson.duration}</Text><Text style={styles.rowTitle}>{lesson.title}</Text><Text style={styles.rowMeta}>{done ? "Complete — tap to review" : unlocked ? `${lesson.xp} XP` : "Finish the previous lesson"}</Text></View></Pressable>; })}</>; }
