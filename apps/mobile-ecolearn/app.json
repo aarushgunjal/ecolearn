@@ -3,26 +3,35 @@
     "name": "EcoLearn",
     "slug": "ecolearn-mobile",
     "version": "1.0.0",
+    "description": "Delaware-first environmental learning and verified waste guidance.",
     "orientation": "portrait",
     "scheme": "ecolearn-mobile",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/ecolearn-icon-v2.png",
     "userInterfaceStyle": "light",
+    "primaryColor": "#173D2A",
     "ios": {
       "supportsTablet": true,
+      "buildNumber": "1",
       "infoPlist": {
+        "LSApplicationCategoryType": "public.app-category.education",
         "NSCameraUsageDescription": "EcoLearn uses your camera to identify a disposal item.",
         "NSPhotoLibraryUsageDescription": "EcoLearn lets you choose item and package-label photos.",
         "NSLocationWhenInUseUsageDescription": "EcoLearn uses your location to find nearby disposal sites."
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.ecolearn.mobile"
     },
     "android": {
       "package": "com.ecolearn.mobile",
+      "versionCode": 1,
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#F7FAF4",
+        "foregroundImage": "./assets/ecolearn-icon-v2.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -39,7 +48,16 @@
           "microphonePermission": false
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F7FAF4",
+          "image": "./assets/ecolearn-icon-v2.png",
+          "imageWidth": 220,
+          "resizeMode": "contain"
+        }
+      ]
     ]
   }
 }

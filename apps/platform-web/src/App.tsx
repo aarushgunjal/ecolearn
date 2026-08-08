@@ -60,7 +60,7 @@ const paths = {
 } as const;
 
 type Section = keyof typeof paths;
-type LegalPage = "privacy" | "terms";
+type LegalPage = "privacy" | "terms" | "delete-account";
 
 const activeForPath = (path: string): Section =>
   (Object.entries(paths).find(([, value]) => value === path)?.[0] as Section | undefined) ??
@@ -68,9 +68,11 @@ const activeForPath = (path: string): Section =>
 
 const readLegalPage = (): LegalPage | null => {
   const hash = window.location.hash.replace("#", "").toLowerCase();
-  if (hash === "privacy" || hash === "terms") return hash;
+  if (hash === "privacy" || hash === "terms" || hash === "delete-account") return hash;
   const path = window.location.pathname.toLowerCase();
-  if (path === "/privacy" || path === "/terms") return path.slice(1) as LegalPage;
+  if (path === "/privacy" || path === "/terms" || path === "/delete-account") {
+    return path.slice(1) as LegalPage;
+  }
   return null;
 };
 
@@ -115,7 +117,12 @@ function AppShell() {
   }, [navigate]);
 
   useEffect(() => {
-    const title = legalPage ? (legalPage === "privacy" ? "Privacy" : "Terms") : active;
+    const legalTitles: Record<LegalPage, string> = {
+      privacy: "Privacy",
+      terms: "Terms",
+      "delete-account": "Account deletion",
+    };
+    const title = legalPage ? legalTitles[legalPage] : active;
     document.title = title === "Home" ? "EcoLearn Delaware" : `${title} · EcoLearn Delaware`;
   }, [active, legalPage]);
 
@@ -229,6 +236,7 @@ function AppShell() {
         <div className="flex gap-5 font-semibold">
           <a href="/privacy" onClick={(event) => { event.preventDefault(); openLegal("privacy"); }} className="hover:text-[#286b3a]">Privacy Policy</a>
           <a href="/terms" onClick={(event) => { event.preventDefault(); openLegal("terms"); }} className="hover:text-[#286b3a]">Terms of Service</a>
+          <a href="/delete-account" onClick={(event) => { event.preventDefault(); openLegal("delete-account"); }} className="hover:text-[#286b3a]">Delete account</a>
         </div>
       </footer>
 

@@ -54,3 +54,12 @@ match. No match means no disposal recommendation.
 The map function uses DNREC's item-filtered solution endpoint when it receives a
 verified item name. Its older OpenStreetMap lookup remains as a clearly separate
 fallback when the app has no exact item yet.
+
+## Account deletion
+
+`delete-account` requires a valid user JWT plus the explicit JSON confirmation
+`{ "confirmation": "DELETE" }`. It removes the user's consented training-photo
+objects first, then deletes the Supabase Auth user. Database records tied to the
+user are removed by the existing `on delete cascade` constraints. The service
+role key is supplied automatically by Supabase and must never be exposed in the
+mobile or web client.

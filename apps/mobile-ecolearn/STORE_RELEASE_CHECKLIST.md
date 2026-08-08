@@ -1,0 +1,131 @@
+# EcoLearn mobile store-release checklist
+
+This is the handoff document for preparing the first App Store and Google Play
+release. It deliberately stops before developer-account enrollment, signing,
+uploading, review submission, or publication.
+
+## Draft listing
+
+- **App name:** EcoLearn
+- **Apple subtitle:** Learn. Scan. Act sustainably.
+- **Google short description:** Learn sustainable habits and check items against Delaware disposal guidance.
+- **Primary category:** Education
+- **Suggested secondary category:** Lifestyle
+- **Support email:** aarushgunjal1@gmail.com
+- **Privacy URL:** https://ecolearn.tech/privacy
+- **Terms URL:** https://ecolearn.tech/terms
+- **Account-deletion URL:** https://ecolearn.tech/delete-account
+
+### Full description draft
+
+EcoLearn turns everyday sustainability choices into practical learning.
+
+Build your environmental knowledge through short lessons, challenges, streaks,
+and progress tracking. When you are unsure about an item, take or choose a
+photo. EcoLearn identifies the visible item and checks it against mirrored
+Delaware DNREC Recyclopedia guidance. If there is no reliable official match,
+EcoLearn says so instead of inventing a disposal rule.
+
+Features include:
+
+- Camera and gallery item scanning
+- Verified Delaware disposal guidance when an official match is available
+- Package-label and barcode tools
+- Nearby disposal-site lookup with permission
+- Sustainability lessons, quizzes, XP, streaks, and challenges
+- Optional scan feedback and explicit choices for training-photo sharing
+- In-app account deletion
+
+EcoLearn is an independent educational product. It is not an official DNREC,
+DSWA, State of Delaware, or local-government application. Always confirm
+hazardous, medical, battery, electronics, chemical, and other special-waste
+requirements with the responsible local program.
+
+### Suggested keywords
+
+recycling, sustainability, environment, Delaware, waste, disposal, education,
+DNREC, eco, learning
+
+## Product and technical preparation
+
+- [x] Expo SDK 57 / React Native 0.86 project validates.
+- [x] Stable iOS bundle ID and Android package are set to `com.ecolearn.mobile`.
+- [x] Separate iOS build number and Android version code are configured.
+- [x] Production, preview APK, development-client, and iOS Simulator EAS profiles exist.
+- [x] Camera, photo-library, location, and blocked-audio permissions are declared.
+- [x] White-background EcoLearn artwork is used for the icon and splash screen.
+- [x] iOS non-exempt encryption is declared false for the current implementation.
+- [x] Privacy Policy and Terms links are available during account creation and in Profile.
+- [x] In-app account deletion has two confirmations.
+- [x] A public account-deletion route is implemented for the website.
+- [ ] Deploy and test the `delete-account` Supabase Edge Function.
+- [ ] Deploy and verify the three public website URLs above over HTTPS.
+- [ ] Add `ecolearn-mobile://auth/callback` to Supabase Auth redirect URLs.
+- [ ] Test email/password sign-up, sign-in, reset, and deletion on real devices.
+- [ ] Test Google sign-in in a signed development build; Expo Go cannot validate it.
+- [ ] Confirm the final bundle ID/package owner before registering either identifier.
+- [ ] Capture store screenshots from final real-device builds.
+- [ ] Create a support page or confirm the public contact route used for support.
+
+## Data-practice inventory for store forms
+
+Treat this as a draft to verify against the production configuration at the
+time of submission; it is not a completed legal or store declaration.
+
+| Data or access | Why EcoLearn uses it | Expected handling |
+| --- | --- | --- |
+| Email and optional profile name | Authentication, account, and support | Stored in Supabase while the account is active |
+| App activity | Progress, XP, lessons, scans, settings, feedback, abuse prevention | Stored in Supabase and associated with the account |
+| Camera/photo-library images | User-requested item or label analysis | Sent for the requested analysis; not stored by the scanner itself |
+| Optional feedback photo | Quality review and model training after an explicit photo choice | Stored privately for up to 24 months under the user's ID |
+| Precise device location | User-requested nearby disposal search | Requested only when the user starts the search; coordinates are sent to the lookup function |
+| Authentication identifiers | Session management and account security | Processed by Supabase; Google data is involved only for optional Google sign-in |
+| Barcode or visible label text | Product and material lookup | Sent only when the user invokes the applicable tool |
+
+Production subprocessors and external requests currently include Supabase,
+the configured OpenRouter vision provider, optional Google sign-in, Delaware
+DNREC data/services, Open Food Facts for barcode lookups, and map/search data
+services used by the nearby-results flow. Re-audit the deployed function code
+and provider settings immediately before answering Apple App Privacy and Google
+Play Data safety questions.
+
+## Store form draft decisions to verify
+
+- The app creates accounts, so both stores need a working deletion path.
+- Camera, photos, and location are optional feature permissions, not required at launch.
+- User-selected images are sent off-device for requested AI analysis.
+- Training-photo storage is optional and requires the separate choice presented in feedback.
+- The app should not be described as tracking users across third-party apps or websites unless the production SDK/provider audit shows otherwise.
+- The app contains no advertising SDK in the current source tree.
+- Store age-rating answers must match the final content and account model.
+
+## Release gates requiring a decision
+
+- [ ] **Youth/privacy model:** the current Privacy Policy says EcoLearn is not
+  directed to children under 13, while the broader product includes school and
+  primary-education ideas. Resolve the intended audience, parent/teacher consent,
+  classroom ownership, and DSWA role before publication.
+- [ ] **Publisher ownership:** decide whether the developer accounts and app
+  identifiers belong to the individual project owner or a DSWA/partner organization.
+- [ ] **Legal review:** confirm the Privacy Policy, Terms, retention promises,
+  Delaware guidance disclaimer, and data-practice forms.
+- [ ] **Brand/partnership review:** obtain permission before presenting DSWA,
+  DNREC, school, or government names/logos in a way that implies endorsement.
+- [ ] **Backend release:** deploy the latest migrations/functions, test deletion,
+  and verify production secrets and rate limits.
+- [ ] **Device QA:** run accessibility, weak-network, permission-denial, image,
+  authentication, scanner, and deletion tests on representative iOS and Android devices.
+- [ ] **Accounts/signing:** enroll in Apple Developer and Google Play Console only
+  after ownership is decided, then create signed production builds and complete submission.
+
+## Store media still needed near submission
+
+- Final iPhone screenshots for the App Store device sizes requested at submission time
+- Final Android phone screenshots and Play feature graphic
+- Optional iPad screenshots if tablet support remains enabled
+- Final app icon exported by the native build pipeline
+- Review notes explaining that scanner results are limited to official Delaware matches
+- A reviewer test account if the stores cannot fully inspect the app without authentication
+
+Do not capture these too early: changing the final layout, account model, legal
+copy, or partnership branding would make the media inaccurate.

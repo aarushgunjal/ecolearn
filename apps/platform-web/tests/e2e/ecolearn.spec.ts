@@ -104,3 +104,12 @@ test("mobile primary navigation remains usable", async ({ page }) => {
   await app.openPrimarySection("Scan");
   await expect(page.getByRole("heading", { name: "Item scanner" })).toBeVisible();
 });
+
+test("public account-deletion instructions are reachable without signing in", async ({ page }) => {
+  await page.goto("/delete-account");
+  await expect(page.getByRole("heading", { name: "Delete your EcoLearn account" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Request account deletion" })).toHaveAttribute(
+    "href",
+    /mailto:aarushgunjal1@gmail\.com/,
+  );
+});

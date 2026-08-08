@@ -35,6 +35,9 @@ verify_jwt = true
 [functions.second-opinion]
 verify_jwt = true
 
+[functions.delete-account]
+verify_jwt = true
+
 [functions.claim-training-batch]
 verify_jwt = false
 

@@ -1,6 +1,6 @@
 import { ArrowLeft, Leaf, ShieldCheck } from "lucide-react";
 
-type LegalPage = "privacy" | "terms";
+type LegalPage = "privacy" | "terms" | "delete-account";
 
 export function Legal({
   page,
@@ -10,6 +10,12 @@ export function Legal({
   onBack: () => void;
 }) {
   const privacy = page === "privacy";
+  const deletion = page === "delete-account";
+  const heading = privacy
+    ? "Privacy Policy"
+    : deletion
+      ? "Delete your EcoLearn account"
+      : "Terms of Service";
   return (
     <div className="min-h-screen bg-[#f7f8f4] text-[#16251e]">
       <header className="border-b border-[#e6e9e2] bg-white/80 backdrop-blur-xl">
@@ -39,12 +45,12 @@ export function Legal({
           <ShieldCheck size={14} /> EcoLearn legal
         </span>
         <h1 className="display-serif mt-5 text-4xl tracking-[-.055em] sm:text-5xl">
-          {privacy ? "Privacy Policy" : "Terms of Service"}
+          {heading}
         </h1>
         <p className="mt-3 text-sm text-[#728076]">
-          Last updated: July 26, 2026
+          Last updated: August 7, 2026
         </p>
-        {privacy ? <PrivacyContent /> : <TermsContent />}
+        {privacy ? <PrivacyContent /> : deletion ? <AccountDeletionContent /> : <TermsContent />}
         <section className="mt-10 rounded-2xl bg-[#e9f4e4] p-5 text-sm leading-6 text-[#42604b]">
           Questions or requests? Contact EcoLearn at{" "}
           <a
@@ -110,8 +116,10 @@ function PrivacyContent() {
         You can choose whether an eligible feedback photo is shared for neural
         network training: always allow, ask every time, or send feedback without
         a photo. You can change the first two choices in Profile settings. You
-        may also contact us to request access to, correction of, or deletion of
-        your personal information, subject to legal and operational limits.
+        can permanently delete your account and associated app data from Profile
+        settings in the mobile app. You may also use the public account-deletion
+        page or contact us to request access to or correction of your personal
+        information, subject to legal and operational limits.
       </Section>
       <Section title="6. Security and retention">
         We use reasonable administrative and technical safeguards. No internet
@@ -122,6 +130,38 @@ function PrivacyContent() {
       <Section title="7. Children and changes">
         EcoLearn is not directed to children under 13. We may update this policy
         as the product changes and will post the new effective date here.
+      </Section>
+    </article>
+  );
+}
+
+function AccountDeletionContent() {
+  return (
+    <article className="legal-copy mt-9 space-y-8 text-[15px] leading-7 text-[#435248]">
+      <Section title="Delete in the mobile app">
+        Sign in to EcoLearn, open <b>Profile</b>, select <b>Delete account</b>,
+        and confirm the two deletion prompts. The request permanently deletes
+        your account, saved progress, settings, activity tied to your account,
+        and any training-feedback photos stored under your user ID.
+      </Section>
+      <Section title="If you cannot access the app">
+        Email EcoLearn from the same email address used for your account. Use
+        the subject “EcoLearn account deletion request” so we can verify and
+        process the request without asking for your password.
+        <div className="mt-4">
+          <a
+            className="inline-flex rounded-xl bg-[#173d2a] px-4 py-3 font-bold text-white"
+            href="mailto:aarushgunjal1@gmail.com?subject=EcoLearn%20account%20deletion%20request"
+          >
+            Request account deletion
+          </a>
+        </div>
+      </Section>
+      <Section title="What to expect">
+        Account deletion is permanent and cannot be undone. A request may need
+        identity verification. Limited records may be retained only when needed
+        for security, fraud prevention, legal compliance, or another permitted
+        operational reason, and will not remain available as an active account.
       </Section>
     </article>
   );
