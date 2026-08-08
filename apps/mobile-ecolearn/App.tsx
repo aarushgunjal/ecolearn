@@ -20,7 +20,6 @@ import * as ExpoLinking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import * as FileSystem from "expo-file-system/legacy";
 import Constants from "expo-constants";
-import { decode } from "base64-arraybuffer";
 import type { Session, User } from "@supabase/supabase-js";
 import { isConfigured, supabase } from "./src/supabase";
 
@@ -156,7 +155,7 @@ function EcoLearnApp({ user }: { user: User }) {
     setProgress(nextProgress as Progress | null); setCompleted((lessonProgress ?? []).map((row) => row.lesson_id));
   };
   useEffect(() => { void refresh(); }, []);
-  const screen = tab === "Home" ? <Home progress={progress} onScan={() => { setShowScanTools(false); setTab("Scan"); }} onLearn={() => setTab("Learn")} /> : tab === "Scan" ? showScanTools ? <ToolsScreen /> : <ScanScreen user={user} onRecorded={refresh} onTools={() => setShowScanTools(true)} /> : tab === "Learn" ? <LearnScreen completed={completed} onCompleted={refresh} /> : tab === "Challenges" ? <QuestsScreen progress={progress} /> : tab === "Ranks" ? <LeaderboardScreen progress={progress} /> : <ProfileScreen user={user} progress={progress} />;
+  const screen = tab === "Home" ? <Home progress={progress} onScan={() => { setShowScanTools(false); setTab("Scan"); }} onLearn={() => setTab("Learn")} /> : tab === "Scan" ? showScanTools ? <ToolsScreen /> : <ScanScreen onRecorded={refresh} onTools={() => setShowScanTools(true)} /> : tab === "Learn" ? <LearnScreen completed={completed} onCompleted={refresh} /> : tab === "Challenges" ? <QuestsScreen progress={progress} /> : tab === "Ranks" ? <LeaderboardScreen progress={progress} /> : <ProfileScreen user={user} progress={progress} />;
   const navItems: { tab: Tab; icon: string; label: string }[] = [
     { tab: "Home", icon: "⌂", label: "Home" },
     { tab: "Scan", icon: "⌕", label: "Scan" },
@@ -170,8 +169,8 @@ function EcoLearnApp({ user }: { user: User }) {
 
 function Home({ progress, onScan, onLearn }: { progress: Progress | null; onScan: () => void; onLearn: () => void }) { return <><Text style={styles.kicker}>GOOD TO SEE YOU</Text><Text style={styles.hero}>Small choices.{"\n"}<Text style={styles.heroAccent}>Real impact.</Text></Text><View style={styles.heroCard}><Text style={styles.cardEyebrow}>YOUR IMPACT</Text><Text style={styles.cardTitle}>{progress?.total_scans ?? 0} items scanned</Text><Text style={styles.cardText}>You are level {progress?.level ?? 1} with a {progress?.streak_days ?? 0}-day activity streak.</Text><Pressable style={styles.lightButton} onPress={onScan}><Text style={styles.lightText}>Scan an item</Text></Pressable></View><Text style={styles.sectionTitle}>Keep going</Text><Pressable style={styles.rowCard} onPress={onLearn}><View style={styles.iconSquare}><Text>◌</Text></View><View style={{ flex: 1 }}><Text style={styles.smallLabel}>LEARN BY DOING</Text><Text style={styles.rowTitle}>Build your eco instinct</Text><Text style={styles.rowMeta}>Short lessons with real-world choices</Text></View><Text style={styles.chevron}>›</Text></Pressable></>; }
 
-function ScanScreen({ user, onRecorded, onTools }: { user: User; onRecorded: () => Promise<void>; onTools: () => void }) {
-  const [photo, setPhoto] = useState<Photo | null>(null); const [result, setResult] = useState<ScanResult | null>(null); const [busy, setBusy] = useState(false); const [feedback, setFeedback] = useState<"correct" | "incorrect" | null>(null); const [correctedLabel, setCorrectedLabel] = useState("");
+function ScanScreen({ onRecorded, onTools }: { onRecorded: () => Promise<void>; onTools: () => void }) {
+  const [photo, setPhoto] = useState<Photo | null>(null); const [result, setResult] = useState<ScanResult | null>(null); const [busy, setBusy] = useState(false);
   const requestId = useRef(newRequestId());
   const recordOfficial = async (verified: ScanResult) => {
     if (!verified.dnrec) return;
@@ -186,7 +185,7 @@ function ScanScreen({ user, onRecorded, onTools }: { user: User; onRecorded: () 
     if (error) throw error;
     await onRecorded();
   };
-  const choose = async (camera: boolean) => { const permission = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!permission.granted) return Alert.alert("Permission needed", `Allow ${camera ? "camera" : "photo library"} access to scan an item.`); const options: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.6, base64: true }; const picked = camera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options); if (!picked.canceled && picked.assets[0]) { requestId.current = newRequestId(); setPhoto(photoFromAsset(picked.assets[0])); setResult(null); setFeedback(null); setCorrectedLabel(""); } };
+  const choose = async (camera: boolean) => { const permission = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!permission.granted) return Alert.alert("Permission needed", `Allow ${camera ? "camera" : "photo library"} access to scan an item.`); const options: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.6, base64: true }; const picked = camera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options); if (!picked.canceled && picked.assets[0]) { requestId.current = newRequestId(); setPhoto(photoFromAsset(picked.assets[0])); setResult(null); } };
   const scan = async () => {
     if (!photo || busy) return;
     setBusy(true);
@@ -207,77 +206,6 @@ function ScanScreen({ user, onRecorded, onTools }: { user: User; onRecorded: () 
       setBusy(false);
     }
   };
-  const submitFeedback = async (
-    verdict: "correct" | "incorrect",
-    includePhoto: boolean,
-  ) => {
-    if (!result) return;
-    setBusy(true);
-    try {
-      let imagePath: string | null = null;
-      if (includePhoto && photo) {
-        const base64 = await FileSystem.readAsStringAsync(photo.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        imagePath = `${user.id}/${Date.now()}-${photo.name.replace(/[^a-z0-9._-]/gi, "-")}`;
-        const { error: uploadError } = await supabase.storage
-          .from("training-feedback")
-          .upload(imagePath, decode(base64), {
-            contentType: photo.mimeType,
-            upsert: false,
-          });
-        if (uploadError) throw uploadError;
-      }
-
-      const { data, error } = await supabase
-        .from("scan_feedback")
-        .insert({
-          user_id: user.id,
-          predicted_label: result.item,
-          predicted_recyclable: result.recyclable,
-          predicted_confidence:
-            result.confidence <= 1 ? result.confidence : result.confidence / 100,
-          model_version: "openrouter-vision-dnrec-v1",
-          verdict,
-          issue: verdict === "incorrect" ? "wrong_item" : null,
-          corrected_disposal: verdict === "incorrect" ? "not_sure" : null,
-          normalized_label:
-            verdict === "incorrect" ? correctedLabel : result.item.toLowerCase(),
-          training_consent: Boolean(imagePath),
-          ai_review_consent: Boolean(imagePath),
-          image_path: imagePath,
-          active_learning_reason:
-            verdict === "incorrect"
-              ? "user_correction"
-              : result.confidence < 0.85
-                ? "low_confidence"
-                : null,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      if (imagePath && data?.id) {
-        void supabase.functions.invoke("review-feedback", {
-          body: { feedbackId: data.id },
-        });
-      }
-      setFeedback(verdict);
-      Alert.alert(
-        "Thank you",
-        includePhoto
-          ? "Your consented feedback is ready for review."
-          : "Your feedback was saved without a photo.",
-      );
-    } catch (error) {
-      Alert.alert(
-        "Could not save feedback",
-        error instanceof Error ? error.message : "Try again shortly.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-  const askFeedback = (verdict: "correct" | "incorrect") => { if (verdict === "incorrect") { setFeedback("incorrect"); return; } Alert.alert("Share a photo for training?", "Only an eligible photo you explicitly share can be reviewed for future model training.", [{ text: "No photo", onPress: () => void submitFeedback("correct", false) }, { text: "Share once", onPress: () => void submitFeedback("correct", true) }, { text: "Cancel", style: "cancel" }]); };
   if (!result && !photo) return <>
     <Text style={styles.kicker}>ITEM SCANNER</Text>
     <Text style={styles.pageTitle}>Know where it goes.</Text>
@@ -288,7 +216,7 @@ function ScanScreen({ user, onRecorded, onTools }: { user: User; onRecorded: () 
   </>;
   if (!result) return <><Text style={styles.kicker}>ITEM SCANNER</Text><Text style={styles.pageTitle}>Ready to scan?</Text><Text style={styles.body}>One visual check will identify the item, then EcoLearn will search the official Delaware catalog.</Text><View style={styles.photoBox}><Image source={{ uri: photo!.uri }} style={styles.fullImage} /></View><View style={styles.row}><Pressable style={[styles.secondaryButton, styles.half]} onPress={() => void choose(false)}><Text style={styles.secondaryText}>Choose another</Text></Pressable><Pressable style={[styles.primaryButton, styles.half]} onPress={() => void choose(true)}><Text style={styles.primaryText}>Use camera</Text></Pressable></View><Pressable disabled={busy} style={[styles.scanButton, busy && styles.disabled]} onPress={() => void scan()}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Identify + check DNREC</Text>}</Pressable></>;
   const official = result.dnrec;
-  const resetScan = () => { setResult(null); setPhoto(null); setFeedback(null); setCorrectedLabel(""); };
+  const resetScan = () => { setResult(null); setPhoto(null); };
   if (!official) return <>
     <Image source={{ uri: photo?.uri }} style={styles.resultImage} />
     <Text style={styles.kicker}>VISUAL IDENTIFICATION</Text>
@@ -310,13 +238,7 @@ function ScanScreen({ user, onRecorded, onTools }: { user: User; onRecorded: () 
     <Text style={styles.pageTitle}>{official.title}</Text>
     <View style={[styles.badge, official.curbside ? styles.goodBadge : styles.warnBadge]}><Text style={[styles.badgeText, official.curbside ? styles.goodText : styles.warnText]}>DNREC: {official.category} · {percent(result.confidence)}% confidence</Text></View>
     <View style={styles.guidanceCard}><Text style={styles.smallLabel}>OFFICIAL DELAWARE DNREC PROTOCOL</Text><Text style={styles.guidance}>{official.instructions}</Text><Pressable onPress={() => void Linking.openURL(official.sourceUrl)}><Text style={styles.link}>Open Delaware DNREC source</Text></Pressable></View>
-    <Text style={styles.helper}>The image was used for this visual check only and is not stored unless you separately share feedback.</Text>
-    <Text style={styles.sectionTitle}>Was this identification helpful?</Text>
-    {feedback === "incorrect" ? <>
-      <Text style={styles.body}>Enter the specific item name that would be more accurate.</Text>
-      <TextInput style={styles.input} value={correctedLabel} onChangeText={setCorrectedLabel} placeholder="Example: plastic beverage bottle" autoCapitalize="sentences" />
-      <Pressable disabled={!correctedLabel.trim()} style={[styles.primaryButton, !correctedLabel.trim() && styles.disabled]} onPress={() => Alert.alert("Share this photo for training?", "A human reviewer checks consented corrections before they can improve item identification.", [{ text: "No photo", onPress: () => void submitFeedback("incorrect", false) }, { text: "Share once", onPress: () => void submitFeedback("incorrect", true) }, { text: "Cancel", style: "cancel" }])}><Text style={styles.primaryText}>Submit correction</Text></Pressable>
-    </> : <View style={styles.row}><Pressable style={[styles.secondaryButton, styles.half]} onPress={() => askFeedback("correct")}><Text style={styles.secondaryText}>Yes, correct</Text></Pressable><Pressable style={[styles.warnButton, styles.half]} onPress={() => askFeedback("incorrect")}><Text style={styles.warnText}>Needs correction</Text></Pressable></View>}
+    <Text style={styles.helper}>The image was used for this visual check only and is not stored or used for training.</Text>
     <Pressable style={styles.scanButton} onPress={resetScan}><Text style={styles.primaryText}>Scan another item</Text></Pressable>
   </>;
 }
@@ -379,7 +301,7 @@ function LeaderboardScreen({ progress }: { progress: Progress | null }) {
   </>;
 }
 
-function ToolsScreen() { const [barcode, setBarcode] = useState(""); const [barcodeResult, setBarcodeResult] = useState<any>(null); const [toolBusy, setToolBusy] = useState(false); const [labelResult, setLabelResult] = useState<any>(null); const [sites, setSites] = useState<Site[]>([]); const [siteType, setSiteType] = useState("recycling"); const lookupBarcode = async () => { const code = barcode.replace(/\D/g, ""); if (code.length < 8 || code.length > 14) return Alert.alert("Enter a valid barcode", "Use the 8–14 digits below the bars."); setToolBusy(true); try { const { data, error } = await supabase.functions.invoke("lookup-barcode", { body: { barcode: code } }); if (error) throw error; setBarcodeResult(data); } catch { Alert.alert("Barcode lookup is unavailable", "Try again shortly or use item scanning."); } finally { setToolBusy(false); } }; const readLabel = async () => { const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!permission.granted) return Alert.alert("Permission needed", "Allow photo access to read a label."); const response = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 }); if (response.canceled || !response.assets[0]) return; Alert.alert("Send label to AI?", "This is separate from training consent. The image is used only to read its visible label and symbols.", [{ text: "Cancel", style: "cancel" }, { text: "Continue", onPress: async () => { setToolBusy(true); try { const asset = response.assets[0]; const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 }); const { data, error } = await supabase.functions.invoke("read-label", { body: { image: `data:${asset.mimeType ?? "image/jpeg"};base64,${base64}` } }); if (error) throw error; setLabelResult(data); } catch { Alert.alert("Could not read that label", "Use a clearer, well-lit photo and try again."); } finally { setToolBusy(false); } } }]); }; const nearby = async () => { const permission = await Location.requestForegroundPermissionsAsync(); if (!permission.granted) return Alert.alert("Location permission needed", "Allow location access to see nearby disposal sites."); setToolBusy(true); try { const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }); const { data, error } = await supabase.functions.invoke("find-disposal-sites", { body: { latitude: location.coords.latitude, longitude: location.coords.longitude, type: siteType } }); if (error) throw error; setSites(data?.sites ?? []); } catch { Alert.alert("Nearby search is unavailable", "Try again shortly."); } finally { setToolBusy(false); } }; return <><Text style={styles.kicker}>SMART TOOLS</Text><Text style={styles.pageTitle}>More ways to decide.</Text><View style={styles.toolCard}><Text style={styles.rowTitle}>Barcode lookup</Text><Text style={styles.body}>Enter the digits below a product barcode.</Text><TextInput style={styles.input} value={barcode} onChangeText={setBarcode} keyboardType="number-pad" placeholder="8–14 digit barcode" /><Pressable style={styles.primaryButton} onPress={() => void lookupBarcode()}><Text style={styles.primaryText}>{toolBusy ? "Looking up…" : "Look up barcode"}</Text></Pressable>{barcodeResult && <Text style={styles.body}>{barcodeResult.found ? `${barcodeResult.name ?? "Product found"}${barcodeResult.guidance ? ` — ${barcodeResult.guidance}` : ""}` : "No product match found."}</Text>}</View><View style={styles.toolCard}><Text style={styles.rowTitle}>Read a package label</Text><Text style={styles.body}>Read visible material and recycling symbols from a selected photo.</Text><Pressable style={styles.secondaryButton} onPress={() => void readLabel()}><Text style={styles.secondaryText}>Choose label photo</Text></Pressable>{labelResult && <Text style={styles.body}>{labelResult.guidance}{labelResult.materials?.length ? `\nMaterials: ${labelResult.materials.join(", ")}` : ""}</Text>}</View><View style={styles.toolCard}><Text style={styles.rowTitle}>Nearby disposal sites</Text><Text style={styles.body}>Find a local option, then confirm its accepted materials and hours.</Text><View style={styles.chips}>{["recycling", "battery", "electronics", "textile"].map((type) => <Pressable key={type} onPress={() => setSiteType(type)} style={[styles.chip, siteType === type && styles.chipActive]}><Text style={[styles.chipText, siteType === type && styles.chipTextActive]}>{type}</Text></Pressable>)}</View><Pressable style={styles.primaryButton} onPress={() => void nearby()}><Text style={styles.primaryText}>Find nearby sites</Text></Pressable>{sites.map((site) => <Pressable key={site.id} style={styles.siteCard} onPress={() => void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${site.latitude},${site.longitude}`)}><Text style={styles.rowTitle}>{site.name}</Text><Text style={styles.rowMeta}>{site.address ?? site.type} · {site.distanceKm.toFixed(1)} km away</Text></Pressable>)}</View></>; }
+function ToolsScreen() { const [barcode, setBarcode] = useState(""); const [barcodeResult, setBarcodeResult] = useState<any>(null); const [toolBusy, setToolBusy] = useState(false); const [labelResult, setLabelResult] = useState<any>(null); const [sites, setSites] = useState<Site[]>([]); const [siteType, setSiteType] = useState("recycling"); const lookupBarcode = async () => { const code = barcode.replace(/\D/g, ""); if (code.length < 8 || code.length > 14) return Alert.alert("Enter a valid barcode", "Use the 8–14 digits below the bars."); setToolBusy(true); try { const { data, error } = await supabase.functions.invoke("lookup-barcode", { body: { barcode: code } }); if (error) throw error; setBarcodeResult(data); } catch { Alert.alert("Barcode lookup is unavailable", "Try again shortly or use item scanning."); } finally { setToolBusy(false); } }; const readLabel = async () => { const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!permission.granted) return Alert.alert("Permission needed", "Allow photo access to read a label."); const response = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 }); if (response.canceled || !response.assets[0]) return; Alert.alert("Send label to AI?", "The image is used only to read its visible label and symbols. EcoLearn does not store it or use it for training.", [{ text: "Cancel", style: "cancel" }, { text: "Continue", onPress: async () => { setToolBusy(true); try { const asset = response.assets[0]; const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 }); const { data, error } = await supabase.functions.invoke("read-label", { body: { image: `data:${asset.mimeType ?? "image/jpeg"};base64,${base64}` } }); if (error) throw error; setLabelResult(data); } catch { Alert.alert("Could not read that label", "Use a clearer, well-lit photo and try again."); } finally { setToolBusy(false); } } }]); }; const nearby = async () => { const permission = await Location.requestForegroundPermissionsAsync(); if (!permission.granted) return Alert.alert("Location permission needed", "Allow location access to see nearby disposal sites."); setToolBusy(true); try { const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }); const { data, error } = await supabase.functions.invoke("find-disposal-sites", { body: { latitude: location.coords.latitude, longitude: location.coords.longitude, type: siteType } }); if (error) throw error; setSites(data?.sites ?? []); } catch { Alert.alert("Nearby search is unavailable", "Try again shortly."); } finally { setToolBusy(false); } }; return <><Text style={styles.kicker}>SMART TOOLS</Text><Text style={styles.pageTitle}>More ways to decide.</Text><View style={styles.toolCard}><Text style={styles.rowTitle}>Barcode lookup</Text><Text style={styles.body}>Enter the digits below a product barcode.</Text><TextInput style={styles.input} value={barcode} onChangeText={setBarcode} keyboardType="number-pad" placeholder="8–14 digit barcode" /><Pressable style={styles.primaryButton} onPress={() => void lookupBarcode()}><Text style={styles.primaryText}>{toolBusy ? "Looking up…" : "Look up barcode"}</Text></Pressable>{barcodeResult && <Text style={styles.body}>{barcodeResult.found ? `${barcodeResult.name ?? "Product found"}${barcodeResult.guidance ? ` — ${barcodeResult.guidance}` : ""}` : "No product match found."}</Text>}</View><View style={styles.toolCard}><Text style={styles.rowTitle}>Read a package label</Text><Text style={styles.body}>Read visible material and recycling symbols from a selected photo.</Text><Pressable style={styles.secondaryButton} onPress={() => void readLabel()}><Text style={styles.secondaryText}>Choose label photo</Text></Pressable>{labelResult && <Text style={styles.body}>{labelResult.guidance}{labelResult.materials?.length ? `\nMaterials: ${labelResult.materials.join(", ")}` : ""}</Text>}</View><View style={styles.toolCard}><Text style={styles.rowTitle}>Nearby disposal sites</Text><Text style={styles.body}>Find a local option, then confirm its accepted materials and hours.</Text><View style={styles.chips}>{["recycling", "battery", "electronics", "textile"].map((type) => <Pressable key={type} onPress={() => setSiteType(type)} style={[styles.chip, siteType === type && styles.chipActive]}><Text style={[styles.chipText, siteType === type && styles.chipTextActive]}>{type}</Text></Pressable>)}</View><Pressable style={styles.primaryButton} onPress={() => void nearby()}><Text style={styles.primaryText}>Find nearby sites</Text></Pressable>{sites.map((site) => <Pressable key={site.id} style={styles.siteCard} onPress={() => void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${site.latitude},${site.longitude}`)}><Text style={styles.rowTitle}>{site.name}</Text><Text style={styles.rowMeta}>{site.address ?? site.type} · {site.distanceKm.toFixed(1)} km away</Text></Pressable>)}</View></>; }
 
 function ProfileScreen({ user, progress }: { user: User; progress: Progress | null }) {
   const initialName = String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? "");
@@ -444,7 +366,7 @@ function ProfileScreen({ user, progress }: { user: User; progress: Progress | nu
   const confirmDeletion = () => {
     Alert.alert(
       "Delete EcoLearn account?",
-      "This permanently deletes your account, saved progress, settings, and submitted feedback. This cannot be undone.",
+      "This permanently deletes your account, saved progress, settings, and associated app activity. This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {

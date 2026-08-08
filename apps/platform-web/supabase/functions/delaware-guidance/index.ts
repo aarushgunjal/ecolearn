@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import {
+  buildDnrecCatalogQueries,
   DNREC_RECYLOPEDIA_URL,
   findDelawareGuidance,
   findLiveDelawareGuidance,
@@ -33,12 +34,13 @@ serve(async (request) => {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     // Query DNREC's live official catalog first. The local mirror is retained as
     // a resilient fallback if the public catalog is temporarily unavailable.
+    const catalogQueries = buildDnrecCatalogQueries(item.trim());
     let lookup: Awaited<ReturnType<typeof findDelawareGuidance>>;
     try {
-      lookup = await findLiveDelawareGuidance(item.trim(), mode !== "suggestions");
+      lookup = await findLiveDelawareGuidance(catalogQueries, mode !== "suggestions");
     } catch (liveError) {
       console.warn("Live DNREC lookup unavailable; using mirrored official data", liveError);
-      lookup = await findDelawareGuidance(admin, item.trim());
+      lookup = await findDelawareGuidance(admin, catalogQueries);
     }
     if (mode === "suggestions") {
       return Response.json({
@@ -50,14 +52,23 @@ serve(async (request) => {
       }, { headers: { ...cors, "Cache-Control": "private, max-age=300" } });
     }
 
+    const candidate = lookup.match;
+    const runnerUp = lookup.candidates.find(
+      (entry) => entry.row.source_topic_id !== candidate?.row.source_topic_id,
+    );
+    const uniqueMatch = Boolean(
+      candidate &&
+      (candidate.score >= 0.96 || !runnerUp || candidate.score - runnerUp.score >= 0.12),
+    );
+
     return Response.json({
       query: item.trim(),
-      verified: Boolean(lookup.match),
-      guidance: lookup.match ? toGuidancePayload(lookup.match) : null,
+      verified: uniqueMatch,
+      guidance: uniqueMatch && candidate ? toGuidancePayload(candidate) : null,
       candidates: lookup.candidates.map(toGuidancePayload),
       sourceName: "Delaware DNREC Recyclopedia",
       sourceUrl: DNREC_RECYLOPEDIA_URL,
-      notice: lookup.match
+      notice: uniqueMatch
         ? undefined
         : "No exact verified DNREC match was found. Choose one of the suggestions or search the official Recyclopedia.",
     }, { headers: { ...cors, "Cache-Control": "private, max-age=300" } });

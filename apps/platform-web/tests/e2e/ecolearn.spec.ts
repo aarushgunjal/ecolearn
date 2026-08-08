@@ -51,11 +51,37 @@ test.describe("EcoLearn guest journeys", () => {
 
     const check = page.getByRole("button", { name: "Check", exact: true });
     await expect(check).toBeDisabled();
-    await page.getByRole("textbox", { name: "Try “plastic water bottle”" }).fill("<script>alert('qa')</script>");
+    await page.getByRole("textbox", { name: "Search official Delaware items" }).fill("<script>alert('qa')</script>");
     await expect(check).toBeEnabled();
     await check.click();
     await expect(page.getByText("No disposal advice is shown without a DNREC match")).toBeVisible();
     expect(dialogOpened).toBe(false);
+  });
+
+  test("shows official predictive item suggestions", async ({ page }) => {
+    await page.route("**/functions/v1/delaware-guidance", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          suggestions: [
+            { title: "Aluminum Cans", category: "Recyclables" },
+            { title: "Aerosol Cans", category: "Household products" },
+          ],
+        }),
+      });
+    });
+
+    const app = new EcoLearnPage(page);
+    await app.goto();
+    await app.openPrimarySection("Scan");
+    await page
+      .getByRole("textbox", { name: "Search official Delaware items" })
+      .fill("soda can");
+
+    await expect(
+      page.getByRole("option", { name: /Aluminum Cans/ }),
+    ).toBeVisible();
   });
 
   test("offers gallery and camera selection as separate mobile-safe controls", async ({ page }) => {

@@ -8,3 +8,9 @@
 
 
 **URL**: https://ecolearn.tech
+
+
+**Operations and scale planning**: See
+[`SCALING_SERVICES_AUDIT.md`](./SCALING_SERVICES_AUDIT.md) for the living
+cross-platform inventory of free services, production upgrade triggers, LLM
+budget controls, and DSWA sponsorship scenarios.

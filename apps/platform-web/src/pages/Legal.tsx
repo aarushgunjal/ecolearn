@@ -82,14 +82,13 @@ function PrivacyContent() {
             an account.
           </li>
           <li>
-            <b>App activity:</b> scans, lesson progress, XP, streaks, settings,
-            and feedback you submit.
+            <b>App activity:</b> scans, lesson progress, XP, streaks, and
+            settings.
           </li>
           <li>
-            <b>Photos:</b> a scan photo is processed to provide a result. A
-            photo is retained for model training only when it is an eligible
-            example and you explicitly choose to share it. Those retained photos
-            may be kept for up to 24 months for quality review and training.
+            <b>Photos:</b> a photo you select is processed to provide the scan
+            or package-label result you request. The current scanner does not
+            store those photos or use them for model training.
           </li>
           <li>
             <b>Approximate location:</b> only when you ask to find nearby
@@ -100,9 +99,8 @@ function PrivacyContent() {
       </Section>
       <Section title="3. How we use information">
         We use information to operate the app, save your progress, improve scan
-        guidance, prevent abuse, respond to support requests, and improve the
-        classifier using only photos for which you gave the applicable consent.
-        We do not sell personal information.
+        guidance, prevent abuse, and respond to support requests. We do not sell
+        personal information.
       </Section>
       <Section title="4. Service providers and disclosures">
         EcoLearn uses service providers to deliver the product, including
@@ -113,19 +111,16 @@ function PrivacyContent() {
         only the information needed to provide the feature you requested.
       </Section>
       <Section title="5. Your choices">
-        You can choose whether an eligible feedback photo is shared for neural
-        network training: always allow, ask every time, or send feedback without
-        a photo. You can change the first two choices in Profile settings. You
-        can permanently delete your account and associated app data from Profile
-        settings in the mobile app. You may also use the public account-deletion
-        page or contact us to request access to or correction of your personal
-        information, subject to legal and operational limits.
+        You can permanently delete your account and associated app data from
+        Profile settings in the mobile app. You may also use the public
+        account-deletion page or contact us to request access to or correction
+        of your personal information, subject to legal and operational limits.
       </Section>
       <Section title="6. Security and retention">
         We use reasonable administrative and technical safeguards. No internet
         service can guarantee absolute security. We retain account and activity
-        information while needed to operate EcoLearn; training-consented photos
-        are retained for up to 24 months unless a shorter period is required.
+        information while needed to operate EcoLearn. The current scanner does
+        not retain submitted scan or package-label photos.
       </Section>
       <Section title="7. Children and changes">
         EcoLearn is not directed to children under 13. We may update this policy
@@ -142,7 +137,8 @@ function AccountDeletionContent() {
         Sign in to EcoLearn, open <b>Profile</b>, select <b>Delete account</b>,
         and confirm the two deletion prompts. The request permanently deletes
         your account, saved progress, settings, activity tied to your account,
-        and any training-feedback photos stored under your user ID.
+        and any previously shared training-feedback photos stored under your
+        user ID.
       </Section>
       <Section title="If you cannot access the app">
         Email EcoLearn from the same email address used for your account. Use
@@ -187,12 +183,11 @@ function TermsContent() {
         operation, attempt unauthorized access, upload unlawful or harmful
         content, or use EcoLearn to infringe another person's rights.
       </Section>
-      <Section title="4. Your content and feedback">
+      <Section title="4. Your content">
         You retain ownership of content you submit. You grant EcoLearn the
-        limited permission needed to process your scans and feedback to operate
-        the service. Training use of an eligible photo requires the separate,
-        explicit photo choice shown when feedback is submitted; that choice can
-        be changed in Profile settings for future submissions.
+        limited permission needed to process a scan or label photo to provide
+        the feature you request. The current scanner does not store those photos
+        or use them for model training.
       </Section>
       <Section title="5. Availability and third-party services">
         We may modify, suspend, or discontinue features. Some features depend on

@@ -100,7 +100,7 @@ export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
     if (!labelConsent)
       return toast({
         title: "Confirm AI label reading first",
-        description: "This permission is separate from training consent.",
+        description: "Confirm that you want this photo analyzed by AI.",
         variant: "destructive",
       });
     if (!file.type.startsWith("image/") || file.size > 6 * 1024 * 1024)

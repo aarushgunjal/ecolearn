@@ -33,7 +33,6 @@ Features include:
 - Package-label and barcode tools
 - Nearby disposal-site lookup with permission
 - Sustainability lessons, quizzes, XP, streaks, and challenges
-- Optional scan feedback and explicit choices for training-photo sharing
 - In-app account deletion
 
 EcoLearn is an independent educational product. It is not an official DNREC,
@@ -75,9 +74,8 @@ time of submission; it is not a completed legal or store declaration.
 | Data or access | Why EcoLearn uses it | Expected handling |
 | --- | --- | --- |
 | Email and optional profile name | Authentication, account, and support | Stored in Supabase while the account is active |
-| App activity | Progress, XP, lessons, scans, settings, feedback, abuse prevention | Stored in Supabase and associated with the account |
+| App activity | Progress, XP, lessons, scans, settings, and abuse prevention | Stored in Supabase and associated with the account |
 | Camera/photo-library images | User-requested item or label analysis | Sent for the requested analysis; not stored by the scanner itself |
-| Optional feedback photo | Quality review and model training after an explicit photo choice | Stored privately for up to 24 months under the user's ID |
 | Precise device location | User-requested nearby disposal search | Requested only when the user starts the search; coordinates are sent to the lookup function |
 | Authentication identifiers | Session management and account security | Processed by Supabase; Google data is involved only for optional Google sign-in |
 | Barcode or visible label text | Product and material lookup | Sent only when the user invokes the applicable tool |
@@ -94,7 +92,8 @@ Play Data safety questions.
 - The app creates accounts, so both stores need a working deletion path.
 - Camera, photos, and location are optional feature permissions, not required at launch.
 - User-selected images are sent off-device for requested AI analysis.
-- Training-photo storage is optional and requires the separate choice presented in feedback.
+- Scanner and label-reader images are processed only for the requested result;
+  the current app does not offer a training-photo submission flow.
 - The app should not be described as tracking users across third-party apps or websites unless the production SDK/provider audit shows otherwise.
 - The app contains no advertising SDK in the current source tree.
 - Store age-rating answers must match the final content and account model.

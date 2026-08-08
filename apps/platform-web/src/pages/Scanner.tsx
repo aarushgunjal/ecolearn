@@ -20,7 +20,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useProgress } from "@/hooks/useProgress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { ScanFeedback } from "@/components/ScanFeedback";
 import { ScanUtilities } from "@/components/ScanUtilities";
 
 type ScanResult = {
@@ -161,10 +160,6 @@ export default function Scanner() {
   const [suggestions, setSuggestions] = useState<DelawareSuggestion[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [trainingConsentMode, setTrainingConsentMode] = useState<
-    "always_allow" | "ask_every_time"
-  >("ask_every_time");
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const imageUrlRef = useRef<string | null>(null);
@@ -184,25 +179,6 @@ export default function Scanner() {
     },
     [],
   );
-
-  useEffect(() => {
-    if (!user) {
-      setTrainingConsentMode("ask_every_time");
-      return;
-    }
-    void supabase
-      .from("user_settings")
-      .select("training_consent_mode")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        setTrainingConsentMode(
-          data?.training_consent_mode === "always_allow"
-            ? "always_allow"
-            : "ask_every_time",
-        );
-      });
-  }, [user]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -296,7 +272,6 @@ export default function Scanner() {
     imageUrlRef.current = URL.createObjectURL(file);
     scanRequestIdRef.current = crypto.randomUUID();
     setUploadedImage(imageUrlRef.current);
-    setImageFile(file);
     setResult(null);
     setIsScanning(true);
     const delayedNotice = setTimeout(
@@ -384,7 +359,6 @@ export default function Scanner() {
   const reset = () => {
     setResult(null);
     setUploadedImage(null);
-    setImageFile(null);
     setSearchQuery("");
     setSuggestions([]);
     if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
@@ -507,27 +481,32 @@ export default function Scanner() {
                     </span>
                     <div className="h-px flex-1 bg-[#e9ece7]" />
                   </div>
-                  <div className="relative flex flex-col gap-2 rounded-xl border border-[#dfe5dc] bg-white p-1.5 shadow-sm sm:flex-row">
-                    <Search className="ml-2 mt-2.5 text-[#7a867d]" size={18} />
-                    <input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                      placeholder="Try “plastic water bottle”"
-                      className="min-w-0 flex-1 bg-transparent px-1 py-2.5 text-sm outline-none placeholder:text-[#a3aca4]"
-                    />
-                    <button
-                      onClick={handleSearch}
-                      disabled={!searchQuery.trim()}
-                      className="rounded-lg bg-[#173d2a] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-                    >
-                      Check
-                    </button>
+                  <div className="space-y-2">
+                    <div className="flex flex-col gap-2 rounded-xl border border-[#dfe5dc] bg-white p-1.5 shadow-sm sm:flex-row">
+                      <Search className="ml-2 mt-2.5 text-[#7a867d]" size={18} />
+                      <input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                        placeholder="Try “soda can”"
+                        aria-label="Search official Delaware items"
+                        aria-autocomplete="list"
+                        aria-controls="delaware-item-suggestions"
+                        className="min-w-0 flex-1 bg-transparent px-1 py-2.5 text-sm outline-none placeholder:text-[#a3aca4]"
+                      />
+                      <button
+                        onClick={handleSearch}
+                        disabled={!searchQuery.trim()}
+                        className="rounded-lg bg-[#173d2a] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+                      >
+                        Check
+                      </button>
+                    </div>
                     {(suggestionsLoading || suggestions.length > 0) && (
-                      <div className="absolute left-0 right-0 top-[calc(100%+0.45rem)] z-20 overflow-hidden rounded-xl border border-[#dfe5dc] bg-white py-1 shadow-lg">
+                      <div id="delaware-item-suggestions" role="listbox" className="overflow-hidden rounded-xl border border-[#dfe5dc] bg-white py-1 shadow-lg">
                         {suggestionsLoading && <p className="px-4 py-3 text-sm text-[#718076]">Searching official Delaware items…</p>}
                         {!suggestionsLoading && suggestions.map((suggestion) => (
-                          <button key={suggestion.title} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => chooseSuggestion(suggestion.title)} className="block w-full px-4 py-3 text-left transition hover:bg-[#f2f8ee]">
+                          <button key={suggestion.title} role="option" aria-selected="false" type="button" onClick={() => chooseSuggestion(suggestion.title)} className="block w-full px-4 py-3 text-left transition hover:bg-[#f2f8ee]">
                             <span className="block text-sm font-semibold text-[#24412e]">{suggestion.title}</span>
                             <span className="mt-0.5 block text-xs text-[#718076]">{suggestion.category}</span>
                           </button>
@@ -551,20 +530,7 @@ export default function Scanner() {
                   </p>
                 </div>
               )}
-              {result && (
-                <>
-                  <ResultCard
-                    result={result}
-                    reset={reset}
-                    imageUrl={uploadedImage}
-                  />
-                  {result.dnrec && <ScanFeedback
-                    result={result}
-                    imageFile={imageFile}
-                    trainingConsentMode={trainingConsentMode}
-                  />}
-                </>
-              )}
+              {result && <ResultCard result={result} reset={reset} imageUrl={uploadedImage} />}
             </div>
           </div>
         </div>
@@ -727,7 +693,7 @@ function ResultCard({
       )}
       <p className="mt-4 text-[11px] leading-4 text-[#758277]">
         The image is used for this visual check only. EcoLearn does not store it
-        or use it for training unless you separately choose to share feedback.
+        or use it for training.
       </p>
       <button
         onClick={reset}

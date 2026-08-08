@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import {
+  buildDnrecIdentificationQueries,
   DNREC_RECYLOPEDIA_URL,
   findDelawareGuidance,
   findLiveDelawareGuidance,
@@ -46,6 +47,11 @@ const confidencePercent = (value: unknown) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
   return Math.round(Math.max(0, Math.min(1, numeric)) * 100);
+};
+
+const positiveIntegerEnv = (name: string, fallback: number) => {
+  const value = Number(Deno.env.get(name));
+  return Number.isInteger(value) && value > 0 ? value : fallback;
 };
 
 const safeNextSteps = (status: ImageStatus, possibleHazard: Hazard, observedItem: string) => {
@@ -120,13 +126,26 @@ serve(async (request) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
-    const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count: recentRequests, error: requestLogError } = await admin
-      .from("ai_request_log")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("request_kind", "delaware_catalog_match")
-      .gte("created_at", since);
+    const userHourlyLimit = positiveIntegerEnv("AI_USER_REQUESTS_PER_HOUR", 10);
+    // The conservative default leaves a small reserve below OpenRouter's
+    // current free-account allowance. Raise this only after funding a paid key.
+    const globalDailyLimit = positiveIntegerEnv("AI_GLOBAL_REQUESTS_PER_DAY", 45);
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const [userUsage, globalUsage] = await Promise.all([
+      admin
+        .from("ai_request_log")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("request_kind", "delaware_catalog_match")
+        .gte("created_at", hourAgo),
+      admin
+        .from("ai_request_log")
+        .select("id", { count: "exact", head: true })
+        .eq("request_kind", "delaware_catalog_match")
+        .gte("created_at", dayAgo),
+    ]);
+    const requestLogError = userUsage.error ?? globalUsage.error;
     if (requestLogError) {
       console.error("AI request log unavailable", requestLogError);
       return errorResponse(
@@ -135,9 +154,17 @@ serve(async (request) => {
         "DATABASE_NOT_READY",
       );
     }
-    if ((recentRequests ?? 0) >= 10) {
+    if ((globalUsage.count ?? 0) >= globalDailyLimit) {
       return errorResponse(
-        "Visual item checks are limited to 10 per hour. Try again later or use exact-item search.",
+        "EcoLearn's daily visual-check budget has been reached. Use exact-item search or try again later.",
+        429,
+        "GLOBAL_DAILY_LIMIT_REACHED",
+        "3600",
+      );
+    }
+    if ((userUsage.count ?? 0) >= userHourlyLimit) {
+      return errorResponse(
+        `Visual item checks are limited to ${userHourlyLimit} per hour. Try again later or use exact-item search.`,
         429,
         "RATE_LIMITED",
         "3600",
@@ -198,11 +225,12 @@ serve(async (request) => {
       body: JSON.stringify({
         model,
         temperature: 0,
+        max_tokens: 240,
         response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
-            content: `Identify what is visibly present in a household-item photo. Return JSON only with exactly these fields: {"image_status":"single_item"|"multiple_items"|"unclear","observed_item":string|null,"catalog_query":string|null,"material":string|null,"confidence":number,"possible_hazard":"battery"|"electronics"|"chemical"|"sharp"|"none"|"unknown","visible_evidence":string}. Use single_item only when one primary discrete item is clear. Use multiple_items for piles, bins, collages, or multiple separate objects. catalog_query must be a short, specific common noun phrase suitable for searching a municipal waste catalog, such as “plastic beverage bottle” rather than “plastic”. Confidence is 0 to 1. Describe only visible evidence. Never provide recycling, disposal, legal, or location guidance. Never identify people or transcribe private information.`,
+            content: `Identify what is visibly present in a household-item photo. Return JSON only with exactly these fields: {"image_status":"single_item"|"multiple_items"|"unclear","observed_item":string|null,"catalog_query":string|null,"material":string|null,"confidence":number,"possible_hazard":"battery"|"electronics"|"chemical"|"sharp"|"none"|"unknown","visible_evidence":string}. Use single_item only when one primary discrete item is clear. Use multiple_items for piles, bins, collages, or multiple separate objects. observed_item may include a visible brand when useful, but catalog_query must ignore brands and describe the material plus generic object class used by a municipal waste catalog. For example, a Pepsi can should use catalog_query "aluminum can", not "Pepsi can"; a branded water bottle should use "plastic beverage bottle". Confidence is 0 to 1. Describe only visible evidence. Never provide recycling, disposal, legal, or location guidance. Never identify people or transcribe private information.`,
           },
           {
             role: "user",
@@ -226,6 +254,13 @@ serve(async (request) => {
           "The visual identification service has reached its temporary limit. Use exact-item search or try again later.",
           429,
           "AI_QUOTA_REACHED",
+        );
+      }
+      if (providerResponse.status === 402) {
+        return errorResponse(
+          "The visual identification budget is temporarily exhausted. Use exact-item search while funding is restored.",
+          503,
+          "AI_CREDITS_EXHAUSTED",
         );
       }
       return errorResponse(
@@ -277,9 +312,18 @@ serve(async (request) => {
       return Response.json({ ...baseResult, message }, { headers: { ...cors, "Cache-Control": "no-store" } });
     }
 
+    // Treat the model's catalog phrase as a hint, not an authority. Combining
+    // it with the visible label and material lets deterministic catalog rules
+    // recover from brand-heavy output (for example, Pepsi can -> aluminum can)
+    // without spending a second LLM request.
+    const catalogQueries = buildDnrecIdentificationQueries({
+      observedItem,
+      catalogQuery,
+      material,
+    });
     let localLookup: Awaited<ReturnType<typeof findDelawareGuidance>>;
     try {
-      localLookup = await findDelawareGuidance(admin, catalogQuery);
+      localLookup = await findDelawareGuidance(admin, catalogQueries);
     } catch (lookupError) {
       console.error("DNREC catalog search failed", lookupError);
       return errorResponse(
