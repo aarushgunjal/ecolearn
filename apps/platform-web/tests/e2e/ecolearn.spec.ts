@@ -84,6 +84,51 @@ test.describe("EcoLearn guest journeys", () => {
     ).toBeVisible();
   });
 
+  test("selects the electronics DSWA video from the verified catalog category", async ({ page }) => {
+    await page.route("**/functions/v1/delaware-guidance", async (route) => {
+      const payload = route.request().postDataJSON();
+      if (payload?.mode === "suggestions") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ suggestions: [] }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          verified: true,
+          guidance: {
+            title: "Can opener",
+            seoName: "can-opener",
+            matchConfidence: 1,
+            category: "Electronics",
+            curbside: false,
+            instructions: "Take this item to an approved electronics collection location.",
+            tags: ["Electronics", "Electronic goods"],
+            sourceName: "Delaware DNREC Recyclopedia",
+            sourceUrl: "https://dnrec.delaware.gov/waste-hazardous/recycling/what/",
+          },
+        }),
+      });
+    });
+
+    const app = new EcoLearnPage(page);
+    await app.goto();
+    await app.openPrimarySection("Scan");
+    await page.getByRole("textbox", { name: "Search official Delaware items" }).fill("can opener");
+    await page.getByRole("button", { name: "Check", exact: true }).click();
+
+    await expect(page.getByRole("heading", { name: "Can opener" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "DSWA Electronics Recycling" })).toBeVisible();
+    await expect(page.locator('iframe[title="DSWA Electronics Recycling"]')).toHaveAttribute(
+      "src",
+      /youtube-nocookie\.com\/embed\//,
+    );
+  });
+
   test("offers gallery and camera selection as separate mobile-safe controls", async ({ page }) => {
     const app = new EcoLearnPage(page);
     await app.goto();
@@ -121,6 +166,121 @@ test.describe("EcoLearn guest journeys", () => {
     await check.click();
     await expect(page.getByRole("button", { name: /Complete lesson \+20 XP/ })).toBeVisible();
   });
+
+  test("renders every nearby result on an interactive map", async ({ page, context }) => {
+    await context.grantPermissions(["geolocation"], {
+      origin: "http://127.0.0.1:8080",
+    });
+    await context.setGeolocation({ latitude: 39.7391, longitude: -75.5398 });
+    let requestedType = "";
+    await page.route("**/functions/v1/find-disposal-sites", async (route) => {
+      requestedType = route.request().postDataJSON()?.type ?? "";
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          sourceName: "Delaware DSWA, DNREC Recyclopedia, and OpenStreetMap",
+          sourceUrl: "https://dswa.com/facility/",
+          matchedTag: "Electronics recycling",
+          notice: "Verify accepted materials and current hours before visiting.",
+          sites: [
+            {
+              id: "dswa-delaware-recycling-center",
+              name: "Delaware Recycling Center",
+              type: "DSWA recycling center",
+              latitude: 39.7052121,
+              longitude: -75.5390718,
+              distanceKm: 3.8,
+              address: "1101 Lambson Lane, New Castle, DE 19720",
+              services: ["Electronics", "Household hazardous waste"],
+              sourceUrl: "https://dswa.com/facility/delaware-recycling-center/",
+            },
+            {
+              id: "dnrec-2385",
+              name: "NERDiT Recycles",
+              type: "Drop Off Only",
+              latitude: 39.7508883,
+              longitude: -75.5220288,
+              distanceKm: 2,
+              address: "3030 Bowers St, Wilmington, DE, 19802",
+              sourceUrl: "https://dnrec.delaware.gov/waste-hazardous/recycling/what/",
+            },
+          ],
+        }),
+      });
+    });
+    await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
+
+    const app = new EcoLearnPage(page);
+    await app.goto();
+    await app.openMoreSection("Scan tools");
+    await page.getByRole("button", { name: "Electronics", exact: true }).click();
+    await page.getByRole("button", { name: "Find nearby locations" }).click();
+
+    await expect(page.getByRole("application", { name: /Nearby disposal map with 2 locations/ })).toBeVisible();
+    await expect(page.locator(".ecolearn-map-marker")).toHaveCount(2);
+    await expect(page.getByText("Delaware Recycling Center", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Show NERDiT Recycles on map" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Get directions ↗" }).first()).toHaveAttribute("href", /google\.com\/maps\/dir/);
+    expect(requestedType).toBe("electronics");
+  });
+
+  test("handles denied location permission without sending a lookup", async ({ page, context }) => {
+    await context.clearPermissions();
+    let called = false;
+    await page.route("**/functions/v1/find-disposal-sites", async (route) => {
+      called = true;
+      await route.abort();
+    });
+    const app = new EcoLearnPage(page);
+    await app.goto();
+    await app.openMoreSection("Scan tools");
+    await page.getByRole("button", { name: "Find nearby locations" }).click();
+    await expect(page.getByText("Location permission needed", { exact: true }).first()).toBeVisible();
+    expect(called).toBe(false);
+  });
+
+  test("persists guest community, organization, and notification actions", async ({ page }) => {
+    const app = new EcoLearnPage(page);
+    await app.goto();
+
+    await app.openMoreSection("Community");
+    await page.getByRole("button", { name: "Join group" }).click();
+    await expect(page.getByRole("button", { name: "Joined" })).toBeVisible();
+    await page.getByRole("button", { name: "Save a map reminder" }).click();
+    await expect(page.getByRole("button", { name: "Map reminder saved" })).toBeVisible();
+
+    await app.openMoreSection("Organizations");
+    await page.getByRole("button", { name: "Manage campaign" }).click();
+    await page.getByRole("button", { name: "Invite volunteers" }).click();
+    await expect(page.getByRole("button", { name: "Campaign open" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Volunteers invited" })).toBeVisible();
+
+    await app.openMoreSection("Notifications");
+    await page.getByRole("button", { name: /Your daily quest is ready/ }).click();
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("ecolearn-notifications-read"))).toBe("true");
+  });
+
+  test("saves local-rule selection and keeps official source reachable", async ({ page }) => {
+    const app = new EcoLearnPage(page);
+    await app.goto();
+    await app.openMoreSection("Local rules");
+    await page.getByLabel("Your municipality").selectOption("Kent County, DE");
+    await page.getByRole("button", { name: "Save location" }).click();
+    await expect(page.getByText("IN KENT COUNTY, DE")).toBeVisible();
+    await expect(page.getByRole("link", { name: /Open Delaware DNREC Recyclopedia/ })).toHaveAttribute("href", /^https:\/\/dnrec\.delaware\.gov/);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("ecolearn-city"))).toBe("Kent County, DE");
+  });
+
+  test("challenge actions persist and guests cannot claim account XP", async ({ page }) => {
+    const app = new EcoLearnPage(page);
+    await app.goto();
+    await app.openPrimarySection("Challenges");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByRole("button", { name: "Completed!" }).first()).toBeVisible();
+    await page.getByRole("button", { name: "Claim 40 XP" }).click();
+    await expect(page.getByText("Sign in to claim XP", { exact: true }).first()).toBeVisible();
+  });
 });
 
 test("mobile primary navigation remains usable", async ({ page }) => {
@@ -138,4 +298,11 @@ test("public account-deletion instructions are reachable without signing in", as
     "href",
     /mailto:aarushgunjal1@gmail\.com/,
   );
+});
+
+test("privacy and terms pages are directly reachable", async ({ page }) => {
+  await page.goto("/privacy");
+  await expect(page.getByRole("heading", { name: "Privacy Policy" })).toBeVisible();
+  await page.goto("/terms");
+  await expect(page.getByRole("heading", { name: "Terms of Service" })).toBeVisible();
 });

@@ -10,3 +10,51 @@
   button, input { font: inherit; }
 }
 .display-serif { font-family: 'Playfair Display', Georgia, serif; }
+
+.leaflet-container {
+  z-index: 0;
+  background: #edf3e9;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.ecolearn-map-marker-shell,
+.ecolearn-user-marker-shell {
+  background: transparent;
+  border: 0;
+}
+
+.ecolearn-map-marker {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 3px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  background: #28763f;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 5px 14px rgb(23 61 42 / 28%);
+  transform: rotate(-45deg);
+}
+
+.ecolearn-map-marker b {
+  display: block;
+  line-height: 28px;
+  transform: rotate(45deg);
+}
+
+.ecolearn-map-marker.is-selected {
+  background: #e38b24;
+  box-shadow: 0 0 0 4px rgb(227 139 36 / 22%), 0 5px 14px rgb(23 61 42 / 28%);
+}
+
+.ecolearn-user-marker {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border: 4px solid #fff;
+  border-radius: 999px;
+  background: #357dd1;
+  box-shadow: 0 0 0 5px rgb(53 125 209 / 22%);
+}

@@ -83,7 +83,7 @@ serve(async (request) => {
     const needed = topics.filter((topic) => force || known.get(topic.topic_id) !== (topic.updated_at ?? null));
     const errors: string[] = [];
 
-    const rows = (await mapWithConcurrency(needed, 8, async (topic) => {
+    const downloadedRows = await mapWithConcurrency(needed, 8, async (topic) => {
       try {
         const detail = await fetchJson<TopicDetail>(
           `${DNREC_API_BASE}/topic/${topic.topic_id}?_with=tags,synonyms&_sort=tags.tag&tags-system-not=1`,
@@ -112,7 +112,10 @@ serve(async (request) => {
         errors.push(`${topic.topic}: ${error instanceof Error ? error.message : "unable to fetch"}`);
         return null;
       }
-    })).filter(Boolean);
+    });
+    const rows = downloadedRows.filter(
+      (row): row is Exclude<(typeof downloadedRows)[number], null> => row !== null,
+    );
 
     for (let index = 0; index < rows.length; index += 50) {
       const { error } = await admin

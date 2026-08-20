@@ -32,7 +32,7 @@ In **Edge Functions → Secrets**, configure:
 | `DNREC_SYNC_SECRET` | Authorizes the background catalog importer. Use a new long random value. |
 | `OPENROUTER_API_KEY` | Used only by the protected visual item identifier. Never use a `VITE_` or `EXPO_PUBLIC_` name. |
 | `OPENROUTER_EXPLAIN_MODEL` | The OpenRouter vision model used for one-call item identification. |
-| `ALLOWED_ORIGIN` | The deployed EcoLearn web origin, such as `https://app.ecolearn.dev`. |
+| `ALLOWED_ORIGIN` | The deployed EcoLearn web origin: `https://ecolearn.dev`. |
 
 ## 3. Deploy from GitHub
 

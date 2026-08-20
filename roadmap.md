@@ -14,7 +14,8 @@ take priority over novelty.
 - [x] Delaware-only DNREC guidance catalog, sync workflow, and live fallback.
 - [x] Exact official item autocomplete and item-filtered Delaware locations.
 - [x] OpenRouter constrained to selecting an official DNREC title or no match.
-- [x] Consent-first feedback and human admin review.
+- [x] Historical consent-first feedback and human admin review infrastructure;
+      the learner-facing feedback prompt is intentionally removed.
 - [x] Server-controlled progress, lesson completion, rewards, and achievements.
 - [x] Expo scanner and EcoLearn companion foundations.
 - [x] Shareable platform routes and protected admin navigation.
@@ -40,6 +41,29 @@ take priority over novelty.
 - [ ] Have the appropriate Delaware authority validate priority item protocols
   and location information.
 - [ ] Define privacy-preserving pilot metrics and an update owner for DNREC data.
+
+## Awaiting DSWA Education direction - do not implement yet
+
+The August 2026 DSWA Education discussion points toward a teacher-led product,
+but implementation is paused until DSWA responds and the school privacy model is
+agreed. The preferred flow is:
+
+`teacher creates classroom -> EcoLearn generates class code -> student joins with
+an assigned safe alias/avatar -> lessons and quests earn XP -> teacher reviews
+class-level progress`
+
+Candidate capabilities, subject to approval, are educator-created assignments,
+lesson preview, printable QR/join codes, student-safe aliases, class-specific
+leaderboards, lesson analytics, accessibility settings, classroom achievements,
+and ready-made sustainability activities. Do not require a primary-school learner
+to manage email verification or an independent profile by default.
+
+The same hold applies to maintenance agents. The proposed model is supervised
+automation that can diagnose issues, open an issue, create a branch, run tests,
+and prepare a pull request. It should not silently change production data, rotate
+production secrets, or deploy directly. A future system-health page should report
+DNREC sync, database, scanner success, OpenRouter spend/cap, site and app status,
+security review age, dependency updates, and open issues.
 
 ## Next: product depth
 

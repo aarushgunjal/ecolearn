@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   Barcode,
   FileText,
@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { NearbyMap } from "@/components/NearbyMap";
 
 type BarcodeResult = {
   found: boolean;
@@ -34,9 +35,20 @@ type DisposalSite = {
   distanceKm: number;
   address?: string;
   official?: boolean;
+  provider?: string;
+  services?: string[];
   sourceName?: string;
   sourceUrl?: string;
 };
+
+const locationTypes = [
+  ["recycling", "Everyday recycling"],
+  ["battery", "Batteries"],
+  ["electronics", "Electronics"],
+  ["hazardous", "Hazardous waste"],
+  ["compost", "Yard waste"],
+  ["textile", "Textiles"],
+] as const;
 
 const readAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -46,7 +58,13 @@ const readAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
-export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
+export function ScanUtilities({
+  verifiedItem,
+  allowGenericLocations = false,
+}: {
+  verifiedItem?: string;
+  allowGenericLocations?: boolean;
+}) {
   const { toast } = useToast();
   const [barcode, setBarcode] = useState("");
   const [barcodeLoading, setBarcodeLoading] = useState(false);
@@ -59,11 +77,21 @@ export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
   const [placesLoading, setPlacesLoading] = useState(false);
   const [places, setPlaces] = useState<DisposalSite[]>([]);
   const [placesSource, setPlacesSource] = useState<string | null>(null);
+  const [placesSourceUrl, setPlacesSourceUrl] = useState<string | null>(null);
+  const [placesMatchedTag, setPlacesMatchedTag] = useState<string | null>(null);
+  const [placesNotice, setPlacesNotice] = useState<string | null>(null);
+  const [siteType, setSiteType] = useState("recycling");
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [mapCenter, setMapCenter] = useState<{
     latitude: number;
     longitude: number;
   } | null>(null);
   const labelInput = useRef<HTMLInputElement>(null);
+  const canSearchPlaces = Boolean(verifiedItem || allowGenericLocations);
+  const selectSite = useCallback(
+    (site: DisposalSite) => setSelectedSiteId(site.id),
+    [],
+  );
 
   const lookupBarcode = async () => {
     const value = barcode.replace(/[^0-9]/g, "");
@@ -139,6 +167,9 @@ export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
         variant: "destructive",
       });
     setPlacesLoading(true);
+    setPlaces([]);
+    setPlacesNotice(null);
+    setSelectedSiteId(null);
     navigator.geolocation.getCurrentPosition(
       async ({ coords }) => {
         setMapCenter({
@@ -152,20 +183,24 @@ export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
               body: {
                 latitude: coords.latitude,
                 longitude: coords.longitude,
-                item: verifiedItem,
+                ...(verifiedItem ? { item: verifiedItem } : { type: siteType }),
               },
             },
           );
           if (error) throw error;
           setPlaces((data?.sites || []) as DisposalSite[]);
           setPlacesSource(data?.sourceName ?? null);
+          setPlacesSourceUrl(data?.sourceUrl ?? null);
+          setPlacesMatchedTag(data?.matchedTag ?? null);
+          setPlacesNotice(data?.notice ?? null);
+          setSelectedSiteId(data?.sites?.[0]?.id ?? null);
           if (!(data?.sites || []).length)
             toast({
               title: "No nearby matches yet",
               description:
                 verifiedItem
                   ? "DNREC has no nearby mapped solution for this exact item. Open its official protocol for other options."
-                  : "Scan or search an exact item first to use DNREC’s official map.",
+                  : "No mapped locations were returned for this category. Try another category or check DSWA’s facility directory.",
             });
         } catch (error) {
           console.error("Disposal lookup failed", error);
@@ -189,11 +224,6 @@ export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
     );
   };
-
-  const featuredLocation = places[0] ?? mapCenter;
-  const mapUrl = featuredLocation
-    ? `https://www.openstreetmap.org/export/embed.html?bbox=${featuredLocation.longitude - 0.025}%2C${featuredLocation.latitude - 0.018}%2C${featuredLocation.longitude + 0.025}%2C${featuredLocation.latitude + 0.018}&layer=mapnik&marker=${featuredLocation.latitude}%2C${featuredLocation.longitude}`
-    : "";
 
   return (
     <section id="available-locations" className="mt-8 grid gap-5 lg:grid-cols-2 scroll-mt-6">
@@ -331,18 +361,20 @@ export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
               <MapPin size={20} />
             </span>
             <div>
-              <h2 className="font-semibold">Nearby disposal</h2>
+              <h2 className="font-semibold">Nearby recycling and disposal locations</h2>
               <p className="text-sm text-[#718076]">
                 {verifiedItem
-                  ? `Official DNREC locations and programs for ${verifiedItem}. Your approximate location is used only for this search.`
-                  : "Scan or select an exact Delaware item first. EcoLearn does not show generic disposal locations."}
+                  ? `Official Delaware options for ${verifiedItem}. Your approximate location is used only for this search.`
+                  : allowGenericLocations
+                    ? "Choose a service and find nearby Delaware facilities. Confirm accepted materials and current hours before visiting."
+                    : "Scan or select an exact Delaware item first to see relevant locations."}
               </p>
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
               onClick={findPlaces}
-              disabled={placesLoading || !verifiedItem}
+              disabled={placesLoading || !canSearchPlaces}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#173d2a] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
             >
               {placesLoading ? (
@@ -350,41 +382,114 @@ export function ScanUtilities({ verifiedItem }: { verifiedItem?: string }) {
               ) : (
                 <Navigation size={16} />
               )}{" "}
-              {verifiedItem ? "See available locations" : "Verify an item first"}
+              {canSearchPlaces ? "Find nearby locations" : "Verify an item first"}
             </button>
           </div>
         </div>
-        {mapUrl && (
-          <iframe
-            title={places.length ? "Nearest official Delaware location" : "Your search area"}
-            src={mapUrl}
-            className="mt-5 h-64 w-full rounded-xl border border-[#e0e7dc]"
-            loading="lazy"
-          />
+        {allowGenericLocations && !verifiedItem && (
+          <div className="mt-5 flex flex-wrap gap-2" aria-label="Location type">
+            {locationTypes.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setSiteType(value)}
+                aria-pressed={siteType === value}
+                className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
+                  siteType === value
+                    ? "border-[#327b44] bg-[#e7f4e1] text-[#245f34]"
+                    : "border-[#dce5d9] bg-white text-[#607066] hover:border-[#a8cc9e]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        {mapCenter && (
+          <div className="mt-5 overflow-hidden rounded-xl">
+            <NearbyMap
+              userLocation={mapCenter}
+              sites={places}
+              selectedSiteId={selectedSiteId}
+              onSelect={selectSite}
+            />
+          </div>
+        )}
+        {placesNotice && (
+          <p className="mt-4 rounded-xl bg-[#fff7e6] p-3 text-sm leading-6 text-[#76551f]">
+            {placesNotice}
+          </p>
         )}
         {places.length > 0 && (
           <div className="mt-5">
-            {placesSource && <p className="mb-3 text-xs font-semibold text-[#52755a]">Source: {placesSource}. The map marker shows the nearest listed official location.</p>}
-            <div className="grid gap-3 sm:grid-cols-2">
-            {places.map((site) => (
-              <a
-                key={site.id}
-                href={`https://www.google.com/maps/dir/?api=1&destination=${site.latitude},${site.longitude}`}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-xl border border-[#e0e7dc] p-4 transition hover:border-[#a8cc9e] hover:bg-[#f8fbf6]"
-              >
-                <p className="font-semibold text-[#24412e]">{site.name}</p>
-                <p className="mt-1 text-sm text-[#607066]">
-                  {site.type} · {site.distanceKm.toFixed(1)} km away
-                </p>
-                {site.address && (
-                  <p className="mt-1 text-xs text-[#7b887d]">{site.address}</p>
+            {placesSource && (
+              <p className="mb-3 text-xs font-semibold leading-5 text-[#52755a]">
+                Source: {placesSource}
+                {placesMatchedTag && placesMatchedTag.toLowerCase() !== verifiedItem?.toLowerCase()
+                  ? ` · DNREC solution category: ${placesMatchedTag}`
+                  : ""}. Select a numbered result to highlight it on the map.{" "}
+                {placesSourceUrl && (
+                  <a href={placesSourceUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                    View official protocol ↗
+                  </a>
                 )}
-                <p className="mt-3 text-xs font-semibold text-[#317a45]">
-                  Get directions →
-                </p>
-              </a>
+              </p>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2">
+            {places.map((site, index) => (
+              <article
+                key={site.id}
+                className={`rounded-xl border p-4 transition ${
+                  selectedSiteId === site.id
+                    ? "border-[#5b9b65] bg-[#f2f9ee] shadow-sm"
+                    : "border-[#e0e7dc] hover:border-[#a8cc9e] hover:bg-[#f8fbf6]"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => selectSite(site)}
+                  className="w-full text-left"
+                  aria-label={`Show ${site.name} on map`}
+                >
+                  <p className="font-semibold text-[#24412e]">
+                    <span className="mr-2 inline-grid h-6 w-6 place-items-center rounded-full bg-[#28763f] text-xs text-white">
+                      {index + 1}
+                    </span>
+                    {site.name}
+                  </p>
+                  <p className="mt-2 text-sm text-[#607066]">
+                    {site.type} · {site.distanceKm.toFixed(1)} km away
+                  </p>
+                  {site.address && (
+                    <p className="mt-1 text-xs text-[#7b887d]">{site.address}</p>
+                  )}
+                  {site.services && site.services.length > 0 && (
+                    <p className="mt-2 text-xs leading-5 text-[#607066]">
+                      Services: {site.services.join(", ")}
+                    </p>
+                  )}
+                </button>
+                <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-[#317a45]">
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${site.latitude},${site.longitude}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-2"
+                  >
+                    Get directions ↗
+                  </a>
+                  {site.sourceUrl && (
+                    <a
+                      href={site.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline underline-offset-2"
+                    >
+                      Verify facility details ↗
+                    </a>
+                  )}
+                </div>
+              </article>
             ))}
             </div>
           </div>

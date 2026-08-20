@@ -4,7 +4,7 @@
 supabase link --project-ref YOUR_PROJECT_REF
 supabase secrets set OPENROUTER_API_KEY=YOUR_PRIVATE_KEY
 supabase secrets set OPENROUTER_EXPLAIN_MODEL=YOUR_VISION_MODEL
-supabase secrets set ALLOWED_ORIGIN=https://app.ecolearn.dev
+supabase secrets set ALLOWED_ORIGIN=https://ecolearn.dev
 supabase functions deploy explain-scan
 ```
 

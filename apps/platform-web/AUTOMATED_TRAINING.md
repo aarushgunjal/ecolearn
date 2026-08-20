@@ -34,7 +34,7 @@ Keep JWT verification **on** for `export-training-manifest`, `lookup-barcode`, `
 
 Add these Edge Function secrets:
 
-- `ALLOWED_ORIGIN=https://app.ecolearn.dev`
+- `ALLOWED_ORIGIN=https://ecolearn.dev`
 - `OPENROUTER_LABEL_MODEL=google/gemma-4-31b-it:free` (or your existing reliable vision model)
 - `TRAINING_AUTOMATION_TOKEN=` a new long random value
 

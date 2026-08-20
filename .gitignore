@@ -9,6 +9,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.pnpm-store/
 dist-ssr
 *.local
 .expo/
@@ -28,6 +29,7 @@ apps/platform-web/.validation-dist/
 apps/platform-web/test-results/
 apps/platform-web/playwright-report/
 *.tsbuildinfo
+/tmp/
 
 # Editor directories and files
 .vscode/*

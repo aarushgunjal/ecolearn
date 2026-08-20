@@ -12,9 +12,9 @@ uploading, review submission, or publication.
 - **Primary category:** Education
 - **Suggested secondary category:** Lifestyle
 - **Support email:** aarushgunjal1@gmail.com
-- **Privacy URL:** https://ecolearn.tech/privacy
-- **Terms URL:** https://ecolearn.tech/terms
-- **Account-deletion URL:** https://ecolearn.tech/delete-account
+- **Privacy URL:** https://ecolearn.dev/privacy
+- **Terms URL:** https://ecolearn.dev/terms
+- **Account-deletion URL:** https://ecolearn.dev/delete-account
 
 ### Full description draft
 

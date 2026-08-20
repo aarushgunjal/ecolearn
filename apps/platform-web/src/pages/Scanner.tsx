@@ -21,6 +21,8 @@ import { useProgress } from "@/hooks/useProgress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { ScanUtilities } from "@/components/ScanUtilities";
+import { DSWAVideoCard } from "@/components/DSWAVideoCard";
+import { videosForScan } from "@/data/dswaVideos";
 
 type ScanResult = {
   item: string;
@@ -610,6 +612,15 @@ function ResultCard({
 }) {
   const good = Boolean(result.dnrec?.curbside);
   const multipleItems = result.imageStatus === "multiple_items";
+  const relatedVideos = result.dnrec
+    ? videosForScan([
+        result.item,
+        result.category,
+        result.material,
+        result.instructions,
+        ...(result.dnrec.tags ?? []),
+      ])
+    : [];
   return (
     <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
       <div className="grid gap-5 sm:grid-cols-[150px_1fr] sm:items-center">
@@ -690,6 +701,19 @@ function ResultCard({
         >
           Verified source: Delaware DNREC Recyclopedia ↗
         </a>
+      )}
+      {relatedVideos.length > 0 && (
+        <section className="mt-6 rounded-2xl bg-[#f4f8f0] p-4 sm:p-5">
+          <p className="text-xs font-bold uppercase tracking-[.14em] text-[#438b52]">
+            Learn more from DSWA Education
+          </p>
+          <p className="mt-2 text-sm leading-6 text-[#657369]">
+            This official Delaware video is selected from the verified item category, not from the product brand.
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {relatedVideos.map((video) => <DSWAVideoCard key={video.id} video={video} compact />)}
+          </div>
+        </section>
       )}
       <p className="mt-4 text-[11px] leading-4 text-[#758277]">
         The image is used for this visual check only. EcoLearn does not store it

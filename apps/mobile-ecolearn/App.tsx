@@ -20,6 +20,7 @@ import * as ExpoLinking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import * as FileSystem from "expo-file-system/legacy";
 import Constants from "expo-constants";
+import MapView, { Marker } from "react-native-maps";
 import type { Session, User } from "@supabase/supabase-js";
 import { isConfigured, supabase } from "./src/supabase";
 
@@ -31,19 +32,35 @@ type ScanResult = { item: string; recyclable: boolean; confidence: number; categ
 type DelawareGuidance = { title: string; category: string; curbside: boolean; instructions: string; sourceName: string; sourceUrl: string; matchConfidence?: number };
 type VisionScanResponse = { verified: boolean; guidance: DelawareGuidance | null; observedItem: string | null; material: string | null; confidence: number; imageStatus: "single_item" | "multiple_items" | "unclear"; visibleEvidence: string | null; nextSteps: string[]; message: string };
 type Progress = { xp: number; level: number; total_scans: number; total_lessons_completed: number; streak_days: number };
-type Site = { id: string; name: string; type: string; latitude: number; longitude: number; distanceKm: number; address?: string };
+type Site = { id: string; name: string; type: string; latitude: number; longitude: number; distanceKm: number; address?: string; services?: string[]; sourceUrl?: string; provider?: string };
 type Lesson = { id: string; title: string; topic: string; duration: string; xp: number; summary: string; question: string; choices: string[]; answer: number; explanation: string };
 
 const usingExpoGo = Constants.appOwnership === "expo";
-const publicSiteUrl = "https://ecolearn.tech";
+const publicSiteUrl = "https://ecolearn.dev";
 const openPublicPage = (path: "/privacy" | "/terms" | "/delete-account") =>
   Linking.openURL(`${publicSiteUrl}${path}`);
 const lessons: Lesson[] = [
-  { id: "10000000-0000-4000-8000-000000000001", title: "The Delaware recycling loop", topic: "Recycling basics", duration: "4 min", xp: 20, summary: "Delaware DNREC says accepted curbside items should be loose, empty, clean, and dry.", question: "Which action best helps a recycling facility sort materials?", choices: ["Bag recyclables", "Keep empty items loose", "Recycle every item with a triangle"], answer: 1, explanation: "DNREC's Recyclopedia advises keeping accepted materials loose, empty, clean, and dry." },
-  { id: "10000000-0000-4000-8000-000000000002", title: "Plastic, decoded", topic: "Delaware materials", duration: "6 min", xp: 30, summary: "A plastic number does not guarantee curbside acceptance. Check the exact item in Delaware DNREC Recyclopedia.", question: "What is the safest choice for plastic bags and film?", choices: ["Put them in curbside recycling", "Use a dedicated store drop-off", "Mix them with paper"], answer: 1, explanation: "Film can tangle sorting equipment. Confirm the exact Delaware drop-off protocol first." },
-  { id: "10000000-0000-4000-8000-000000000003", title: "Wishcycling myths", topic: "Smart sorting", duration: "5 min", xp: 25, summary: "Wishcycling is placing an item in recycling because we hope it is accepted. It can contaminate real recyclables.", question: "What should you do with an unknown material?", choices: ["Put it in recycling just in case", "Check Delaware DNREC guidance", "Place it in a bag with paper"], answer: 1, explanation: "When unsure, Delaware DNREC guidance is safer than guessing." },
-  { id: "10000000-0000-4000-8000-000000000004", title: "Food's second life", topic: "Composting", duration: "7 min", xp: 35, summary: "Food scraps can be a resource through composting where a local program accepts them.", question: "What should you check before composting food scraps?", choices: ["Whether your local program accepts them", "Whether they are in plastic", "Nothing"], answer: 0, explanation: "Accepted materials differ by program, so local rules come first." },
+  { id: "10000000-0000-4000-8000-000000000001", title: "The recycling loop", topic: "Recycling basics", duration: "4 min", xp: 20, summary: "Recycling is a system. Empty, clean items should stay loose so sorting equipment can separate them.", question: "Which action best helps a recycling facility sort materials?", choices: ["Put recyclables in a plastic bag", "Keep empty items loose in the bin", "Recycle every item with a triangle"], answer: 1, explanation: "Correct. Loose, clean, empty items are much easier for a facility to sort." },
+  { id: "10000000-0000-4000-8000-000000000002", title: "Plastic, decoded", topic: "Materials", duration: "6 min", xp: 30, summary: "Plastic numbers identify resin types, but the number alone does not promise curbside acceptance.", question: "What is the safest choice for plastic bags and film?", choices: ["Place them loose in curbside recycling", "Use a dedicated store drop-off if available", "Put them in with paper"], answer: 1, explanation: "Exactly. Film plastic tangles sorting equipment; use a dedicated film collection program." },
+  { id: "10000000-0000-4000-8000-000000000003", title: "Wishcycling myths", topic: "Smart sorting", duration: "5 min", xp: 25, summary: "Wishcycling puts the wrong item in recycling. Food-soiled paper and special waste need different handling.", question: "Why should a greasy pizza box stay out of paper recycling?", choices: ["It is too heavy", "Grease contaminates the paper fibers", "Cardboard is never recyclable"], answer: 1, explanation: "Right. Clean cardboard is valuable; grease makes its fibers unsuitable for recycling." },
+  { id: "10000000-0000-4000-8000-000000000004", title: "Food's second life", topic: "Composting", duration: "7 min", xp: 35, summary: "Food scraps can return nutrients to soil when green and brown compost materials stay balanced.", question: "Which is a useful 'brown' material for a compost pile?", choices: ["Dry leaves", "A plastic wrapper", "A battery"], answer: 0, explanation: "Yes. Dry leaves add carbon-rich brown material and help balance moist food scraps." },
+  { id: "10000000-0000-4000-8000-000000000005", title: "Glass and metal basics", topic: "Materials", duration: "5 min", xp: 25, summary: "Glass and metal containers need to be empty and rinsed, while sharp or pressurized items may need special handling.", question: "What should you do before recycling a food jar or soda can?", choices: ["Leave food residue inside", "Empty and rinse it", "Wrap it in a bag"], answer: 1, explanation: "Correct. Empty, clean containers give the recycling system the best chance of success." },
+  { id: "10000000-0000-4000-8000-000000000006", title: "Smarter compost habits", topic: "Organic waste", duration: "6 min", xp: 30, summary: "Healthy compost balances moist green material with dry brown material and keeps plastic contamination out.", question: "Which item is usually safe to add to a compost bin?", choices: ["Dry leaves", "A battery", "Plastic cutlery"], answer: 0, explanation: "Right. Dry leaves are a classic compost ingredient and help balance food scraps." },
 ];
+
+const dswaVideoForItem = (values: Array<string | null | undefined>) => {
+  const text = values.filter(Boolean).join(" ").toLowerCase();
+  if (/electronic|computer|laptop|tablet|phone|television|printer|device|appliance|charger|e-waste/.test(text)) {
+    return { title: "Watch DSWA Electronics Recycling", url: "https://www.youtube.com/watch?v=zgM9MRqwlEc" };
+  }
+  if (/hazardous|battery|batteries|paint|chemical|propane|special collection/.test(text)) {
+    return { title: "Watch DSWA Special Collection Events", url: "https://www.youtube.com/watch?v=_FXnpUKHgHI" };
+  }
+  if (/curbside|recycl|aluminum|glass|metal|plastic|paper|carton/.test(text)) {
+    return { title: "Tour the DSWA Delaware Recycling Center", url: "https://www.youtube.com/watch?v=mzh2A_s5GUQ" };
+  }
+  return null;
+};
 
 const percent = (value: number) => Math.round(value <= 1 ? value * 100 : Math.min(100, value));
 const photoFromAsset = (asset: ImagePicker.ImagePickerAsset): Photo => ({ uri: asset.uri, name: asset.fileName ?? "ecolearn-photo.jpg", mimeType: asset.base64 ? "image/jpeg" : asset.mimeType ?? "image/jpeg", base64: asset.base64 });
@@ -81,6 +98,9 @@ const extras = StyleSheet.create({
   webNavTextActive: { color: "#237342" },
   photoHint: { marginTop: 8, color: "#5b8061", fontSize: 12, textAlign: "center" },
   toolsLinkCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 18, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 18, backgroundColor: "#fff", padding: 16 },
+  map: { height: 330, marginTop: 16, borderRadius: 16 },
+  selectedSite: { marginHorizontal: -8, borderRadius: 12, backgroundColor: "#f0f8ec", paddingHorizontal: 8, paddingBottom: 8 },
+  siteActions: { flexDirection: "row", flexWrap: "wrap", gap: 18 },
 });
 
 export default function App() {
@@ -216,6 +236,7 @@ function ScanScreen({ onRecorded, onTools }: { onRecorded: () => Promise<void>; 
   </>;
   if (!result) return <><Text style={styles.kicker}>ITEM SCANNER</Text><Text style={styles.pageTitle}>Ready to scan?</Text><Text style={styles.body}>One visual check will identify the item, then EcoLearn will search the official Delaware catalog.</Text><View style={styles.photoBox}><Image source={{ uri: photo!.uri }} style={styles.fullImage} /></View><View style={styles.row}><Pressable style={[styles.secondaryButton, styles.half]} onPress={() => void choose(false)}><Text style={styles.secondaryText}>Choose another</Text></Pressable><Pressable style={[styles.primaryButton, styles.half]} onPress={() => void choose(true)}><Text style={styles.primaryText}>Use camera</Text></Pressable></View><Pressable disabled={busy} style={[styles.scanButton, busy && styles.disabled]} onPress={() => void scan()}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Identify + check DNREC</Text>}</Pressable></>;
   const official = result.dnrec;
+  const relatedVideo = dswaVideoForItem([result.item, result.category, result.material, result.instructions]);
   const resetScan = () => { setResult(null); setPhoto(null); };
   if (!official) return <>
     <Image source={{ uri: photo?.uri }} style={styles.resultImage} />
@@ -238,6 +259,7 @@ function ScanScreen({ onRecorded, onTools }: { onRecorded: () => Promise<void>; 
     <Text style={styles.pageTitle}>{official.title}</Text>
     <View style={[styles.badge, official.curbside ? styles.goodBadge : styles.warnBadge]}><Text style={[styles.badgeText, official.curbside ? styles.goodText : styles.warnText]}>DNREC: {official.category} · {percent(result.confidence)}% confidence</Text></View>
     <View style={styles.guidanceCard}><Text style={styles.smallLabel}>OFFICIAL DELAWARE DNREC PROTOCOL</Text><Text style={styles.guidance}>{official.instructions}</Text><Pressable onPress={() => void Linking.openURL(official.sourceUrl)}><Text style={styles.link}>Open Delaware DNREC source</Text></Pressable></View>
+    {relatedVideo && <Pressable style={styles.explainButton} onPress={() => void Linking.openURL(relatedVideo.url)}><Text style={styles.explainText}>{relatedVideo.title}</Text></Pressable>}
     <Text style={styles.helper}>The image was used for this visual check only and is not stored or used for training.</Text>
     <Pressable style={styles.scanButton} onPress={resetScan}><Text style={styles.primaryText}>Scan another item</Text></Pressable>
   </>;
@@ -301,7 +323,180 @@ function LeaderboardScreen({ progress }: { progress: Progress | null }) {
   </>;
 }
 
-function ToolsScreen() { const [barcode, setBarcode] = useState(""); const [barcodeResult, setBarcodeResult] = useState<any>(null); const [toolBusy, setToolBusy] = useState(false); const [labelResult, setLabelResult] = useState<any>(null); const [sites, setSites] = useState<Site[]>([]); const [siteType, setSiteType] = useState("recycling"); const lookupBarcode = async () => { const code = barcode.replace(/\D/g, ""); if (code.length < 8 || code.length > 14) return Alert.alert("Enter a valid barcode", "Use the 8–14 digits below the bars."); setToolBusy(true); try { const { data, error } = await supabase.functions.invoke("lookup-barcode", { body: { barcode: code } }); if (error) throw error; setBarcodeResult(data); } catch { Alert.alert("Barcode lookup is unavailable", "Try again shortly or use item scanning."); } finally { setToolBusy(false); } }; const readLabel = async () => { const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!permission.granted) return Alert.alert("Permission needed", "Allow photo access to read a label."); const response = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 }); if (response.canceled || !response.assets[0]) return; Alert.alert("Send label to AI?", "The image is used only to read its visible label and symbols. EcoLearn does not store it or use it for training.", [{ text: "Cancel", style: "cancel" }, { text: "Continue", onPress: async () => { setToolBusy(true); try { const asset = response.assets[0]; const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 }); const { data, error } = await supabase.functions.invoke("read-label", { body: { image: `data:${asset.mimeType ?? "image/jpeg"};base64,${base64}` } }); if (error) throw error; setLabelResult(data); } catch { Alert.alert("Could not read that label", "Use a clearer, well-lit photo and try again."); } finally { setToolBusy(false); } } }]); }; const nearby = async () => { const permission = await Location.requestForegroundPermissionsAsync(); if (!permission.granted) return Alert.alert("Location permission needed", "Allow location access to see nearby disposal sites."); setToolBusy(true); try { const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }); const { data, error } = await supabase.functions.invoke("find-disposal-sites", { body: { latitude: location.coords.latitude, longitude: location.coords.longitude, type: siteType } }); if (error) throw error; setSites(data?.sites ?? []); } catch { Alert.alert("Nearby search is unavailable", "Try again shortly."); } finally { setToolBusy(false); } }; return <><Text style={styles.kicker}>SMART TOOLS</Text><Text style={styles.pageTitle}>More ways to decide.</Text><View style={styles.toolCard}><Text style={styles.rowTitle}>Barcode lookup</Text><Text style={styles.body}>Enter the digits below a product barcode.</Text><TextInput style={styles.input} value={barcode} onChangeText={setBarcode} keyboardType="number-pad" placeholder="8–14 digit barcode" /><Pressable style={styles.primaryButton} onPress={() => void lookupBarcode()}><Text style={styles.primaryText}>{toolBusy ? "Looking up…" : "Look up barcode"}</Text></Pressable>{barcodeResult && <Text style={styles.body}>{barcodeResult.found ? `${barcodeResult.name ?? "Product found"}${barcodeResult.guidance ? ` — ${barcodeResult.guidance}` : ""}` : "No product match found."}</Text>}</View><View style={styles.toolCard}><Text style={styles.rowTitle}>Read a package label</Text><Text style={styles.body}>Read visible material and recycling symbols from a selected photo.</Text><Pressable style={styles.secondaryButton} onPress={() => void readLabel()}><Text style={styles.secondaryText}>Choose label photo</Text></Pressable>{labelResult && <Text style={styles.body}>{labelResult.guidance}{labelResult.materials?.length ? `\nMaterials: ${labelResult.materials.join(", ")}` : ""}</Text>}</View><View style={styles.toolCard}><Text style={styles.rowTitle}>Nearby disposal sites</Text><Text style={styles.body}>Find a local option, then confirm its accepted materials and hours.</Text><View style={styles.chips}>{["recycling", "battery", "electronics", "textile"].map((type) => <Pressable key={type} onPress={() => setSiteType(type)} style={[styles.chip, siteType === type && styles.chipActive]}><Text style={[styles.chipText, siteType === type && styles.chipTextActive]}>{type}</Text></Pressable>)}</View><Pressable style={styles.primaryButton} onPress={() => void nearby()}><Text style={styles.primaryText}>Find nearby sites</Text></Pressable>{sites.map((site) => <Pressable key={site.id} style={styles.siteCard} onPress={() => void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${site.latitude},${site.longitude}`)}><Text style={styles.rowTitle}>{site.name}</Text><Text style={styles.rowMeta}>{site.address ?? site.type} · {site.distanceKm.toFixed(1)} km away</Text></Pressable>)}</View></>; }
+function ToolsScreen() {
+  const [barcode, setBarcode] = useState("");
+  const [barcodeResult, setBarcodeResult] = useState<any>(null);
+  const [labelResult, setLabelResult] = useState<any>(null);
+  const [busyTool, setBusyTool] = useState<"barcode" | "label" | "locations" | null>(null);
+  const [sites, setSites] = useState<Site[]>([]);
+  const [siteType, setSiteType] = useState("recycling");
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locationNotice, setLocationNotice] = useState<string | null>(null);
+  const mapRef = useRef<MapView | null>(null);
+
+  useEffect(() => {
+    if (!userLocation || !mapRef.current) return;
+    const coordinates = [userLocation, ...sites.map(({ latitude, longitude }) => ({ latitude, longitude }))];
+    mapRef.current.fitToCoordinates(coordinates, {
+      edgePadding: { top: 55, right: 45, bottom: 55, left: 45 },
+      animated: true,
+    });
+  }, [sites, userLocation]);
+
+  const lookupBarcode = async () => {
+    const code = barcode.replace(/\D/g, "");
+    if (code.length < 8 || code.length > 14) {
+      return Alert.alert("Enter a valid barcode", "Use the 8–14 digits below the bars.");
+    }
+    setBusyTool("barcode");
+    setBarcodeResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("lookup-barcode", { body: { barcode: code } });
+      if (error) throw error;
+      setBarcodeResult(data);
+    } catch {
+      Alert.alert("Barcode lookup is unavailable", "Try again shortly or use item scanning.");
+    } finally {
+      setBusyTool(null);
+    }
+  };
+
+  const readLabel = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return Alert.alert("Permission needed", "Allow photo access to read a label.");
+    const response = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
+    if (response.canceled || !response.assets[0]) return;
+    Alert.alert(
+      "Send label to AI?",
+      "The image is used only to read its visible label and symbols. EcoLearn does not store it or use it for training.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Continue",
+          onPress: async () => {
+            setBusyTool("label");
+            setLabelResult(null);
+            try {
+              const asset = response.assets[0];
+              const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+              const { data, error } = await supabase.functions.invoke("read-label", {
+                body: { image: `data:${asset.mimeType ?? "image/jpeg"};base64,${base64}` },
+              });
+              if (error) throw error;
+              setLabelResult(data);
+            } catch {
+              Alert.alert("Could not read that label", "Use a clearer, well-lit photo and try again.");
+            } finally {
+              setBusyTool(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const nearby = async () => {
+    const permission = await Location.requestForegroundPermissionsAsync();
+    if (!permission.granted) return Alert.alert("Location permission needed", "Allow location access to see nearby disposal sites.");
+    setBusyTool("locations");
+    setSites([]);
+    setLocationNotice(null);
+    try {
+      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const current = { latitude: location.coords.latitude, longitude: location.coords.longitude };
+      setUserLocation(current);
+      const { data, error } = await supabase.functions.invoke("find-disposal-sites", {
+        body: { ...current, type: siteType },
+      });
+      if (error) throw error;
+      const nextSites = (data?.sites ?? []) as Site[];
+      setSites(nextSites);
+      setSelectedSiteId(nextSites[0]?.id ?? null);
+      setLocationNotice(data?.notice ?? null);
+      if (!nextSites.length) Alert.alert("No nearby matches", "Try another category or check the DSWA facility directory.");
+    } catch {
+      Alert.alert("Nearby search is unavailable", "Try again shortly.");
+    } finally {
+      setBusyTool(null);
+    }
+  };
+
+  const focusSite = (site: Site) => {
+    setSelectedSiteId(site.id);
+    mapRef.current?.animateToRegion(
+      { latitude: site.latitude, longitude: site.longitude, latitudeDelta: 0.08, longitudeDelta: 0.08 },
+      350,
+    );
+  };
+
+  return <>
+    <Text style={styles.kicker}>SMART TOOLS</Text>
+    <Text style={styles.pageTitle}>More ways to decide.</Text>
+    <View style={styles.toolCard}>
+      <Text style={styles.rowTitle}>Barcode lookup</Text>
+      <Text style={styles.body}>Enter the digits below a product barcode.</Text>
+      <TextInput style={styles.input} value={barcode} onChangeText={setBarcode} keyboardType="number-pad" placeholder="8–14 digit barcode" />
+      <Pressable disabled={busyTool !== null} style={[styles.primaryButton, busyTool !== null && styles.disabled]} onPress={() => void lookupBarcode()}>
+        <Text style={styles.primaryText}>{busyTool === "barcode" ? "Looking up…" : "Look up barcode"}</Text>
+      </Pressable>
+      {barcodeResult && <Text style={styles.body}>{barcodeResult.found ? `${barcodeResult.name ?? "Product found"}${barcodeResult.guidance ? ` — ${barcodeResult.guidance}` : ""}` : "No product match found."}</Text>}
+    </View>
+    <View style={styles.toolCard}>
+      <Text style={styles.rowTitle}>Read a package label</Text>
+      <Text style={styles.body}>Read visible material and recycling symbols from a selected photo.</Text>
+      <Pressable disabled={busyTool !== null} style={[styles.secondaryButton, busyTool !== null && styles.disabled]} onPress={() => void readLabel()}>
+        <Text style={styles.secondaryText}>{busyTool === "label" ? "Reading label…" : "Choose label photo"}</Text>
+      </Pressable>
+      {labelResult && <Text style={styles.body}>{labelResult.guidance}{labelResult.materials?.length ? `\nMaterials: ${labelResult.materials.join(", ")}` : ""}</Text>}
+    </View>
+    <View style={styles.toolCard}>
+      <Text style={styles.rowTitle}>Nearby recycling and disposal locations</Text>
+      <Text style={styles.body}>Choose a service, see every result on the map, then confirm accepted materials and hours.</Text>
+      <View style={styles.chips}>
+        {[["recycling", "Recycling"], ["battery", "Batteries"], ["electronics", "Electronics"], ["hazardous", "Hazardous"], ["compost", "Yard waste"], ["textile", "Textiles"]].map(([value, label]) => (
+          <Pressable key={value} onPress={() => setSiteType(value)} style={[styles.chip, siteType === value && styles.chipActive]}>
+            <Text style={[styles.chipText, siteType === value && styles.chipTextActive]}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Pressable disabled={busyTool !== null} style={[styles.primaryButton, busyTool !== null && styles.disabled]} onPress={() => void nearby()}>
+        <Text style={styles.primaryText}>{busyTool === "locations" ? "Finding locations…" : "Find nearby locations"}</Text>
+      </Pressable>
+      {userLocation && <MapView
+        ref={mapRef}
+        style={extras.map}
+        initialRegion={{ ...userLocation, latitudeDelta: 0.35, longitudeDelta: 0.35 }}
+        showsUserLocation
+        showsMyLocationButton
+        accessibilityLabel={`Nearby disposal map with ${sites.length} locations`}
+      >
+        {sites.map((site, index) => <Marker
+          key={site.id}
+          coordinate={{ latitude: site.latitude, longitude: site.longitude }}
+          title={`${index + 1}. ${site.name}`}
+          description={`${site.type} · ${site.distanceKm.toFixed(1)} km away`}
+          pinColor={selectedSiteId === site.id ? "#e38b24" : "#28763f"}
+          onPress={() => setSelectedSiteId(site.id)}
+        />)}
+      </MapView>}
+      {locationNotice && <Text style={styles.helper}>{locationNotice}</Text>}
+      {sites.map((site, index) => <View key={site.id} style={[styles.siteCard, selectedSiteId === site.id && extras.selectedSite]}>
+        <Pressable onPress={() => focusSite(site)} accessibilityLabel={`Show ${site.name} on map`}>
+          <Text style={styles.rowTitle}>{index + 1}. {site.name}</Text>
+          <Text style={styles.rowMeta}>{site.address ?? site.type} · {site.distanceKm.toFixed(1)} km away</Text>
+          {site.services?.length ? <Text style={styles.helper}>Services: {site.services.join(", ")}</Text> : null}
+        </Pressable>
+        <View style={extras.siteActions}>
+          <Pressable onPress={() => void Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${site.latitude},${site.longitude}`)}>
+            <Text style={styles.link}>Directions ↗</Text>
+          </Pressable>
+          {site.sourceUrl && <Pressable onPress={() => void Linking.openURL(site.sourceUrl!)}><Text style={styles.link}>Verify details ↗</Text></Pressable>}
+        </View>
+      </View>)}
+    </View>
+  </>;
+}
 
 function ProfileScreen({ user, progress }: { user: User; progress: Progress | null }) {
   const initialName = String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? "");

@@ -29,6 +29,8 @@ import { useProgress } from "@/hooks/useProgress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminReview } from "@/components/AdminReview";
+import { DSWAVideoCard } from "@/components/DSWAVideoCard";
+import { dswaVideos, videosForLesson } from "@/data/dswaVideos";
 
 const lessons = [
   {
@@ -571,6 +573,20 @@ export function Learn() {
           </p>
         </div>
       </div>
+      <section className="mt-12">
+        <p className="text-xs font-bold uppercase tracking-[.14em] text-[#438b52]">
+          Learn from Delaware's experts
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-[-.04em] text-[#173d2a]">
+          Official DSWA Education videos
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#718076]">
+          Tour Delaware's recycling, transfer, landfill, electronics, and environmental education programs.
+        </p>
+        <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {dswaVideos.map((video) => <DSWAVideoCard key={video.id} video={video} />)}
+        </div>
+      </section>
     </div>
   );
 }
@@ -619,6 +635,11 @@ function LessonPlayer({
             <p className="mt-6 text-lg leading-8 text-[#52665a]">
               {content.intro}
             </p>
+            {videosForLesson(lesson.id).slice(0, 1).map((video) => (
+              <div key={video.id} className="mt-7">
+                <DSWAVideoCard video={video} compact />
+              </div>
+            ))}
           </>
         )}
         {step > 0 && !isQuiz && (

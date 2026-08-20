@@ -23,7 +23,7 @@ const getRedirectUrl = () => {
   ) {
     return window.location.origin;
   }
-  return "https://ecolearn.tech";
+  return "https://ecolearn.dev";
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

@@ -11,7 +11,6 @@ import {
   FileText,
   GraduationCap,
   MapPin,
-  QrCode,
   ScanBarcode,
   ShieldCheck,
   Users,
@@ -20,6 +19,7 @@ import {
 import { useProgress } from "@/hooks/useProgress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { ScanUtilities } from "@/components/ScanUtilities";
 
 const municipalities = [
   "Delaware",
@@ -50,6 +50,7 @@ export function LocalRules() {
         <section className="rounded-2xl border border-[#e0e7dc] bg-white p-6">
           <label className="text-sm font-bold">Your municipality</label>
           <select
+            aria-label="Your municipality"
             value={city}
             onChange={(e) => setCity(e.target.value)}
             className="mt-3 w-full rounded-xl border border-[#dce4d8] bg-white px-4 py-3 outline-none"
@@ -462,81 +463,18 @@ export function Admin() {
 }
 
 export function ScannerTools() {
-  const [barcode, setBarcode] = useState("");
-  const [show, setShow] = useState(false);
-  const [queuedBarcode, setQueuedBarcode] = useState(
-    () => localStorage.getItem("ecolearn-last-barcode") || "",
-  );
-  const { toast } = useToast();
   return (
     <Hub
       title="Smart scan tools"
       eyebrow="More ways to identify an item"
       icon={<ScanBarcode />}
     >
-      <div className="grid gap-5 md:grid-cols-2">
-        <button
-          onClick={() => setShow(true)}
-          className="rounded-2xl border border-[#dce5d9] bg-white p-6 text-left transition hover:shadow-lg"
-        >
-          <ScanBarcode className="text-[#3c904c]" />
-          <h2 className="mt-4 font-semibold">Barcode lookup</h2>
-          <p className="mt-2 text-sm leading-6 text-[#718076]">
-            Use your camera or type a UPC to identify packaged products.
-          </p>
-        </button>
-        <button
-          onClick={() =>
-            toast({
-              title: "OCR ready",
-              description:
-                "Point the scanner at a label to read material and disposal instructions.",
-            })
-          }
-          className="rounded-2xl border border-[#dce5d9] bg-white p-6 text-left transition hover:shadow-lg"
-        >
-          <QrCode className="text-[#3c904c]" />
-          <h2 className="mt-4 font-semibold">Read a label</h2>
-          <p className="mt-2 text-sm leading-6 text-[#718076]">
-            Extract recycling symbols and manufacturer text with OCR.
-          </p>
-        </button>
-      </div>
-      {show && (
-        <div className="mt-5 rounded-2xl bg-[#edf7e8] p-5">
-          <label className="text-sm font-bold">UPC / barcode number</label>
-          <div className="mt-3 flex gap-2">
-            <input
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              placeholder="e.g. 012345678905"
-              className="min-w-0 flex-1 rounded-xl border border-[#ccdfc6] bg-white px-4 py-3 outline-none"
-            />
-            <button
-              onClick={() => {
-                if (!barcode) {
-                  toast({
-                    title: "Enter a barcode",
-                    description: "Try scanning the code from the package.",
-                  });
-                  return;
-                }
-
-                setQueuedBarcode(barcode);
-                localStorage.setItem("ecolearn-last-barcode", barcode);
-                toast({
-                  title: "Barcode lookup queued",
-                  description:
-                    "Connect a product database API to return product packaging data.",
-                });
-              }}
-              className="rounded-xl bg-[#173d2a] px-4 text-sm font-bold text-white"
-            >
-              {queuedBarcode === barcode && barcode ? "Queued" : "Lookup"}
-            </button>
-          </div>
-        </div>
-      )}
+      <p className="mb-5 max-w-3xl text-sm leading-6 text-[#66746a]">
+        Use a barcode, read a package label, or explore nearby Delaware
+        recycling and special-waste locations. Location is requested only when
+        you start a nearby search.
+      </p>
+      <ScanUtilities allowGenericLocations />
     </Hub>
   );
 }

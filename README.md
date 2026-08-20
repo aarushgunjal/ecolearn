@@ -7,7 +7,7 @@
 **How to use**: Open the website and create an account to save data. To scan, simply open the scan section and scan whatever items you want one at a time or upload an image.
 
 
-**URL**: https://ecolearn.tech
+**URL**: https://ecolearn.dev
 
 
 **Operations and scale planning**: See
