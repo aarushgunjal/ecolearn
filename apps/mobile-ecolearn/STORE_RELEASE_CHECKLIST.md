@@ -52,7 +52,7 @@ DNREC, eco, learning
 - [x] Expo SDK 57 / React Native 0.86 project validates.
 - [x] Expo Doctor passes all 21 checks and iOS/Android production bundles compile.
 - [x] Stable iOS bundle ID and Android package are set to `com.ecolearn.mobile`.
-- [x] Separate iOS build number and Android version code are configured.
+- [x] EAS remotely manages and auto-increments the iOS build number and Android version code.
 - [x] Production, preview APK, development-client, and iOS Simulator EAS profiles exist.
 - [x] Camera, photo-library, location, and blocked-audio permissions are declared.
 - [x] White-background EcoLearn artwork is used for the icon and splash screen.

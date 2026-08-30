@@ -2,7 +2,7 @@
 
 EcoLearn targets Expo SDK 57 and React Native 0.86. The app is configured for
 Android and iOS with camera, photo-library, and foreground-location permission
-messages, separate native version numbers, app identifiers, adaptive artwork,
+messages, remotely managed native build numbers, app identifiers, adaptive artwork,
 native Sign in with Apple, and development, preview, simulator, and production
 build profiles.
 
@@ -83,8 +83,8 @@ Android package from `app.json`.
 
 Before an EAS cloud build, add the two `EXPO_PUBLIC_SUPABASE_*` variables to the
 Expo project's `production` environment. Do not commit `.env`. EAS remote app
-versioning initializes from build number/version code `1` and production builds
-auto-increment thereafter.
+versioning owns the iOS build number and Android version code; production builds
+auto-increment them.
 
 Before authentication QA, add both `ecolearn-mobile://auth/callback` and
 `ecolearn-mobile://auth/reset-password` to the Supabase Auth redirect allowlist.
