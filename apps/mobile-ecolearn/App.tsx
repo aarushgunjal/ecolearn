@@ -28,11 +28,13 @@ import { Ionicons } from "@expo/vector-icons";
 import type { Session, User } from "@supabase/supabase-js";
 import { isConfigured, supabase } from "./src/supabase";
 import { challengeDefinitions, dswaVideoForItem, lessonEditorial } from "./src/content";
+import { CommunityScreen } from "./src/CommunityScreen";
+import { MapScreen } from "./src/MapScreen";
 import ecoLearnIcon from "./assets/ecolearn-icon-v2.png";
 
 WebBrowser.maybeCompleteAuthSession();
 
-type Tab = "Home" | "Scan" | "Learn" | "Challenges" | "Profile";
+type Tab = "Home" | "Scan" | "Map" | "Learn" | "Community" | "Challenges" | "Profile";
 type Photo = { uri: string; name: string; mimeType: string; base64?: string | null };
 type ScanResult = { item: string; recyclable: boolean; confidence: number; category: string; instructions: string; tips?: string[]; imageStatus?: "single_item" | "multiple_items" | "unclear"; material?: string | null; visibleEvidence?: string | null; dnrec?: DelawareGuidance | null };
 type DelawareGuidance = { title: string; category: string; curbside: boolean; instructions: string; sourceName: string; sourceUrl: string; matchConfidence?: number };
@@ -82,6 +84,7 @@ const extras = StyleSheet.create({
   googleAfterApple: { marginTop: 12 },
   headerStreak: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 99, backgroundColor: "#fff3d5", paddingHorizontal: 10, paddingVertical: 7 },
   headerStreakText: { color: "#976700", fontSize: 11, fontWeight: "800" },
+  headerProfile: { width: 34, height: 34, marginLeft: 7, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#e6f2df" },
   webNav: { flexDirection: "row", borderTopWidth: 1, borderTopColor: "#e2e7df", backgroundColor: "#ffffff", paddingHorizontal: 8, paddingTop: 7, paddingBottom: 4 },
   webNavItem: { flex: 1, alignItems: "center", gap: 3, borderRadius: 13, paddingHorizontal: 4, paddingVertical: 7 },
   webNavActive: { backgroundColor: "#e8f3df" },
@@ -287,20 +290,24 @@ function EcoLearnApp({ user }: { user: User }) {
   const refreshAll = async () => { setRefreshing(true); await refresh(); setRefreshing(false); };
   const openTab = (next: Tab, tools = false) => { setShowScanTools(tools); setTab(next); };
   const screen = tab === "Home"
-    ? <Home user={user} displayName={displayName} progress={progress} lessons={lessons} completed={completed} achievements={achievements} earnedAchievementIds={earnedAchievementIds} recentScans={recentScans} onScan={() => openTab("Scan")} onLearn={() => openTab("Learn")} onTools={() => openTab("Scan", true)} onChallenges={() => openTab("Challenges")} />
+    ? <Home user={user} displayName={displayName} progress={progress} lessons={lessons} completed={completed} achievements={achievements} earnedAchievementIds={earnedAchievementIds} recentScans={recentScans} onScan={() => openTab("Scan")} onLearn={() => openTab("Learn")} onMap={() => openTab("Map")} onCommunity={() => openTab("Community")} onChallenges={() => openTab("Challenges")} />
     : tab === "Scan"
       ? showScanTools ? <ToolsScreen onBack={() => setShowScanTools(false)} /> : <ScanScreen onRecorded={refresh} onTools={() => setShowScanTools(true)} />
+      : tab === "Map"
+        ? <MapScreen />
       : tab === "Learn"
         ? <LearnScreen lessons={lessons} completed={completed} onCompleted={refresh} />
+        : tab === "Community"
+          ? <CommunityScreen onOpenLesson={() => openTab("Learn")} />
         : tab === "Challenges"
           ? <QuestsScreen progress={progress} claims={rewardClaims} achievements={achievements} earnedAchievementIds={earnedAchievementIds} onRefresh={refresh} />
           : <ProfileScreen user={user} progress={progress} achievements={achievements} earnedAchievementIds={earnedAchievementIds} onNameSaved={setDisplayName} />;
   const navItems: { tab: Tab; icon: keyof typeof Ionicons.glyphMap; activeIcon: keyof typeof Ionicons.glyphMap; label: string }[] = [
     { tab: "Home", icon: "home-outline", activeIcon: "home", label: "Home" },
     { tab: "Scan", icon: "scan-outline", activeIcon: "scan", label: "Scan" },
+    { tab: "Map", icon: "map-outline", activeIcon: "map", label: "Map" },
     { tab: "Learn", icon: "book-outline", activeIcon: "book", label: "Learn" },
-    { tab: "Challenges", icon: "trophy-outline", activeIcon: "trophy", label: "Quests" },
-    { tab: "Profile", icon: "person-outline", activeIcon: "person", label: "Profile" },
+    { tab: "Community", icon: "people-outline", activeIcon: "people", label: "Community" },
   ];
   return <SafeAreaView style={styles.safe}>
     <StatusBar barStyle="dark-content" />
@@ -308,6 +315,7 @@ function EcoLearnApp({ user }: { user: User }) {
       <Image source={ecoLearnIcon} style={styles.logoImage} />
       <View><Text style={styles.brand}>EcoLearn</Text><Text style={styles.headerSubtitle}>Delaware-first guidance</Text></View>
       <View style={extras.headerStreak}><Ionicons name="flame" size={14} color="#9a6800" /><Text style={extras.headerStreakText}>{progress?.streak_days ?? 0} day streak</Text></View>
+      <Pressable accessibilityLabel="Open profile" onPress={() => openTab("Profile")} style={extras.headerProfile}><Ionicons name="person" size={17} color="#245533" /></Pressable>
     </View>
     <ScrollView style={styles.scroll} contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refreshAll()} tintColor="#2f7a43" />} keyboardShouldPersistTaps="handled">
       {dataError && <View style={styles.notice}><Ionicons name="cloud-offline-outline" size={18} color="#8a5b17" /><Text style={styles.noticeText}>{dataError}</Text></View>}
@@ -323,7 +331,7 @@ function EcoLearnApp({ user }: { user: User }) {
   </SafeAreaView>;
 }
 
-function Home({ user, displayName, progress, lessons, completed, achievements, earnedAchievementIds, recentScans, onScan, onLearn, onTools, onChallenges }: { user: User; displayName: string; progress: Progress | null; lessons: Lesson[]; completed: string[]; achievements: Achievement[]; earnedAchievementIds: string[]; recentScans: ScanHistoryItem[]; onScan: () => void; onLearn: () => void; onTools: () => void; onChallenges: () => void }) {
+function Home({ user, displayName, progress, lessons, completed, achievements, earnedAchievementIds, recentScans, onScan, onLearn, onMap, onCommunity, onChallenges }: { user: User; displayName: string; progress: Progress | null; lessons: Lesson[]; completed: string[]; achievements: Achievement[]; earnedAchievementIds: string[]; recentScans: ScanHistoryItem[]; onScan: () => void; onLearn: () => void; onMap: () => void; onCommunity: () => void; onChallenges: () => void }) {
   const firstName = (displayName || String(user.user_metadata?.full_name ?? "") || "Eco learner").trim().split(/\s+/)[0];
   const nextLesson = lessons.find((lesson) => !completed.includes(lesson.id));
   const xp = progress?.xp ?? 0;
@@ -351,7 +359,8 @@ function Home({ user, displayName, progress, lessons, completed, achievements, e
       <Ionicons name="chevron-forward" size={21} color="#3f864c" />
     </Pressable> : <View style={styles.successCard}><Ionicons name="checkmark-circle" size={23} color="#2d7a42" /><View style={styles.flexOne}><Text style={styles.rowTitle}>All lessons completed</Text><Text style={styles.rowMeta}>Review any lesson or keep checking real items.</Text></View></View>}
     <View style={styles.quickGrid}>
-      <Pressable style={styles.quickCard} onPress={onTools}><Ionicons name="location-outline" size={24} color="#2d7a42" /><Text style={styles.quickTitle}>Nearby sites</Text><Text style={styles.rowMeta}>Find verified disposal options.</Text></Pressable>
+      <Pressable style={styles.quickCard} onPress={onMap}><Ionicons name="location-outline" size={24} color="#2d7a42" /><Text style={styles.quickTitle}>Nearby sites</Text><Text style={styles.rowMeta}>Find verified disposal options.</Text></Pressable>
+      <Pressable style={styles.quickCard} onPress={onCommunity}><Ionicons name="people-outline" size={24} color="#2d7a42" /><Text style={styles.quickTitle}>My community</Text><Text style={styles.rowMeta}>Classes, schools, and local groups.</Text></Pressable>
       <Pressable style={styles.quickCard} onPress={onChallenges}><Ionicons name="trophy-outline" size={24} color="#a66d10" /><Text style={styles.quickTitle}>Quests</Text><Text style={styles.rowMeta}>Turn real actions into progress.</Text></Pressable>
     </View>
     {nextAchievement && <><Text style={styles.sectionTitle}>Next badge</Text><View style={styles.progressCard}><View style={styles.cardTopRow}><View style={styles.flexOne}><Text style={styles.rowTitle}>{nextAchievement.title}</Text><Text style={styles.rowMeta}>{nextAchievement.description}</Text></View><Text style={styles.progressValue}>{Math.min(achievementCurrent, nextAchievement.requirement_value)}/{nextAchievement.requirement_value}</Text></View><View style={questStyles.track}><View style={[questStyles.fill, { width: `${Math.min(100, Math.round((achievementCurrent / nextAchievement.requirement_value) * 100))}%` }]} /></View></View></>}
@@ -968,8 +977,8 @@ const styles = StyleSheet.create({
   featureCard: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 18, backgroundColor: "#fff", padding: 15 },
   featureIcon: { width: 45, height: 45, alignItems: "center", justifyContent: "center", borderRadius: 14, backgroundColor: "#e5f3dd" },
   successCard: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 18, backgroundColor: "#e8f5e2", padding: 16 },
-  quickGrid: { flexDirection: "row", gap: 10, marginTop: 10 },
-  quickCard: { flex: 1, minHeight: 118, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 17, backgroundColor: "#fff", padding: 14 },
+  quickGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 10 },
+  quickCard: { flexGrow: 1, flexBasis: "46%", minHeight: 118, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 17, backgroundColor: "#fff", padding: 14 },
   quickTitle: { marginTop: 11, color: "#173d2a", fontSize: 14, fontWeight: "800" },
   progressCard: { borderWidth: 1, borderColor: "#dfe7db", borderRadius: 17, backgroundColor: "#fff", padding: 15 },
   progressValue: { color: "#327844", fontSize: 13, fontWeight: "800" },

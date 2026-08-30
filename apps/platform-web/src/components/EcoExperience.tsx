@@ -340,18 +340,18 @@ export function Home() {
         <section className="rounded-[1.5rem] border border-[#e0e7dc] bg-white p-6">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[.14em] text-[#6a9d5d]">
+              <p className="text-xs font-bold uppercase tracking-[.14em] text-[#3f7540]">
                 Today’s quest
               </p>
               <h2 className="mt-2 text-xl font-semibold tracking-[-.035em]">
                 Sort three items correctly
               </h2>
             </div>
-            <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#edf7e8] text-[#3d914d]">
+            <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#edf7e8] text-[#26733a]">
               <Target />
             </span>
           </div>
-          <p className="mt-3 text-sm leading-6 text-[#728076]">
+          <p className="mt-3 text-sm leading-6 text-[#59685e]">
             Use the scanner to keep contamination out of your recycling bin.
           </p>
           <div className="mt-5 flex items-center gap-3">
@@ -361,14 +361,14 @@ export function Home() {
                 style={{ width: `${(questProgress / 3) * 100}%` }}
               />
             </div>
-            <span className="text-xs font-bold text-[#3d914d]">
+            <span className="text-xs font-bold text-[#26733a]">
               {questProgress} / 3
             </span>
           </div>
           <button
             onClick={() => void claimQuest()}
             disabled={!questComplete || questClaimed}
-            className="mt-5 flex items-center gap-1 text-sm font-bold text-[#26753f] disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-5 flex items-center gap-1 text-sm font-bold text-[#26753f] disabled:cursor-not-allowed disabled:text-[#59675e]"
           >
             {questClaimed
               ? "Quest completed"
@@ -389,7 +389,7 @@ export function Home() {
             <span className="text-4xl font-semibold tracking-[-.06em]">
               {avoidedKg}
             </span>
-            <span className="mb-1 text-sm text-[#718076]">kg CO₂ avoided</span>
+            <span className="mb-1 text-sm text-[#58675d]">kg CO₂ avoided</span>
           </div>
           <div className="mt-5 flex h-16 items-end gap-2">
             {[35, 52, 40, 78, 60, 94, 72].map((h, i) => (
@@ -400,7 +400,7 @@ export function Home() {
               />
             ))}
           </div>
-          <p className="mt-2 text-xs text-[#7d8980]">Your actions this week</p>
+          <p className="mt-2 text-xs text-[#5d6a61]">Your actions this week</p>
         </section>
       </div>
       <section>
@@ -506,7 +506,7 @@ export function Learn() {
       <h1 className="display-serif mt-2 text-4xl tracking-[-.05em] sm:text-5xl">
         Build your <em className="text-[#4d9b58]">eco instinct.</em>
       </h1>
-      <p className="mt-4 max-w-xl leading-7 text-[#718076]">
+      <p className="mt-4 max-w-xl leading-7 text-[#58675d]">
         Short lessons, meaningful choices, and a quiz that proves you
         understand.
       </p>
@@ -520,7 +520,7 @@ export function Learn() {
               <button
                 key={lesson.id}
                 onClick={() => isUnlocked && setActiveLesson(lesson)}
-                className={`flex w-full items-center gap-4 rounded-2xl border border-[#e0e7dc] bg-white p-4 text-left transition ${isUnlocked ? "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#1d5c37]/5" : "cursor-not-allowed opacity-50"}`}
+                className={`flex w-full items-center gap-4 rounded-2xl border border-[#e0e7dc] p-4 text-left transition ${isUnlocked ? "bg-white hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#1d5c37]/5" : "cursor-not-allowed bg-[#f3f5f1] text-[#58645c]"}`}
                 disabled={!isUnlocked || loading}
               >
                 <span
@@ -559,7 +559,7 @@ export function Learn() {
         <div className="h-fit rounded-[1.5rem] bg-[#f4f8f0] p-6">
           <Award className="text-[#4a9956]" />
           <h2 className="mt-4 text-lg font-semibold">Your learning path</h2>
-          <p className="mt-2 text-sm leading-6 text-[#718076]">
+          <p className="mt-2 text-sm leading-6 text-[#58675d]">
             Finish each quiz to unlock the next practical skill.
           </p>
           <div className="mt-5 h-2 overflow-hidden rounded-full bg-[#dce8d8]">
@@ -580,7 +580,7 @@ export function Learn() {
         <h2 className="mt-2 text-2xl font-semibold tracking-[-.04em] text-[#173d2a]">
           Official DSWA Education videos
         </h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#718076]">
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#58675d]">
           Tour Delaware's recycling, transfer, landfill, electronics, and environmental education programs.
         </p>
         <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -975,7 +975,7 @@ export function Profile() {
       <section className="mt-7 rounded-[1.5rem] border border-[#e0e7dc] bg-white p-6">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">Achievements</h2>
-          <span className="text-sm text-[#718076]">
+          <span className="text-sm text-[#58675d]">
             {earnedCount} / {totalAchievements || 12} unlocked
           </span>
         </div>
@@ -1015,7 +1015,7 @@ export function Profile() {
           </span>
           <div>
             <h2 className="font-semibold">Profile & settings</h2>
-            <p className="text-sm text-[#718076]">
+            <p className="text-sm text-[#58675d]">
               Choose how EcoLearn recognizes you.
             </p>
           </div>
@@ -1098,6 +1098,7 @@ export function AuthDialog({ close }: { close: () => void }) {
         <button
           onClick={close}
           className="absolute right-5 top-5 text-[#7a877d]"
+          aria-label="Close sign-in dialog"
         >
           <X />
         </button>
@@ -1107,7 +1108,7 @@ export function AuthDialog({ close }: { close: () => void }) {
         <h2 className="mt-5 text-2xl font-semibold tracking-[-.04em]">
           {mode === "signup" ? "Start your eco journey" : "Welcome back"}
         </h2>
-        <p className="mt-2 text-sm leading-6 text-[#718076]">
+        <p className="mt-2 text-sm leading-6 text-[#58675d]">
           Track actions, build habits, and make a measurable difference.
         </p>
         <button
@@ -1196,18 +1197,21 @@ function LessonTile({
   const Icon = lesson.icon;
   return (
     <button
-      className={`rounded-2xl border border-[#e0e7dc] bg-white p-4 text-left transition hover:-translate-y-0.5 hover:shadow-lg ${locked ? "opacity-60" : ""}`}
+      type="button"
+      onClick={() => window.dispatchEvent(new Event("ecolearn-open-learn"))}
+      disabled={locked}
+      className={`rounded-2xl border border-[#e0e7dc] p-4 text-left transition ${locked ? "cursor-not-allowed bg-[#f3f5f1] text-[#58645c]" : "bg-white hover:-translate-y-0.5 hover:shadow-lg"}`}
     >
       <div
         className={`grid h-11 w-11 place-items-center rounded-xl ${lesson.color} text-[#367b45]`}
       >
         {completed ? <CircleCheck size={18} /> : <Icon size={20} />}
       </div>
-      <p className="mt-4 text-xs font-bold uppercase tracking-wide text-[#77857a]">
+      <p className="mt-4 text-xs font-bold uppercase tracking-wide text-[#58675d]">
         {lesson.topic}
       </p>
       <p className="mt-1 font-semibold leading-5">{lesson.title}</p>
-      <p className="mt-2 text-xs text-[#7b877e]">
+      <p className="mt-2 text-xs text-[#59665e]">
         {lesson.duration} · {lesson.xp} XP
       </p>
     </button>

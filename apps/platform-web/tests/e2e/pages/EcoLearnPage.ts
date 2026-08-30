@@ -9,7 +9,7 @@ export class EcoLearnPage {
   }
 
   async openPrimarySection(
-    name: "Home" | "Scan" | "Learn" | "Challenges" | "Ranks",
+    name: "Home" | "Scan" | "Map" | "Learn" | "Community",
   ) {
     await this.page.getByRole("button", { name, exact: true }).first().click();
   }
@@ -17,8 +17,9 @@ export class EcoLearnPage {
   async openMoreSection(
     name:
       | "Local rules"
-      | "Community"
+      | "Challenges"
       | "Schools"
+      | "Profile"
       | "Organizations"
       | "Scan tools"
       | "Notifications",

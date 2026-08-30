@@ -1,6 +1,6 @@
 import { ArrowLeft, Leaf, ShieldCheck } from "lucide-react";
 
-type LegalPage = "privacy" | "terms" | "delete-account";
+type LegalPage = "privacy" | "terms" | "delete-account" | "support";
 
 export function Legal({
   page,
@@ -11,11 +11,14 @@ export function Legal({
 }) {
   const privacy = page === "privacy";
   const deletion = page === "delete-account";
+  const support = page === "support";
   const heading = privacy
     ? "Privacy Policy"
     : deletion
       ? "Delete your EcoLearn account"
-      : "Terms of Service";
+      : support
+        ? "EcoLearn Support"
+        : "Terms of Service";
   return (
     <div className="min-h-screen bg-[#f7f8f4] text-[#16251e]">
       <header className="border-b border-[#e6e9e2] bg-white/80 backdrop-blur-xl">
@@ -48,9 +51,9 @@ export function Legal({
           {heading}
         </h1>
         <p className="mt-3 text-sm text-[#728076]">
-          Last updated: August 7, 2026
+          Last updated: August 29, 2026
         </p>
-        {privacy ? <PrivacyContent /> : deletion ? <AccountDeletionContent /> : <TermsContent />}
+        {privacy ? <PrivacyContent /> : deletion ? <AccountDeletionContent /> : support ? <SupportContent /> : <TermsContent />}
         <section className="mt-10 rounded-2xl bg-[#e9f4e4] p-5 text-sm leading-6 text-[#42604b]">
           Questions or requests? Contact EcoLearn at{" "}
           <a
@@ -63,6 +66,25 @@ export function Legal({
         </section>
       </main>
     </div>
+  );
+}
+
+function SupportContent() {
+  return (
+    <article className="legal-copy mt-9 space-y-8 text-[15px] leading-7 text-[#435248]">
+      <Section title="Get help">
+        Email EcoLearn at <a className="font-bold underline underline-offset-2" href="mailto:aarushgunjal1@gmail.com?subject=EcoLearn%20support%20request">aarushgunjal1@gmail.com</a>. Include the device type, app version, what you were trying to do, and the exact error message. Do not include passwords, authentication codes, student records, or photos containing personal information.
+      </Section>
+      <Section title="Account and access">
+        For sign-in trouble, first use <b>Forgot password?</b> in the app. Account deletion is available from Profile and through the public <a className="font-bold underline underline-offset-2" href="/delete-account">account-deletion page</a>.
+      </Section>
+      <Section title="Scanner and disposal guidance">
+        Use one clear photo of a single item. EcoLearn only presents Delaware disposal instructions when it can verify a match against DNREC Recyclopedia data. A no-match response is intentional and safer than guessing. For hazardous, medical, battery, electronics, or chemical waste, confirm requirements with the responsible Delaware program before acting.
+      </Section>
+      <Section title="Privacy and safety">
+        Never send support messages containing a password, precise home address, full student roster, or other sensitive student information. Review the <a className="font-bold underline underline-offset-2" href="/privacy">Privacy Policy</a> for details about current data handling.
+      </Section>
+    </article>
   );
 }
 

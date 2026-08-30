@@ -4,9 +4,10 @@ import {
   BookOpen,
   Flame,
   Leaf,
+  MapPinned,
   MoreHorizontal,
   ScanLine,
-  Trophy,
+  UsersRound,
   UserRound,
 } from "lucide-react";
 import Scanner from "./pages/Scanner";
@@ -17,7 +18,6 @@ import {
   AuthDialog,
   Challenges,
   Home,
-  Leaderboard,
   Learn,
   Profile,
 } from "@/components/EcoExperience";
@@ -30,6 +30,7 @@ import {
   ScannerTools,
   Schools,
 } from "@/components/PlatformHubs";
+import { MapHub } from "@/components/MapHub";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdmin } from "@/hooks/useAdmin";
 import { useProgress } from "@/hooks/useProgress";
@@ -37,18 +38,17 @@ import { useProgress } from "@/hooks/useProgress";
 const navigation = [
   { label: "Home", icon: Leaf },
   { label: "Scan", icon: ScanLine },
+  { label: "Map", icon: MapPinned },
   { label: "Learn", icon: BookOpen },
-  { label: "Challenges", icon: Trophy },
-  { label: "Ranks", icon: Trophy },
-  { label: "Profile", icon: UserRound },
+  { label: "Community", icon: UsersRound },
 ] as const;
 
 const paths = {
   Home: "/",
   Scan: "/scan",
+  Map: "/map",
   Learn: "/learn",
   Challenges: "/challenges",
-  Ranks: "/leaderboard",
   Profile: "/profile",
   Rules: "/delaware-rules",
   Community: "/community",
@@ -60,7 +60,7 @@ const paths = {
 } as const;
 
 type Section = keyof typeof paths;
-type LegalPage = "privacy" | "terms" | "delete-account";
+type LegalPage = "privacy" | "terms" | "delete-account" | "support";
 
 const activeForPath = (path: string): Section =>
   (Object.entries(paths).find(([, value]) => value === path)?.[0] as Section | undefined) ??
@@ -68,9 +68,9 @@ const activeForPath = (path: string): Section =>
 
 const readLegalPage = (): LegalPage | null => {
   const hash = window.location.hash.replace("#", "").toLowerCase();
-  if (hash === "privacy" || hash === "terms" || hash === "delete-account") return hash;
+  if (hash === "privacy" || hash === "terms" || hash === "delete-account" || hash === "support") return hash;
   const path = window.location.pathname.toLowerCase();
-  if (path === "/privacy" || path === "/terms" || path === "/delete-account") {
+  if (path === "/privacy" || path === "/terms" || path === "/delete-account" || path === "/support") {
     return path.slice(1) as LegalPage;
   }
   return null;
@@ -99,6 +99,7 @@ function AppShell() {
   useEffect(() => {
     const handleOpenNotifications = () => navigate("Notifications");
     const handleOpenLearn = () => navigate("Learn");
+    const handleOpenAuth = () => setAuthOpen(true);
     const handleHistoryChange = () => {
       setLegalPage(readLegalPage());
       setActive(activeForPath(window.location.pathname));
@@ -106,11 +107,13 @@ function AppShell() {
     };
     window.addEventListener("ecolearn-open-notifications", handleOpenNotifications);
     window.addEventListener("ecolearn-open-learn", handleOpenLearn);
+    window.addEventListener("ecolearn-open-auth", handleOpenAuth);
     window.addEventListener("hashchange", handleHistoryChange);
     window.addEventListener("popstate", handleHistoryChange);
     return () => {
       window.removeEventListener("ecolearn-open-notifications", handleOpenNotifications);
       window.removeEventListener("ecolearn-open-learn", handleOpenLearn);
+      window.removeEventListener("ecolearn-open-auth", handleOpenAuth);
       window.removeEventListener("hashchange", handleHistoryChange);
       window.removeEventListener("popstate", handleHistoryChange);
     };
@@ -121,6 +124,7 @@ function AppShell() {
       privacy: "Privacy",
       terms: "Terms",
       "delete-account": "Account deletion",
+      support: "Support",
     };
     const title = legalPage ? legalTitles[legalPage] : active;
     document.title = title === "Home" ? "EcoLearn Delaware" : `${title} · EcoLearn Delaware`;
@@ -200,9 +204,10 @@ function AppShell() {
       {moreOpen && (
         <div className="fixed inset-x-4 top-[84px] z-40 mx-auto grid max-w-xl grid-cols-2 gap-2 rounded-2xl border border-[#dfe6dc] bg-white p-3 shadow-2xl sm:grid-cols-3">
           {([
+            ["Challenges", "Challenges"],
             ["Rules", "Local rules"],
-            ["Community", "Community"],
             ["Schools", "Schools"],
+            ["Profile", "Profile"],
             ["Organization", "Organizations"],
             ...(isAdmin ? [["Admin", "Admin portal"]] : []),
             ["Tools", "Scan tools"],
@@ -218,9 +223,9 @@ function AppShell() {
       <main className="mx-auto max-w-7xl px-5 pb-28 pt-8 lg:px-8 lg:pt-12">
         {active === "Home" && <Home />}
         {active === "Scan" && <Scanner />}
+        {active === "Map" && <MapHub />}
         {active === "Learn" && <Learn />}
         {active === "Challenges" && <Challenges />}
-        {active === "Ranks" && <Leaderboard />}
         {active === "Profile" && (user ? <Profile /> : <SignInPrompt onSignIn={() => setAuthOpen(true)} />)}
         {active === "Rules" && <LocalRules />}
         {active === "Community" && <Community />}
@@ -231,18 +236,19 @@ function AppShell() {
         {active === "Notifications" && <Notifications />}
       </main>
 
-      <footer className="mx-auto flex max-w-7xl flex-col gap-3 border-t border-[#e2e8de] px-5 py-7 text-sm text-[#718076] sm:flex-row sm:items-center sm:justify-between lg:px-8">
+      <footer className="mx-auto flex max-w-7xl flex-col gap-3 border-t border-[#e2e8de] px-5 py-7 text-sm text-[#58675d] sm:flex-row sm:items-center sm:justify-between lg:px-8">
         <p>© {new Date().getFullYear()} EcoLearn. Small choices, real impact.</p>
         <div className="flex gap-5 font-semibold">
           <a href="/privacy" onClick={(event) => { event.preventDefault(); openLegal("privacy"); }} className="hover:text-[#286b3a]">Privacy Policy</a>
           <a href="/terms" onClick={(event) => { event.preventDefault(); openLegal("terms"); }} className="hover:text-[#286b3a]">Terms of Service</a>
           <a href="/delete-account" onClick={(event) => { event.preventDefault(); openLegal("delete-account"); }} className="hover:text-[#286b3a]">Delete account</a>
+          <a href="/support" onClick={(event) => { event.preventDefault(); openLegal("support"); }} className="hover:text-[#286b3a]">Support</a>
         </div>
       </footer>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[#e5e9e1] bg-white/95 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden" aria-label="Mobile navigation">
         {navigation.map(({ label, icon: Icon }) => (
-          <button key={label} onClick={() => navigate(label)} className={`flex min-w-14 flex-col items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold ${active === label ? "text-[#237342]" : "text-[#77847a]"}`}>
+          <button key={label} onClick={() => navigate(label)} className={`flex min-w-14 flex-col items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold ${active === label ? "text-[#237342]" : "text-[#56645a]"}`}>
             <Icon size={19} />
             {label}
           </button>

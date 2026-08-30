@@ -61,9 +61,11 @@ const readAsDataUrl = (file: File) =>
 export function ScanUtilities({
   verifiedItem,
   allowGenericLocations = false,
+  mode = "all",
 }: {
   verifiedItem?: string;
   allowGenericLocations?: boolean;
+  mode?: "all" | "map";
 }) {
   const { toast } = useToast();
   const [barcode, setBarcode] = useState("");
@@ -227,6 +229,7 @@ export function ScanUtilities({
 
   return (
     <section id="available-locations" className="mt-8 grid gap-5 lg:grid-cols-2 scroll-mt-6">
+      {mode === "all" && <>
       <div className="rounded-[1.5rem] border border-[#dfe6dc] bg-white p-6">
         <div className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#edf7e8] text-[#337d45]">
@@ -354,6 +357,7 @@ export function ScanUtilities({
           </div>
         )}
       </div>
+      </>}
       <div className="rounded-[1.5rem] border border-[#dfe6dc] bg-white p-6 lg:col-span-2">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">

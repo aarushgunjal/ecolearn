@@ -20,6 +20,7 @@ import { useProgress } from "@/hooks/useProgress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { ScanUtilities } from "@/components/ScanUtilities";
+import { CommunityWorkspace } from "@/components/CommunityWorkspace";
 
 const municipalities = [
   "Delaware",
@@ -116,150 +117,11 @@ export function LocalRules() {
 }
 
 export function Community() {
-  const { progress } = useProgress();
-  const [joined, setJoined] = useState(
-    () => localStorage.getItem("ecolearn-community-joined") === "true",
-  );
-  const [rsvped, setRsvped] = useState(
-    () => localStorage.getItem("ecolearn-riverside-rsvp") === "true",
-  );
-  const { toast } = useToast();
-  const memberCount = 328 + (progress?.total_scans ?? 0);
-  const citywideCount = 1204 + (progress?.total_lessons_completed ?? 0) * 3;
-  const friendCount = 14 + Math.min(progress?.streak_days ?? 0, 5);
-  return (
-    <Hub
-      title="Your community"
-      eyebrow="People power progress"
-      icon={<Users />}
-    >
-      <div className="grid gap-5 lg:grid-cols-3">
-        <CommunityCard
-          title="Delaware eco learners"
-          meta={`${memberCount} members · Statewide`}
-          button={joined ? "Joined" : "Join group"}
-          onClick={() => {
-            setJoined(true);
-            localStorage.setItem("ecolearn-community-joined", "true");
-          }}
-        />
-        <CommunityCard
-          title="Delaware clean spaces"
-          meta={`${citywideCount} members · Statewide`}
-          button="View group"
-        />
-        <CommunityCard
-          title="EcoLearn friends"
-          meta={`${friendCount} friends · Private`}
-          button="Invite friends"
-        />
-      </div>
-      <section className="mt-6 rounded-2xl border border-[#e0e7dc] bg-white p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-[#498b53]">
-              Upcoming event
-            </p>
-            <h2 className="mt-1 text-xl font-semibold">
-              Find a DNREC drop-off
-            </h2>
-            <p className="mt-2 text-sm text-[#718076]">
-              Use the Delaware map to locate a verified solution for your item.
-            </p>
-          </div>
-          <CalendarDays className="text-[#4b9856]" />
-        </div>
-        <button
-          onClick={() => {
-            setRsvped(true);
-            localStorage.setItem("ecolearn-riverside-rsvp", "true");
-            toast({
-              title: rsvped ? "Official map saved" : "Official map reminder saved",
-              description: "Use the official DNREC map to confirm a participating location.",
-            });
-          }}
-          className="mt-5 rounded-xl bg-[#173d2a] px-5 py-3 text-sm font-bold text-white"
-        >
-          {rsvped ? "Map reminder saved" : "Save a map reminder"}
-        </button>
-      </section>
-    </Hub>
-  );
+  return <CommunityWorkspace mode="community" />;
 }
 
 export function Schools() {
-  const { progress } = useProgress();
-  const [created, setCreated] = useState(
-    () => localStorage.getItem("ecolearn-classroom-created") === "true",
-  );
-  const [assigned, setAssigned] = useState(
-    () => localStorage.getItem("ecolearn-assignment-created") === "true",
-  );
-  const { toast } = useToast();
-  const studentCount = 24 + (progress?.level ?? 1);
-  const completionRate = Math.min(
-    99,
-    86 + (progress?.total_lessons_completed ?? 0) * 2,
-  );
-  return (
-    <Hub
-      title="EcoLearn for Delaware schools"
-      eyebrow="Primary-school sustainability, through action"
-      icon={<GraduationCap />}
-    >
-      <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
-        <section className="rounded-2xl border border-[#e0e7dc] bg-white p-6">
-          <p className="text-sm font-bold text-[#4c8c55]">TEACHER WORKSPACE</p>
-          <h2 className="mt-2 text-2xl font-semibold">
-            Build Delaware recycling habits early.
-          </h2>
-          <p className="mt-3 leading-7 text-[#718076]">
-            Start with short, plain-language lessons for grades 3–5. Teacher or parent-managed accounts keep student participation supervised.
-          </p>
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <MiniMetric value={`${studentCount}`} label="Students" />
-            <MiniMetric value={`${completionRate}%`} label="Completion" />
-          </div>
-          <button
-            onClick={() => {
-              setCreated(true);
-              localStorage.setItem("ecolearn-classroom-created", "true");
-              toast({
-                title: "Classroom created",
-                description: "Your school workspace is ready.",
-              });
-            }}
-            className="mt-5 rounded-xl bg-[#173d2a] px-5 py-3 text-sm font-bold text-white"
-          >
-            {created ? "Classroom created" : "Create a classroom"}
-          </button>
-        </section>
-        <section className="rounded-2xl bg-[#f3f8ef] p-6">
-          <ClipboardList className="text-[#4c9756]" />
-          <h2 className="mt-4 text-lg font-semibold">
-            Ready-to-assign lessons
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-[#718076]">
-            The recycling loop · 4 minutes · 20 XP
-          </p>
-          <button
-            onClick={() => {
-              setAssigned(true);
-              localStorage.setItem("ecolearn-assignment-created", "true");
-              toast({
-                title: "Lesson assigned",
-                description: "The recycling loop has been queued for your class.",
-              });
-            }}
-            className="mt-5 flex items-center gap-1 text-sm font-bold text-[#317c45]"
-          >
-            {assigned ? "Assigned to class" : "Assign to class"}{" "}
-            <ChevronRight size={16} />
-          </button>
-        </section>
-      </div>
-    </Hub>
-  );
+  return <CommunityWorkspace mode="school" />;
 }
 
 export function Organization() {
@@ -542,33 +404,6 @@ function Hub({
       </div>
       {children}
     </div>
-  );
-}
-function CommunityCard({
-  title,
-  meta,
-  button,
-  onClick,
-}: {
-  title: string;
-  meta: string;
-  button: string;
-  onClick?: () => void;
-}) {
-  return (
-    <section className="rounded-2xl border border-[#e0e7dc] bg-white p-5">
-      <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#e8f4e1] text-[#3c8d4b]">
-        <Users />
-      </span>
-      <h2 className="mt-4 font-semibold">{title}</h2>
-      <p className="mt-1 text-sm text-[#748176]">{meta}</p>
-      <button
-        onClick={onClick}
-        className="mt-5 rounded-xl border border-[#d6e3d2] px-4 py-2.5 text-sm font-bold text-[#347b44]"
-      >
-        {button}
-      </button>
-    </section>
   );
 }
 function MiniMetric({ value, label }: { value: string; label: string }) {

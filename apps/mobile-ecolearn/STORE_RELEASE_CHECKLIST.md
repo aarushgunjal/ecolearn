@@ -34,6 +34,8 @@ Features include:
 - Verified Delaware disposal guidance when an official match is available
 - Package-label and barcode tools
 - Nearby disposal-site lookup with permission
+- Multiple classrooms, schools, and local communities per account
+- Teacher assignments, private class analytics, announcements, events, and aggregate school standings
 - Sustainability lessons, quizzes, XP, streaks, and challenges
 - In-app account deletion
 
@@ -64,7 +66,9 @@ DNREC, eco, learning
 - [x] In-app account deletion has two confirmations.
 - [x] A public account-deletion route is implemented for the website.
 - [x] Apple bundle identifier, distribution certificate, provisioning profile, EAS project, and App Store Connect app are configured.
-- [x] App Store Connect received TestFlight build `1.0.0 (2)`.
+- [x] App Store Connect received TestFlight build `1.0.0 (3)`.
+- [ ] Deploy and validate the secure community/classroom migration.
+- [ ] Upload a new TestFlight candidate containing the community and primary-map navigation.
 - [x] Production EAS environment contains both required public Supabase variables.
 - [x] Privacy, Terms, deletion, and support URLs return successfully over HTTPS.
 - [ ] Deploy and test the `delete-account` Supabase Edge Function.

@@ -8,7 +8,7 @@ Updated: August 30, 2026
 - Bundle identifier: `com.ecolearn.mobile`
 - Expo project: `@aarugunj/ecolearn-mobile`
 - Public website: <https://ecolearn.dev>
-- Existing TestFlight upload: `1.0.0 (2)`
+- Existing TestFlight upload: `1.0.0 (3)`; a newer build is required for the community/classroom release
 - Release branch: `codex/app-store-readiness`
 - iPhone-only first release; iPad support is intentionally disabled until tablet QA is complete.
 
@@ -30,8 +30,9 @@ Updated: August 30, 2026
 - Test Apple, Google, and email sign-in; email confirmation; password reset; sign-out; and deletion.
 - Test camera denial, gallery denial, location denial, weak network, and offline recovery.
 - Verify visual scan, manual catalog autocomplete, barcode, label reading, nearby map, all six lessons, quests, achievements, profile editing, legal links, and account deletion.
+- Deploy the secure community/classroom migration, then test student and teacher invitations, multiple memberships, assignments, announcements, events, class analytics, and aggregate school standings.
 - Capture current iPhone screenshots only after the candidate passes.
 - Complete App Privacy, age rating, pricing and availability, review contact, and reviewer notes.
 - Resolve the under-13/classroom privacy model before describing EcoLearn as a child-directed classroom product.
 
-The classroom/teacher system remains intentionally deferred until DSWA guidance is received. It is not represented as part of version 1.0.
+The classroom/community system is now implemented, but under-13 public deployment remains blocked on the youth/privacy and school-authorization decision.

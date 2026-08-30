@@ -10,17 +10,18 @@ test.describe("EcoLearn guest journeys", () => {
 
     await app.openPrimarySection("Scan");
     await expect(page.getByRole("heading", { name: "Item scanner" })).toBeVisible();
+    await app.openPrimarySection("Map");
+    await expect(page.getByRole("heading", { name: /Find the right place/ })).toBeVisible();
     await app.openPrimarySection("Learn");
     await expect(page.getByRole("heading", { name: /Build your eco instinct/ })).toBeVisible();
-    await app.openPrimarySection("Challenges");
+    await app.openPrimarySection("Community");
+    await expect(page.getByRole("heading", { name: /Sign in to join your people/ })).toBeVisible();
+    await app.openMoreSection("Challenges");
     await expect(page.getByRole("heading", { name: /Quests with purpose/ })).toBeVisible();
-    await app.openPrimarySection("Ranks");
-    await expect(page.getByRole("heading", { name: "Better together." })).toBeVisible();
 
     const sections = [
       ["Local rules", /Delaware recycling rules/],
-      ["Community", /Your community/],
-      ["Schools", /EcoLearn for Delaware schools/],
+      ["Schools", /Sign in to join your people/],
       ["Organizations", /Organization hub/],
       ["Scan tools", /Smart scan tools/],
       ["Notifications", /Notifications/],
@@ -146,6 +147,7 @@ test.describe("EcoLearn guest journeys", () => {
     const app = new EcoLearnPage(page);
     await app.goto();
     await app.openAuthDialog();
+    await expect(page.getByRole("button", { name: "Close sign-in dialog" })).toBeVisible();
     await page.getByRole("textbox", { name: "Email address" }).fill("not-an-email");
     await page.getByRole("textbox", { name: "Password" }).fill("short");
     await page.getByRole("button", { name: "Create free account" }).last().click();
@@ -165,6 +167,14 @@ test.describe("EcoLearn guest journeys", () => {
     await page.getByRole("button", { name: "Keep empty items loose in the bin" }).click();
     await check.click();
     await expect(page.getByRole("button", { name: /Complete lesson \+20 XP/ })).toBeVisible();
+  });
+
+  test("opens the learning path from the home lesson card", async ({ page }) => {
+    const app = new EcoLearnPage(page);
+    await app.goto();
+    await page.getByRole("button", { name: /Recycling basics The recycling loop/ }).click();
+    await expect(page.getByRole("heading", { name: /Build your eco instinct/ })).toBeVisible();
+    await expect(page).toHaveURL(/\/learn$/);
   });
 
   test("renders every nearby result on an interactive map", async ({ page, context }) => {
@@ -213,7 +223,7 @@ test.describe("EcoLearn guest journeys", () => {
 
     const app = new EcoLearnPage(page);
     await app.goto();
-    await app.openMoreSection("Scan tools");
+    await app.openPrimarySection("Map");
     await page.getByRole("button", { name: "Electronics", exact: true }).click();
     await page.getByRole("button", { name: "Find nearby locations" }).click();
 
@@ -234,21 +244,22 @@ test.describe("EcoLearn guest journeys", () => {
     });
     const app = new EcoLearnPage(page);
     await app.goto();
-    await app.openMoreSection("Scan tools");
+    await app.openPrimarySection("Map");
     await page.getByRole("button", { name: "Find nearby locations" }).click();
     await expect(page.getByText("Location permission needed", { exact: true }).first()).toBeVisible();
     expect(called).toBe(false);
   });
 
-  test("persists guest community, organization, and notification actions", async ({ page }) => {
+  test("keeps community data private while preserving public organization and notification actions", async ({ page }) => {
     const app = new EcoLearnPage(page);
     await app.goto();
 
-    await app.openMoreSection("Community");
-    await page.getByRole("button", { name: "Join group" }).click();
-    await expect(page.getByRole("button", { name: "Joined" })).toBeVisible();
-    await page.getByRole("button", { name: "Save a map reminder" }).click();
-    await expect(page.getByRole("button", { name: "Map reminder saved" })).toBeVisible();
+    await app.openPrimarySection("Community");
+    await expect(page.getByRole("heading", { name: /Sign in to join your people/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Join group" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Sign in or create an account" }).click();
+    await expect(page.getByRole("heading", { name: "Start your eco journey" })).toBeVisible();
+    await page.getByRole("button", { name: "Close sign-in dialog" }).click();
 
     await app.openMoreSection("Organizations");
     await page.getByRole("button", { name: "Manage campaign" }).click();
@@ -275,7 +286,7 @@ test.describe("EcoLearn guest journeys", () => {
   test("challenge actions persist and guests cannot claim account XP", async ({ page }) => {
     const app = new EcoLearnPage(page);
     await app.goto();
-    await app.openPrimarySection("Challenges");
+    await app.openMoreSection("Challenges");
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page.getByRole("button", { name: "Completed!" }).first()).toBeVisible();
     await page.getByRole("button", { name: "Claim 40 XP" }).click();
@@ -300,9 +311,15 @@ test("public account-deletion instructions are reachable without signing in", as
   );
 });
 
-test("privacy and terms pages are directly reachable", async ({ page }) => {
+test("privacy, terms, and support pages are directly reachable", async ({ page }) => {
   await page.goto("/privacy");
   await expect(page.getByRole("heading", { name: "Privacy Policy" })).toBeVisible();
   await page.goto("/terms");
   await expect(page.getByRole("heading", { name: "Terms of Service" })).toBeVisible();
+  await page.goto("/support");
+  await expect(page.getByRole("heading", { name: "EcoLearn Support" })).toBeVisible();
+  await expect(page.getByRole("article").getByRole("link", { name: "aarushgunjal1@gmail.com" })).toHaveAttribute(
+    "href",
+    /mailto:aarushgunjal1@gmail\.com/,
+  );
 });

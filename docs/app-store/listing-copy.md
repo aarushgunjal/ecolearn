@@ -29,10 +29,14 @@ Features:
 - Predictive official catalog search
 - Delaware disposal guidance with source links
 - Nearby disposal-site map and directions
+- Private classroom, school, and local-community memberships
+- Teacher assignments, class progress, and privacy-preserving school standings
 - Package-label and barcode tools
 - Six reviewed lessons with quizzes and XP
 - Honest quests, achievements, streaks, and scan history
 - In-app profile management and account deletion
+
+Classroom features should be included in the public store listing only after the youth/privacy model and school authorization process are approved.
 
 EcoLearn is an independent educational product and is not an official DNREC,
 DSWA, State of Delaware, or local-government application. Confirm hazardous,
