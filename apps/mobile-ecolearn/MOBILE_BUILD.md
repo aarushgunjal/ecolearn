@@ -3,7 +3,8 @@
 EcoLearn targets Expo SDK 57 and React Native 0.86. The app is configured for
 Android and iOS with camera, photo-library, and foreground-location permission
 messages, separate native version numbers, app identifiers, adaptive artwork,
-and development, preview, simulator, and production build profiles.
+native Sign in with Apple, and development, preview, simulator, and production
+build profiles.
 
 ## Local configuration
 
@@ -81,7 +82,14 @@ Android package from `app.json`.
 - `production` creates store-ready artifacts when signing accounts are ready.
 
 Before an EAS cloud build, add the two `EXPO_PUBLIC_SUPABASE_*` variables to the
-Expo project's environment. Do not commit `.env`.
+Expo project's `production` environment. Do not commit `.env`. EAS remote app
+versioning initializes from build number/version code `1` and production builds
+auto-increment thereafter.
+
+Before authentication QA, add both `ecolearn-mobile://auth/callback` and
+`ecolearn-mobile://auth/reset-password` to the Supabase Auth redirect allowlist.
+When Apple membership activates, enable Sign in with Apple for
+`com.ecolearn.mobile` and add that client ID to the Supabase Apple provider.
 
 Before testing account deletion, deploy the repository's `delete-account`
 Supabase Edge Function using the existing GitHub workflow. Also deploy the web
@@ -100,5 +108,5 @@ app so `/privacy`, `/terms`, and `/delete-account` are publicly reachable.
 The configured identifiers are `com.ecolearn.mobile` on both platforms. Treat
 them as permanent once the app is registered or distributed.
 
-See `STORE_RELEASE_CHECKLIST.md` for the listing draft, data-practice inventory,
-and the decisions that remain before store submission.
+See `../../docs/app-store/release-readiness.md` and the rest of
+`../../docs/app-store/` for the authoritative release package.

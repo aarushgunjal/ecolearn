@@ -1,8 +1,9 @@
 # EcoLearn mobile store-release checklist
 
-This is the handoff document for preparing the first App Store and Google Play
-release. It deliberately stops before developer-account enrollment, signing,
-uploading, review submission, or publication.
+This is the active handoff document for the first App Store and Google Play
+release. Apple signing is configured and the first TestFlight build has been
+uploaded; the current release candidate still needs real-device acceptance QA
+before it is sent to App Review.
 
 ## Draft listing
 
@@ -15,6 +16,7 @@ uploading, review submission, or publication.
 - **Privacy URL:** https://ecolearn.dev/privacy
 - **Terms URL:** https://ecolearn.dev/terms
 - **Account-deletion URL:** https://ecolearn.dev/delete-account
+- **Support URL:** https://ecolearn.dev/support
 
 ### Full description draft
 
@@ -48,6 +50,7 @@ DNREC, eco, learning
 ## Product and technical preparation
 
 - [x] Expo SDK 57 / React Native 0.86 project validates.
+- [x] Expo Doctor passes all 21 checks and iOS/Android production bundles compile.
 - [x] Stable iOS bundle ID and Android package are set to `com.ecolearn.mobile`.
 - [x] Separate iOS build number and Android version code are configured.
 - [x] Production, preview APK, development-client, and iOS Simulator EAS profiles exist.
@@ -55,16 +58,24 @@ DNREC, eco, learning
 - [x] White-background EcoLearn artwork is used for the icon and splash screen.
 - [x] iOS non-exempt encryption is declared false for the current implementation.
 - [x] Privacy Policy and Terms links are available during account creation and in Profile.
+- [x] Native Sign in with Apple is implemented and configured in the Expo project.
+- [x] Password recovery returns through the EcoLearn deep-link scheme.
+- [x] Public support route and in-app support link are implemented.
 - [x] In-app account deletion has two confirmations.
 - [x] A public account-deletion route is implemented for the website.
+- [x] Apple bundle identifier, distribution certificate, provisioning profile, EAS project, and App Store Connect app are configured.
+- [x] App Store Connect received TestFlight build `1.0.0 (2)`.
+- [x] Production EAS environment contains both required public Supabase variables.
+- [x] Privacy, Terms, deletion, and support URLs return successfully over HTTPS.
 - [ ] Deploy and test the `delete-account` Supabase Edge Function.
-- [ ] Deploy and verify the three public website URLs above over HTTPS.
-- [ ] Add `ecolearn-mobile://auth/callback` to Supabase Auth redirect URLs.
-- [ ] Test email/password sign-up, sign-in, reset, and deletion on real devices.
-- [ ] Test Google sign-in in a signed development build; Expo Go cannot validate it.
-- [ ] Confirm the final bundle ID/package owner before registering either identifier.
+- [ ] Add `ecolearn-mobile://auth/callback` and `ecolearn-mobile://auth/reset-password` to Supabase Auth redirect URLs.
+- [ ] Test Apple, Google, email/password, reset, and deletion on a physical iPhone using the current release candidate.
 - [ ] Capture store screenshots from final real-device builds.
-- [ ] Create a support page or confirm the public contact route used for support.
+- [ ] Complete App Privacy, age rating, pricing/availability, reviewer contact, and review notes in App Store Connect.
+
+The maintained App Store package now lives in `../../docs/app-store/`. Use those
+files for release status, listing copy, privacy answers, reviewer notes,
+screenshots, and TestFlight QA.
 
 ## Data-practice inventory for store forms
 

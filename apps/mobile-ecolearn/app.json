@@ -10,7 +10,8 @@
     "userInterfaceStyle": "light",
     "primaryColor": "#173D2A",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
+      "usesAppleSignIn": true,
       "buildNumber": "1",
       "infoPlist": {
         "LSApplicationCategoryType": "public.app-category.education",
@@ -39,6 +40,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-apple-authentication",
       "expo-web-browser",
       [
         "expo-image-picker",
@@ -57,7 +59,14 @@
           "imageWidth": 220,
           "resizeMode": "contain"
         }
-      ]
-    ]
+      ],
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f283f1ca-fb2d-4026-b656-1471155b5f3a"
+      }
+    },
+    "owner": "aarugunj"
   }
 }

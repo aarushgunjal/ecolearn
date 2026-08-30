@@ -1,19 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
   Linking,
+  Platform,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
 } from "react-native";
+import * as AppleAuthentication from "expo-apple-authentication";
+import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import * as ExpoLinking from "expo-linking";
@@ -21,47 +24,34 @@ import * as WebBrowser from "expo-web-browser";
 import * as FileSystem from "expo-file-system/legacy";
 import Constants from "expo-constants";
 import MapView, { Marker } from "react-native-maps";
+import { Ionicons } from "@expo/vector-icons";
 import type { Session, User } from "@supabase/supabase-js";
 import { isConfigured, supabase } from "./src/supabase";
+import { challengeDefinitions, dswaVideoForItem, lessonEditorial } from "./src/content";
+import ecoLearnIcon from "./assets/ecolearn-icon-v2.png";
 
 WebBrowser.maybeCompleteAuthSession();
 
-type Tab = "Home" | "Scan" | "Learn" | "Challenges" | "Ranks" | "Profile";
+type Tab = "Home" | "Scan" | "Learn" | "Challenges" | "Profile";
 type Photo = { uri: string; name: string; mimeType: string; base64?: string | null };
 type ScanResult = { item: string; recyclable: boolean; confidence: number; category: string; instructions: string; tips?: string[]; imageStatus?: "single_item" | "multiple_items" | "unclear"; material?: string | null; visibleEvidence?: string | null; dnrec?: DelawareGuidance | null };
 type DelawareGuidance = { title: string; category: string; curbside: boolean; instructions: string; sourceName: string; sourceUrl: string; matchConfidence?: number };
 type VisionScanResponse = { verified: boolean; guidance: DelawareGuidance | null; observedItem: string | null; material: string | null; confidence: number; imageStatus: "single_item" | "multiple_items" | "unclear"; visibleEvidence: string | null; nextSteps: string[]; message: string };
-type Progress = { xp: number; level: number; total_scans: number; total_lessons_completed: number; streak_days: number };
+type Progress = { xp: number; level: number; total_scans: number; total_lessons_completed: number; streak_days: number; last_activity_date?: string | null };
 type Site = { id: string; name: string; type: string; latitude: number; longitude: number; distanceKm: number; address?: string; services?: string[]; sourceUrl?: string; provider?: string };
-type Lesson = { id: string; title: string; topic: string; duration: string; xp: number; summary: string; question: string; choices: string[]; answer: number; explanation: string };
+type Lesson = { id: string; slug: string; title: string; topic: string; description: string | null; duration_minutes: number; xp_reward: number; sort_order: number };
+type Achievement = { id: string; title: string; description: string | null; icon: string; requirement_type: "scans" | "lessons" | "streak" | "level"; requirement_value: number };
+type ScanHistoryItem = { id: string; item_name: string; category: string | null; is_recyclable: boolean; created_at: string };
+type DelawareSuggestion = { title: string; category: string };
+type BarcodeResult = { found: boolean; name?: string | null; guidance?: string | null };
+type LabelResult = { guidance: string; materials: string[]; text?: string | null; recyclingSymbols?: string[] };
 
 const usingExpoGo = Constants.appOwnership === "expo";
 const publicSiteUrl = "https://ecolearn.dev";
-const openPublicPage = (path: "/privacy" | "/terms" | "/delete-account") =>
+const openPublicPage = (path: "/privacy" | "/terms" | "/delete-account" | "/support") =>
   Linking.openURL(`${publicSiteUrl}${path}`);
-const lessons: Lesson[] = [
-  { id: "10000000-0000-4000-8000-000000000001", title: "The recycling loop", topic: "Recycling basics", duration: "4 min", xp: 20, summary: "Recycling is a system. Empty, clean items should stay loose so sorting equipment can separate them.", question: "Which action best helps a recycling facility sort materials?", choices: ["Put recyclables in a plastic bag", "Keep empty items loose in the bin", "Recycle every item with a triangle"], answer: 1, explanation: "Correct. Loose, clean, empty items are much easier for a facility to sort." },
-  { id: "10000000-0000-4000-8000-000000000002", title: "Plastic, decoded", topic: "Materials", duration: "6 min", xp: 30, summary: "Plastic numbers identify resin types, but the number alone does not promise curbside acceptance.", question: "What is the safest choice for plastic bags and film?", choices: ["Place them loose in curbside recycling", "Use a dedicated store drop-off if available", "Put them in with paper"], answer: 1, explanation: "Exactly. Film plastic tangles sorting equipment; use a dedicated film collection program." },
-  { id: "10000000-0000-4000-8000-000000000003", title: "Wishcycling myths", topic: "Smart sorting", duration: "5 min", xp: 25, summary: "Wishcycling puts the wrong item in recycling. Food-soiled paper and special waste need different handling.", question: "Why should a greasy pizza box stay out of paper recycling?", choices: ["It is too heavy", "Grease contaminates the paper fibers", "Cardboard is never recyclable"], answer: 1, explanation: "Right. Clean cardboard is valuable; grease makes its fibers unsuitable for recycling." },
-  { id: "10000000-0000-4000-8000-000000000004", title: "Food's second life", topic: "Composting", duration: "7 min", xp: 35, summary: "Food scraps can return nutrients to soil when green and brown compost materials stay balanced.", question: "Which is a useful 'brown' material for a compost pile?", choices: ["Dry leaves", "A plastic wrapper", "A battery"], answer: 0, explanation: "Yes. Dry leaves add carbon-rich brown material and help balance moist food scraps." },
-  { id: "10000000-0000-4000-8000-000000000005", title: "Glass and metal basics", topic: "Materials", duration: "5 min", xp: 25, summary: "Glass and metal containers need to be empty and rinsed, while sharp or pressurized items may need special handling.", question: "What should you do before recycling a food jar or soda can?", choices: ["Leave food residue inside", "Empty and rinse it", "Wrap it in a bag"], answer: 1, explanation: "Correct. Empty, clean containers give the recycling system the best chance of success." },
-  { id: "10000000-0000-4000-8000-000000000006", title: "Smarter compost habits", topic: "Organic waste", duration: "6 min", xp: 30, summary: "Healthy compost balances moist green material with dry brown material and keeps plastic contamination out.", question: "Which item is usually safe to add to a compost bin?", choices: ["Dry leaves", "A battery", "Plastic cutlery"], answer: 0, explanation: "Right. Dry leaves are a classic compost ingredient and help balance food scraps." },
-];
-
-const dswaVideoForItem = (values: Array<string | null | undefined>) => {
-  const text = values.filter(Boolean).join(" ").toLowerCase();
-  if (/electronic|computer|laptop|tablet|phone|television|printer|device|appliance|charger|e-waste/.test(text)) {
-    return { title: "Watch DSWA Electronics Recycling", url: "https://www.youtube.com/watch?v=zgM9MRqwlEc" };
-  }
-  if (/hazardous|battery|batteries|paint|chemical|propane|special collection/.test(text)) {
-    return { title: "Watch DSWA Special Collection Events", url: "https://www.youtube.com/watch?v=_FXnpUKHgHI" };
-  }
-  if (/curbside|recycl|aluminum|glass|metal|plastic|paper|carton/.test(text)) {
-    return { title: "Tour the DSWA Delaware Recycling Center", url: "https://www.youtube.com/watch?v=mzh2A_s5GUQ" };
-  }
-  return null;
-};
-
+const appVersion = Constants.expoConfig?.version ?? "1.0.0";
+const nativeBuildVersion = Constants.nativeBuildVersion ?? "1";
 const percent = (value: number) => Math.round(value <= 1 ? value * 100 : Math.min(100, value));
 const photoFromAsset = (asset: ImagePicker.ImagePickerAsset): Photo => ({ uri: asset.uri, name: asset.fileName ?? "ecolearn-photo.jpg", mimeType: asset.base64 ? "image/jpeg" : asset.mimeType ?? "image/jpeg", base64: asset.base64 });
 const functionErrorMessage = async (
@@ -88,16 +78,17 @@ const newRequestId = () => {
   return `${part()}${part()}-${part()}-4${part().slice(1)}-a${part().slice(1)}-${part()}${part()}${part()}`;
 };
 const extras = StyleSheet.create({
-  headerStreak: { marginLeft: "auto", borderRadius: 99, backgroundColor: "#fff3d5", paddingHorizontal: 10, paddingVertical: 7 },
+  appleButton: { width: "100%", height: 48, marginTop: 27 },
+  googleAfterApple: { marginTop: 12 },
+  headerStreak: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 99, backgroundColor: "#fff3d5", paddingHorizontal: 10, paddingVertical: 7 },
   headerStreakText: { color: "#976700", fontSize: 11, fontWeight: "800" },
-  navIcon: { color: "#b9d2bc", fontSize: 15, lineHeight: 16, textAlign: "center" },
-  webNav: { position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", justifyContent: "space-around", borderTopWidth: 1, borderTopColor: "#e5e9e1", backgroundColor: "#ffffff", paddingHorizontal: 4, paddingTop: 8, paddingBottom: 12 },
-  webNavItem: { minWidth: 48, alignItems: "center", borderRadius: 10, paddingHorizontal: 4, paddingVertical: 5 },
+  webNav: { flexDirection: "row", borderTopWidth: 1, borderTopColor: "#e2e7df", backgroundColor: "#ffffff", paddingHorizontal: 8, paddingTop: 7, paddingBottom: 4 },
+  webNavItem: { flex: 1, alignItems: "center", gap: 3, borderRadius: 13, paddingHorizontal: 4, paddingVertical: 7 },
   webNavActive: { backgroundColor: "#e8f3df" },
-  webNavText: { color: "#77847a", fontSize: 9, fontWeight: "800" },
+  webNavText: { color: "#77847a", fontSize: 10, fontWeight: "700" },
   webNavTextActive: { color: "#237342" },
   photoHint: { marginTop: 8, color: "#5b8061", fontSize: 12, textAlign: "center" },
-  toolsLinkCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 18, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 18, backgroundColor: "#fff", padding: 16 },
+  toolsLinkCard: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 18, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 18, backgroundColor: "#fff", padding: 16 },
   map: { height: 330, marginTop: 16, borderRadius: 16 },
   selectedSite: { marginHorizontal: -8, borderRadius: 12, backgroundColor: "#f0f8ec", paddingHorizontal: 8, paddingBottom: 8 },
   siteActions: { flexDirection: "row", flexWrap: "wrap", gap: 18 },
@@ -106,15 +97,37 @@ const extras = StyleSheet.create({
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
+  const [recoveringPassword, setRecoveringPassword] = useState(false);
 
   useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoadingSession(false); });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
-    return () => listener.subscription.unsubscribe();
+    const consumeAuthLink = async (url: string) => {
+      const callback = new URL(url.replace("#", "?"));
+      const accessToken = callback.searchParams.get("access_token");
+      const refreshToken = callback.searchParams.get("refresh_token");
+      if (!accessToken || !refreshToken) return;
+      const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      if (error) {
+        Alert.alert("Could not open sign-in link", error.message);
+        return;
+      }
+      if (callback.searchParams.get("type") === "recovery") setRecoveringPassword(true);
+    };
+    void ExpoLinking.getInitialURL().then((url) => { if (url) void consumeAuthLink(url); });
+    const linkListener = ExpoLinking.addEventListener("url", ({ url }) => { void consumeAuthLink(url); });
+    const { data: listener } = supabase.auth.onAuthStateChange((event, next) => {
+      setSession(next);
+      if (event === "PASSWORD_RECOVERY") setRecoveringPassword(true);
+    });
+    return () => {
+      linkListener.remove();
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   if (!isConfigured) return <ConfigurationScreen />;
   if (loadingSession) return <LoadingScreen message="Opening EcoLearn…" />;
+  if (recoveringPassword && session) return <PasswordRecoveryScreen onComplete={() => setRecoveringPassword(false)} />;
   if (!session) return <AuthScreen />;
   return <EcoLearnApp user={session.user} />;
 }
@@ -162,7 +175,74 @@ function AuthScreen() {
     } catch (error) { Alert.alert("Google sign-in needs setup", error instanceof Error ? error.message : "Try email sign-in or check the mobile redirect configuration."); }
     finally { setBusy(false); }
   };
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage}><Text style={styles.brandLarge}>ecolearn</Text><Text style={styles.pageTitle}>{mode === "signin" ? "Welcome back." : "Start your impact."}</Text><Text style={styles.body}>Save scans, learn sustainable habits, and build a more circular world.</Text><Pressable onPress={() => void google()} disabled={busy} style={[styles.googleButton, usingExpoGo && styles.disabled]}><Text style={styles.googleText}>{usingExpoGo ? "Google sign-in needs development build" : "Continue with Google"}</Text></Pressable>{usingExpoGo && <Text style={styles.helper}>For Expo Go testing, use email/password. Google works in the later EcoLearn development build.</Text>}<Text style={styles.or}>OR WITH EMAIL</Text><TextInput value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="Email address" style={styles.input} /><TextInput value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === "signin" ? "current-password" : "new-password"} placeholder="Password" style={styles.input} /><Pressable onPress={() => void submit()} disabled={busy} style={styles.primaryButton}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{mode === "signin" ? "Sign in" : "Create account"}</Text>}</Pressable><Pressable onPress={() => setMode(mode === "signin" ? "signup" : "signin")}><Text style={styles.link}>{mode === "signin" ? "New to EcoLearn? Create an account" : "Already a member? Sign in"}</Text></Pressable><Text style={styles.legal}>By continuing, you agree to EcoLearn’s <Text style={styles.legalLink} onPress={() => void openPublicPage("/terms")}>Terms of Service</Text> and <Text style={styles.legalLink} onPress={() => void openPublicPage("/privacy")}>Privacy Policy</Text>.</Text></ScrollView></SafeAreaView>;
+  const apple = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const rawNonce = Crypto.randomUUID();
+      const state = Crypto.randomUUID();
+      const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+      const credential = await AppleAuthentication.signInAsync({
+        nonce: hashedNonce,
+        state,
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (credential.state !== state) throw new Error("Apple sign-in could not be verified. Please try again.");
+      if (!credential.identityToken) throw new Error("Apple did not return an identity token.");
+      const { error } = await supabase.auth.signInWithIdToken({ provider: "apple", token: credential.identityToken, nonce: rawNonce });
+      if (error) throw error;
+      const fullName = [credential.fullName?.givenName, credential.fullName?.middleName, credential.fullName?.familyName]
+        .filter(Boolean)
+        .join(" ");
+      if (fullName) {
+        const { error: profileError } = await supabase.auth.updateUser({
+          data: {
+            full_name: fullName,
+            given_name: credential.fullName?.givenName,
+            family_name: credential.fullName?.familyName,
+          },
+        });
+        if (profileError) throw profileError;
+      }
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+      if (code !== "ERR_REQUEST_CANCELED") {
+        Alert.alert("Apple sign-in unavailable", error instanceof Error ? error.message : "Please try again or use email sign-in.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  const resetPassword = async () => {
+    if (!email.trim()) return Alert.alert("Enter your email", "Enter the email address for your EcoLearn account first.");
+    setBusy(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: ExpoLinking.createURL("auth/reset-password"),
+    });
+    setBusy(false);
+    if (error) return Alert.alert("Could not send reset email", error.message);
+    Alert.alert("Check your email", "Open the EcoLearn password-reset link on this device to choose a new password.");
+  };
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><Text style={styles.brandLarge}>ecolearn</Text><Text style={styles.pageTitle}>{mode === "signin" ? "Welcome back." : "Start your impact."}</Text><Text style={styles.body}>Save scans, learn sustainable habits, and build a more circular world.</Text>{Platform.OS === "ios" && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={13} style={extras.appleButton} onPress={() => void apple()} />}<Pressable onPress={() => void google()} disabled={busy} style={[styles.googleButton, Platform.OS === "ios" && extras.googleAfterApple, usingExpoGo && styles.disabled]}><Text style={styles.googleText}>{usingExpoGo ? "Google sign-in needs development build" : "Continue with Google"}</Text></Pressable>{usingExpoGo && <Text style={styles.helper}>For Expo Go testing, use email/password. Google works in the later EcoLearn development build.</Text>}<Text style={styles.or}>OR WITH EMAIL</Text><TextInput value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="Email address" style={styles.input} /><TextInput value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === "signin" ? "current-password" : "new-password"} placeholder="Password" style={styles.input} /><Pressable onPress={() => void submit()} disabled={busy} style={styles.primaryButton}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{mode === "signin" ? "Sign in" : "Create account"}</Text>}</Pressable>{mode === "signin" && <Pressable onPress={() => void resetPassword()} disabled={busy}><Text style={styles.link}>Forgot password?</Text></Pressable>}<Pressable onPress={() => setMode(mode === "signin" ? "signup" : "signin")}><Text style={styles.link}>{mode === "signin" ? "New to EcoLearn? Create an account" : "Already a member? Sign in"}</Text></Pressable><Text style={styles.legal}>By continuing, you agree to EcoLearn’s <Text style={styles.legalLink} onPress={() => void openPublicPage("/terms")}>Terms of Service</Text> and <Text style={styles.legalLink} onPress={() => void openPublicPage("/privacy")}>Privacy Policy</Text>.</Text></ScrollView></SafeAreaView>;
+}
+
+function PasswordRecoveryScreen({ onComplete }: { onComplete: () => void }) {
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (password.length < 8) return Alert.alert("Use a stronger password", "Your new password must contain at least eight characters.");
+    if (password !== confirmation) return Alert.alert("Passwords do not match", "Enter the same new password twice.");
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password });
+    setBusy(false);
+    if (error) return Alert.alert("Could not update password", error.message);
+    Alert.alert("Password updated", "You can continue using EcoLearn with your new password.", [{ text: "Continue", onPress: onComplete }]);
+  };
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><Text style={styles.brandLarge}>ecolearn</Text><Text style={styles.pageTitle}>Choose a new password.</Text><Text style={styles.body}>Use at least eight characters and keep it private.</Text><TextInput value={password} onChangeText={setPassword} secureTextEntry autoComplete="new-password" placeholder="New password" style={styles.input} /><TextInput value={confirmation} onChangeText={setConfirmation} secureTextEntry autoComplete="new-password" placeholder="Confirm new password" style={styles.input} /><Pressable onPress={() => void save()} disabled={busy} style={styles.primaryButton}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Save new password</Text>}</Pressable></ScrollView></SafeAreaView>;
 }
 
 function EcoLearnApp({ user }: { user: User }) {
@@ -170,27 +250,133 @@ function EcoLearnApp({ user }: { user: User }) {
   const [showScanTools, setShowScanTools] = useState(false);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [completed, setCompleted] = useState<string[]>([]);
-  const refresh = async () => {
-    const [{ data: nextProgress }, { data: lessonProgress }] = await Promise.all([supabase.from("user_progress").select("xp,level,total_scans,total_lessons_completed,streak_days").eq("user_id", user.id).maybeSingle(), supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("status", "completed")]);
-    setProgress(nextProgress as Progress | null); setCompleted((lessonProgress ?? []).map((row) => row.lesson_id));
-  };
-  useEffect(() => { void refresh(); }, []);
-  const screen = tab === "Home" ? <Home progress={progress} onScan={() => { setShowScanTools(false); setTab("Scan"); }} onLearn={() => setTab("Learn")} /> : tab === "Scan" ? showScanTools ? <ToolsScreen /> : <ScanScreen onRecorded={refresh} onTools={() => setShowScanTools(true)} /> : tab === "Learn" ? <LearnScreen completed={completed} onCompleted={refresh} /> : tab === "Challenges" ? <QuestsScreen progress={progress} /> : tab === "Ranks" ? <LeaderboardScreen progress={progress} /> : <ProfileScreen user={user} progress={progress} />;
-  const navItems: { tab: Tab; icon: string; label: string }[] = [
-    { tab: "Home", icon: "⌂", label: "Home" },
-    { tab: "Scan", icon: "⌕", label: "Scan" },
-    { tab: "Learn", icon: "▤", label: "Learn" },
-    { tab: "Challenges", icon: "★", label: "Challenges" },
-    { tab: "Ranks", icon: "♛", label: "Ranks" },
-    { tab: "Profile", icon: "◉", label: "Profile" },
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [earnedAchievementIds, setEarnedAchievementIds] = useState<string[]>([]);
+  const [recentScans, setRecentScans] = useState<ScanHistoryItem[]>([]);
+  const [rewardClaims, setRewardClaims] = useState<string[]>([]);
+  const [displayName, setDisplayName] = useState(() => String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? ""));
+  const [refreshing, setRefreshing] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const refresh = useCallback(async () => {
+    setDataError(null);
+    const results = await Promise.all([
+      supabase.from("user_progress").select("xp,level,total_scans,total_lessons_completed,streak_days,last_activity_date").eq("user_id", user.id).maybeSingle(),
+      supabase.from("lesson_progress").select("lesson_id").eq("user_id", user.id).eq("status", "completed"),
+      supabase.from("lessons").select("id,slug,title,topic,description,duration_minutes,xp_reward,sort_order").eq("is_published", true).order("sort_order"),
+      supabase.from("achievements").select("id,title,description,icon,requirement_type,requirement_value").order("requirement_value"),
+      supabase.from("user_achievements").select("achievement_id").eq("user_id", user.id),
+      supabase.from("scan_history").select("id,item_name,category,is_recyclable,created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5),
+      supabase.from("reward_claims").select("reward_key").eq("user_id", user.id),
+      supabase.from("user_settings").select("display_name").eq("user_id", user.id).maybeSingle(),
+    ]);
+    const firstError = results.find((result) => result.error)?.error;
+    if (firstError) setDataError("Some account data could not be refreshed. Pull down to try again.");
+    const [progressResult, lessonProgress, lessonsResult, achievementsResult, earnedResult, scansResult, claimsResult, settingsResult] = results;
+    if (progressResult.data) setProgress(progressResult.data as Progress);
+    setCompleted(((lessonProgress.data ?? []) as Array<{ lesson_id: string }>).map((row) => row.lesson_id));
+    setLessons((lessonsResult.data ?? []) as Lesson[]);
+    setAchievements((achievementsResult.data ?? []) as Achievement[]);
+    setEarnedAchievementIds(((earnedResult.data ?? []) as Array<{ achievement_id: string }>).map((row) => row.achievement_id));
+    setRecentScans((scansResult.data ?? []) as ScanHistoryItem[]);
+    setRewardClaims(((claimsResult.data ?? []) as Array<{ reward_key: string }>).map((row) => row.reward_key));
+    const savedName = (settingsResult.data as { display_name?: string | null } | null)?.display_name;
+    if (savedName) setDisplayName(savedName);
+  }, [user.id]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  const refreshAll = async () => { setRefreshing(true); await refresh(); setRefreshing(false); };
+  const openTab = (next: Tab, tools = false) => { setShowScanTools(tools); setTab(next); };
+  const screen = tab === "Home"
+    ? <Home user={user} displayName={displayName} progress={progress} lessons={lessons} completed={completed} achievements={achievements} earnedAchievementIds={earnedAchievementIds} recentScans={recentScans} onScan={() => openTab("Scan")} onLearn={() => openTab("Learn")} onTools={() => openTab("Scan", true)} onChallenges={() => openTab("Challenges")} />
+    : tab === "Scan"
+      ? showScanTools ? <ToolsScreen onBack={() => setShowScanTools(false)} /> : <ScanScreen onRecorded={refresh} onTools={() => setShowScanTools(true)} />
+      : tab === "Learn"
+        ? <LearnScreen lessons={lessons} completed={completed} onCompleted={refresh} />
+        : tab === "Challenges"
+          ? <QuestsScreen progress={progress} claims={rewardClaims} achievements={achievements} earnedAchievementIds={earnedAchievementIds} onRefresh={refresh} />
+          : <ProfileScreen user={user} progress={progress} achievements={achievements} earnedAchievementIds={earnedAchievementIds} onNameSaved={setDisplayName} />;
+  const navItems: { tab: Tab; icon: keyof typeof Ionicons.glyphMap; activeIcon: keyof typeof Ionicons.glyphMap; label: string }[] = [
+    { tab: "Home", icon: "home-outline", activeIcon: "home", label: "Home" },
+    { tab: "Scan", icon: "scan-outline", activeIcon: "scan", label: "Scan" },
+    { tab: "Learn", icon: "book-outline", activeIcon: "book", label: "Learn" },
+    { tab: "Challenges", icon: "trophy-outline", activeIcon: "trophy", label: "Quests" },
+    { tab: "Profile", icon: "person-outline", activeIcon: "person", label: "Profile" },
   ];
-  return <SafeAreaView style={styles.safe}><StatusBar barStyle="dark-content" /><View style={styles.appHeader}><View style={styles.logo}><Text style={styles.logoText}>e</Text></View><Text style={styles.brand}>ecolearn</Text><View style={extras.headerStreak}><Text style={extras.headerStreakText}>🔥 {progress?.streak_days ?? 0} day streak</Text></View></View><ScrollView contentContainerStyle={styles.page}>{screen}</ScrollView><View style={extras.webNav}>{navItems.map(({ tab: item, icon, label }) => <Pressable key={item} onPress={() => { setShowScanTools(false); setTab(item); }} style={[extras.webNavItem, item === tab && extras.webNavActive]}><Text style={[extras.navIcon, extras.webNavText, item === tab && extras.webNavTextActive]}>{icon}</Text><Text style={[extras.webNavText, item === tab && extras.webNavTextActive]}>{label}</Text></Pressable>)}</View></SafeAreaView>;
+  return <SafeAreaView style={styles.safe}>
+    <StatusBar barStyle="dark-content" />
+    <View style={styles.appHeader}>
+      <Image source={ecoLearnIcon} style={styles.logoImage} />
+      <View><Text style={styles.brand}>EcoLearn</Text><Text style={styles.headerSubtitle}>Delaware-first guidance</Text></View>
+      <View style={extras.headerStreak}><Ionicons name="flame" size={14} color="#9a6800" /><Text style={extras.headerStreakText}>{progress?.streak_days ?? 0} day streak</Text></View>
+    </View>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refreshAll()} tintColor="#2f7a43" />} keyboardShouldPersistTaps="handled">
+      {dataError && <View style={styles.notice}><Ionicons name="cloud-offline-outline" size={18} color="#8a5b17" /><Text style={styles.noticeText}>{dataError}</Text></View>}
+      {screen}
+    </ScrollView>
+    <View style={extras.webNav}>{navItems.map(({ tab: item, icon, activeIcon, label }) => {
+      const active = item === tab;
+      return <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: active }} onPress={() => openTab(item)} style={[extras.webNavItem, active && extras.webNavActive]}>
+        <Ionicons name={active ? activeIcon : icon} size={21} color={active ? "#1f6e39" : "#7c8980"} />
+        <Text style={[extras.webNavText, active && extras.webNavTextActive]}>{label}</Text>
+      </Pressable>;
+    })}</View>
+  </SafeAreaView>;
 }
 
-function Home({ progress, onScan, onLearn }: { progress: Progress | null; onScan: () => void; onLearn: () => void }) { return <><Text style={styles.kicker}>GOOD TO SEE YOU</Text><Text style={styles.hero}>Small choices.{"\n"}<Text style={styles.heroAccent}>Real impact.</Text></Text><View style={styles.heroCard}><Text style={styles.cardEyebrow}>YOUR IMPACT</Text><Text style={styles.cardTitle}>{progress?.total_scans ?? 0} items scanned</Text><Text style={styles.cardText}>You are level {progress?.level ?? 1} with a {progress?.streak_days ?? 0}-day activity streak.</Text><Pressable style={styles.lightButton} onPress={onScan}><Text style={styles.lightText}>Scan an item</Text></Pressable></View><Text style={styles.sectionTitle}>Keep going</Text><Pressable style={styles.rowCard} onPress={onLearn}><View style={styles.iconSquare}><Text>◌</Text></View><View style={{ flex: 1 }}><Text style={styles.smallLabel}>LEARN BY DOING</Text><Text style={styles.rowTitle}>Build your eco instinct</Text><Text style={styles.rowMeta}>Short lessons with real-world choices</Text></View><Text style={styles.chevron}>›</Text></Pressable></>; }
+function Home({ user, displayName, progress, lessons, completed, achievements, earnedAchievementIds, recentScans, onScan, onLearn, onTools, onChallenges }: { user: User; displayName: string; progress: Progress | null; lessons: Lesson[]; completed: string[]; achievements: Achievement[]; earnedAchievementIds: string[]; recentScans: ScanHistoryItem[]; onScan: () => void; onLearn: () => void; onTools: () => void; onChallenges: () => void }) {
+  const firstName = (displayName || String(user.user_metadata?.full_name ?? "") || "Eco learner").trim().split(/\s+/)[0];
+  const nextLesson = lessons.find((lesson) => !completed.includes(lesson.id));
+  const xp = progress?.xp ?? 0;
+  const levelProgress = xp % 100;
+  const nextAchievement = achievements.find((achievement) => !earnedAchievementIds.includes(achievement.id));
+  const achievementCurrent = nextAchievement ? achievementMetric(nextAchievement, progress) : 0;
+  return <>
+    <Text style={styles.kicker}>WELCOME BACK, {firstName.toUpperCase()}</Text>
+    <Text style={styles.hero}>Learn it. Scan it.{"\n"}<Text style={styles.heroAccent}>Make it count.</Text></Text>
+    <View style={styles.heroCard}>
+      <View style={styles.cardTopRow}><View><Text style={styles.cardEyebrow}>LEVEL {progress?.level ?? 1}</Text><Text style={styles.cardTitle}>{xp.toLocaleString()} XP earned</Text></View><View style={styles.levelBadge}><Ionicons name="leaf" size={20} color="#173d2a" /></View></View>
+      <View style={styles.darkTrack}><View style={[styles.darkFill, { width: `${levelProgress}%` }]} /></View>
+      <Text style={styles.cardText}>{100 - levelProgress} XP until your next level</Text>
+      <View style={styles.heroActions}><Pressable style={styles.lightButton} onPress={onScan}><Ionicons name="scan" size={18} color="#214c2e" /><Text style={styles.lightText}>Scan an item</Text></Pressable><Pressable style={styles.darkGhostButton} onPress={onLearn}><Text style={styles.darkGhostText}>Continue learning</Text></Pressable></View>
+    </View>
+    <View style={styles.metricsRow}>
+      <Metric icon="scan-outline" value={progress?.total_scans ?? 0} label="Verified checks" />
+      <Metric icon="book-outline" value={progress?.total_lessons_completed ?? 0} label="Lessons" />
+      <Metric icon="ribbon-outline" value={earnedAchievementIds.length} label="Badges" />
+    </View>
+    <Text style={styles.sectionTitle}>Pick up where you left off</Text>
+    {nextLesson ? <Pressable style={styles.featureCard} onPress={onLearn}>
+      <View style={styles.featureIcon}><Ionicons name="book" size={23} color="#2f7b44" /></View>
+      <View style={styles.flexOne}><Text style={styles.smallLabel}>NEXT LESSON · {nextLesson.duration_minutes} MIN</Text><Text style={styles.rowTitle}>{nextLesson.title}</Text><Text style={styles.rowMeta}>{nextLesson.description}</Text></View>
+      <Ionicons name="chevron-forward" size={21} color="#3f864c" />
+    </Pressable> : <View style={styles.successCard}><Ionicons name="checkmark-circle" size={23} color="#2d7a42" /><View style={styles.flexOne}><Text style={styles.rowTitle}>All lessons completed</Text><Text style={styles.rowMeta}>Review any lesson or keep checking real items.</Text></View></View>}
+    <View style={styles.quickGrid}>
+      <Pressable style={styles.quickCard} onPress={onTools}><Ionicons name="location-outline" size={24} color="#2d7a42" /><Text style={styles.quickTitle}>Nearby sites</Text><Text style={styles.rowMeta}>Find verified disposal options.</Text></Pressable>
+      <Pressable style={styles.quickCard} onPress={onChallenges}><Ionicons name="trophy-outline" size={24} color="#a66d10" /><Text style={styles.quickTitle}>Quests</Text><Text style={styles.rowMeta}>Turn real actions into progress.</Text></Pressable>
+    </View>
+    {nextAchievement && <><Text style={styles.sectionTitle}>Next badge</Text><View style={styles.progressCard}><View style={styles.cardTopRow}><View style={styles.flexOne}><Text style={styles.rowTitle}>{nextAchievement.title}</Text><Text style={styles.rowMeta}>{nextAchievement.description}</Text></View><Text style={styles.progressValue}>{Math.min(achievementCurrent, nextAchievement.requirement_value)}/{nextAchievement.requirement_value}</Text></View><View style={questStyles.track}><View style={[questStyles.fill, { width: `${Math.min(100, Math.round((achievementCurrent / nextAchievement.requirement_value) * 100))}%` }]} /></View></View></>}
+    <Text style={styles.sectionTitle}>Recent verified checks</Text>
+    <View style={styles.listCard}>{recentScans.length ? recentScans.map((scan, index) => <View key={scan.id} style={[styles.activityRow, index > 0 && styles.activityBorder]}><View style={[styles.activityIcon, scan.is_recyclable ? styles.activityGood : styles.activitySpecial]}><Ionicons name={scan.is_recyclable ? "checkmark" : "information"} size={17} color={scan.is_recyclable ? "#286d3b" : "#9a5e13"} /></View><View style={styles.flexOne}><Text style={styles.activityTitle}>{scan.item_name}</Text><Text style={styles.rowMeta}>{scan.category ?? "Official Delaware guidance"}</Text></View><Text style={styles.activityDate}>{new Date(scan.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</Text></View>) : <View style={styles.emptyState}><Ionicons name="scan-outline" size={25} color="#6f7e73" /><Text style={styles.emptyTitle}>No verified checks yet</Text><Text style={styles.rowMeta}>Scan or search for an item to start your private history.</Text></View>}</View>
+  </>;
+}
+
+function Metric({ icon, value, label }: { icon: keyof typeof Ionicons.glyphMap; value: number; label: string }) {
+  return <View style={styles.metric}><Ionicons name={icon} size={19} color="#327844" /><Text style={styles.metricValue}>{value}</Text><Text style={styles.metricLabel}>{label}</Text></View>;
+}
+
+function achievementMetric(achievement: Achievement, progress: Progress | null) {
+  if (!progress) return 0;
+  if (achievement.requirement_type === "scans") return progress.total_scans;
+  if (achievement.requirement_type === "lessons") return progress.total_lessons_completed;
+  if (achievement.requirement_type === "streak") return progress.streak_days;
+  return progress.level;
+}
 
 function ScanScreen({ onRecorded, onTools }: { onRecorded: () => Promise<void>; onTools: () => void }) {
   const [photo, setPhoto] = useState<Photo | null>(null); const [result, setResult] = useState<ScanResult | null>(null); const [busy, setBusy] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<DelawareSuggestion[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const requestId = useRef(newRequestId());
   const recordOfficial = async (verified: ScanResult) => {
     if (!verified.dnrec) return;
@@ -206,6 +392,37 @@ function ScanScreen({ onRecorded, onTools }: { onRecorded: () => Promise<void>; 
     await onRecorded();
   };
   const choose = async (camera: boolean) => { const permission = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!permission.granted) return Alert.alert("Permission needed", `Allow ${camera ? "camera" : "photo library"} access to scan an item.`); const options: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.6, base64: true }; const picked = camera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options); if (!picked.canceled && picked.assets[0]) { requestId.current = newRequestId(); setPhoto(photoFromAsset(picked.assets[0])); setResult(null); } };
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (query.length < 2 || photo || result) { setSuggestions([]); setSuggestionsLoading(false); return; }
+    let active = true;
+    const timer = setTimeout(async () => {
+      setSuggestionsLoading(true);
+      const { data, error } = await supabase.functions.invoke("delaware-guidance", { body: { item: query, mode: "suggestions" } });
+      if (active) {
+        setSuggestions(error ? [] : ((data?.suggestions ?? []) as DelawareSuggestion[]));
+        setSuggestionsLoading(false);
+      }
+    }, 280);
+    return () => { active = false; clearTimeout(timer); };
+  }, [searchQuery, photo, result]);
+  const searchCatalog = async (value = searchQuery) => {
+    const item = value.trim();
+    if (!item || busy) return;
+    setBusy(true); setSuggestions([]); setResult(null); requestId.current = newRequestId();
+    try {
+      const { data, error } = await supabase.functions.invoke("delaware-guidance", { body: { item } });
+      if (error) throw error;
+      const guidance = data?.verified ? data.guidance as DelawareGuidance | null : null;
+      const checked: ScanResult = guidance
+        ? { item: guidance.title, recyclable: guidance.curbside, confidence: guidance.matchConfidence ?? 1, category: guidance.category, instructions: guidance.instructions, tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the complete official item protocol", "Use nearby locations for specialty items"], dnrec: guidance }
+        : { item, recyclable: false, confidence: 0, category: "No official DNREC match", instructions: "EcoLearn could not verify that name against the official Delaware catalog.", tips: ["Choose a suggested official item if one appears", "Try a simpler material or item name", "Use a clear one-item photo for visual identification"], dnrec: null };
+      setResult(checked);
+      if (guidance) await recordOfficial(checked);
+    } catch (error) {
+      Alert.alert("Delaware catalog unavailable", await functionErrorMessage(error, "Try the catalog search again shortly."));
+    } finally { setBusy(false); }
+  };
   const scan = async () => {
     if (!photo || busy) return;
     setBusy(true);
@@ -227,19 +444,26 @@ function ScanScreen({ onRecorded, onTools }: { onRecorded: () => Promise<void>; 
     }
   };
   if (!result && !photo) return <>
-    <Text style={styles.kicker}>ITEM SCANNER</Text>
+    <Text style={styles.kicker}>OFFICIAL DELAWARE ITEM CHECK</Text>
     <Text style={styles.pageTitle}>Know where it goes.</Text>
-    <Text style={styles.body}>Choose or take a clear photo of one household item. EcoLearn identifies it once, then checks the official Delaware catalog.</Text>
-    <View style={styles.photoBox}><Text style={styles.photoIcon}>SCAN</Text><Text style={extras.photoHint}>Use a well-lit photo with one item in view.</Text></View>
-    <View style={styles.row}><Pressable style={[styles.secondaryButton, styles.half]} onPress={() => void choose(false)}><Text style={styles.secondaryText}>Choose from gallery</Text></Pressable><Pressable style={[styles.primaryButton, styles.half]} onPress={() => void choose(true)}><Text style={styles.primaryText}>Use camera</Text></Pressable></View>
-    <Pressable style={extras.toolsLinkCard} onPress={onTools}><View><Text style={styles.smallLabel}>MORE SCAN TOOLS</Text><Text style={styles.rowTitle}>Barcode, label, and nearby sites</Text><Text style={styles.rowMeta}>Use another way to make the right call.</Text></View><Text style={styles.chevron}>›</Text></Pressable>
+    <Text style={styles.body}>Use a photo or search by name. Disposal instructions appear only when EcoLearn finds a strong DNREC catalog match.</Text>
+    <View style={styles.scanPanel}>
+      <View style={styles.scanIllustration}><Ionicons name="scan" size={36} color="#2e7a43" /></View>
+      <Text style={styles.scanPanelTitle}>Identify one household item</Text>
+      <Text style={styles.scanPanelText}>Use a clear, well-lit photo without people or personal information.</Text>
+      <View style={styles.row}><Pressable style={[styles.secondaryButton, styles.half]} onPress={() => void choose(false)}><Ionicons name="images-outline" size={18} color="#286d3b" /><Text style={styles.secondaryText}>Gallery</Text></Pressable><Pressable style={[styles.primaryButton, styles.half, styles.noTopMargin]} onPress={() => void choose(true)}><Ionicons name="camera-outline" size={18} color="#fff" /><Text style={styles.primaryText}>Camera</Text></Pressable></View>
+    </View>
+    <View style={styles.dividerRow}><View style={styles.divider} /><Text style={styles.dividerText}>OR SEARCH THE CATALOG</Text><View style={styles.divider} /></View>
+    <View style={styles.searchRow}><Ionicons name="search" size={19} color="#78847b" /><TextInput value={searchQuery} onChangeText={setSearchQuery} onSubmitEditing={() => void searchCatalog()} returnKeyType="search" autoCorrect placeholder="Try “soda can”" style={styles.searchInput} /><Pressable disabled={!searchQuery.trim() || busy} onPress={() => void searchCatalog()} style={[styles.searchButton, (!searchQuery.trim() || busy) && styles.disabled]}>{busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.searchButtonText}>Check</Text>}</Pressable></View>
+    {(suggestionsLoading || suggestions.length > 0) && <View style={styles.suggestionCard}>{suggestionsLoading ? <View style={styles.suggestionLoading}><ActivityIndicator color="#2e7a43" /><Text style={styles.rowMeta}>Searching official items…</Text></View> : suggestions.map((suggestion, index) => <Pressable key={suggestion.title} onPress={() => { setSearchQuery(suggestion.title); void searchCatalog(suggestion.title); }} style={[styles.suggestionRow, index > 0 && styles.activityBorder]}><View style={styles.flexOne}><Text style={styles.activityTitle}>{suggestion.title}</Text><Text style={styles.rowMeta}>{suggestion.category}</Text></View><Ionicons name="arrow-forward" size={18} color="#3d834b" /></Pressable>)}</View>}
+    <Pressable style={extras.toolsLinkCard} onPress={onTools}><View style={styles.toolIcon}><Ionicons name="location-outline" size={22} color="#2f7b44" /></View><View style={styles.flexOne}><Text style={styles.smallLabel}>MORE WAYS TO CHECK</Text><Text style={styles.rowTitle}>Barcode, label, and nearby sites</Text><Text style={styles.rowMeta}>Use the right tool for the item in front of you.</Text></View><Ionicons name="chevron-forward" size={21} color="#3f864c" /></Pressable>
   </>;
   if (!result) return <><Text style={styles.kicker}>ITEM SCANNER</Text><Text style={styles.pageTitle}>Ready to scan?</Text><Text style={styles.body}>One visual check will identify the item, then EcoLearn will search the official Delaware catalog.</Text><View style={styles.photoBox}><Image source={{ uri: photo!.uri }} style={styles.fullImage} /></View><View style={styles.row}><Pressable style={[styles.secondaryButton, styles.half]} onPress={() => void choose(false)}><Text style={styles.secondaryText}>Choose another</Text></Pressable><Pressable style={[styles.primaryButton, styles.half]} onPress={() => void choose(true)}><Text style={styles.primaryText}>Use camera</Text></Pressable></View><Pressable disabled={busy} style={[styles.scanButton, busy && styles.disabled]} onPress={() => void scan()}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Identify + check DNREC</Text>}</Pressable></>;
   const official = result.dnrec;
   const relatedVideo = dswaVideoForItem([result.item, result.category, result.material, result.instructions]);
-  const resetScan = () => { setResult(null); setPhoto(null); };
+  const resetScan = () => { setResult(null); setPhoto(null); setSearchQuery(""); setSuggestions([]); requestId.current = newRequestId(); };
   if (!official) return <>
-    <Image source={{ uri: photo?.uri }} style={styles.resultImage} />
+    {photo && <Image source={{ uri: photo.uri }} style={styles.resultImage} />}
     <Text style={styles.kicker}>VISUAL IDENTIFICATION</Text>
     <Text style={styles.pageTitle}>{result.item}</Text>
     <View style={[styles.badge, styles.warnBadge]}><Text style={[styles.badgeText, styles.warnText]}>{result.category} · {percent(result.confidence)}% confidence</Text></View>
@@ -254,7 +478,7 @@ function ScanScreen({ onRecorded, onTools }: { onRecorded: () => Promise<void>; 
     <Pressable style={styles.scanButton} onPress={resetScan}><Text style={styles.primaryText}>Try another photo</Text></Pressable>
   </>;
   return <>
-    <Image source={{ uri: photo?.uri }} style={styles.resultImage} />
+    {photo && <Image source={{ uri: photo.uri }} style={styles.resultImage} />}
     <Text style={styles.kicker}>OFFICIAL DELAWARE MATCH</Text>
     <Text style={styles.pageTitle}>{official.title}</Text>
     <View style={[styles.badge, official.curbside ? styles.goodBadge : styles.warnBadge]}><Text style={[styles.badgeText, official.curbside ? styles.goodText : styles.warnText]}>DNREC: {official.category} · {percent(result.confidence)}% confidence</Text></View>
@@ -265,68 +489,106 @@ function ScanScreen({ onRecorded, onTools }: { onRecorded: () => Promise<void>; 
   </>;
 }
 
-function LearnScreen({ completed, onCompleted }: { completed: string[]; onCompleted: () => Promise<void> }) { const [active, setActive] = useState<Lesson | null>(null); const [choice, setChoice] = useState<number | null>(null); const complete = async () => { if (!active || choice !== active.answer) return; const { error } = await supabase.rpc("complete_ecolearn_lesson", { p_lesson_id: active.id, p_selected_answer: choice }); if (error) return Alert.alert("Could not save lesson", error.message); await onCompleted(); Alert.alert("Lesson complete", `+${active.xp} XP earned.`); setActive(null); setChoice(null); }; if (active) return <><Text style={styles.kicker}>{active.topic.toUpperCase()}</Text><Text style={styles.pageTitle}>{active.title}</Text><Text style={styles.body}>{active.summary}</Text><Text style={styles.question}>{active.question}</Text>{active.choices.map((item, index) => <Pressable key={item} onPress={() => setChoice(index)} style={[styles.answer, choice === index && styles.answerActive]}><Text style={styles.answerText}>{item}</Text></Pressable>)}{choice !== null && <Text style={styles.helper}>{choice === active.answer ? active.explanation : "Not quite—review the lesson and choose again."}</Text>}<Pressable disabled={choice !== active.answer} style={[styles.primaryButton, choice !== active.answer && styles.disabled]} onPress={() => void complete()}><Text style={styles.primaryText}>Complete lesson</Text></Pressable><Pressable onPress={() => { setActive(null); setChoice(null); }}><Text style={styles.link}>Back to lessons</Text></Pressable></>; return <><Text style={styles.kicker}>LEARN BY DOING</Text><Text style={styles.pageTitle}>Build your eco instinct.</Text><Text style={styles.body}>{completed.length} of {lessons.length} lessons complete.</Text>{lessons.map((lesson, index) => { const done = completed.includes(lesson.id); const unlocked = index === 0 || completed.includes(lessons[index - 1].id); return <Pressable key={lesson.id} disabled={!unlocked} onPress={() => setActive(lesson)} style={[styles.lessonCard, !unlocked && styles.disabled]}><View style={styles.number}><Text style={styles.numberText}>{done ? "✓" : index + 1}</Text></View><View style={{ flex: 1 }}><Text style={styles.smallLabel}>{lesson.topic.toUpperCase()} · {lesson.duration}</Text><Text style={styles.rowTitle}>{lesson.title}</Text><Text style={styles.rowMeta}>{done ? "Complete — tap to review" : unlocked ? `${lesson.xp} XP` : "Finish the previous lesson"}</Text></View></Pressable>; })}</>; }
-
-function QuestsScreen({ progress }: { progress: Progress | null }) {
-  const scans = progress?.total_scans ?? 0;
-  const lessonsDone = progress?.total_lessons_completed ?? 0;
-  const quests = [
-    { title: "The clean bin", detail: "Scan 3 household items and sort with confidence.", current: Math.min(scans, 3), target: 3, reward: "30 XP" },
-    { title: "Lesson learner", detail: "Finish a lesson and strengthen your eco instinct.", current: Math.min(lessonsDone, 1), target: 1, reward: "25 XP" },
-    { title: "Seven-day glow", detail: "Keep building your daily eco habit.", current: Math.min(progress?.streak_days ?? 0, 7), target: 7, reward: "100 XP" },
-  ];
+function LearnScreen({ lessons, completed, onCompleted }: { lessons: Lesson[]; completed: string[]; onCompleted: () => Promise<void> }) {
+  const [active, setActive] = useState<Lesson | null>(null);
+  const [step, setStep] = useState(0);
+  const [choice, setChoice] = useState<number | null>(null);
+  const [checked, setChecked] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const closeLesson = () => { setActive(null); setStep(0); setChoice(null); setChecked(false); };
+  const openLesson = (lesson: Lesson) => { setActive(lesson); setStep(0); setChoice(null); setChecked(false); };
+  if (active) {
+    const content = lessonEditorial[active.id];
+    if (!content) return <View style={styles.emptyState}><Ionicons name="alert-circle-outline" size={28} color="#8a5b17" /><Text style={styles.emptyTitle}>Lesson content unavailable</Text><Text style={styles.rowMeta}>This lesson was unpublished from the app because its reviewed content is missing.</Text><Pressable onPress={closeLesson} style={styles.secondaryButton}><Text style={styles.secondaryText}>Back to lessons</Text></Pressable></View>;
+    const quizStep = content.facts.length + 1;
+    const isQuiz = step === quizStep;
+    const totalSteps = quizStep + 1;
+    const alreadyDone = completed.includes(active.id);
+    const complete = async () => {
+      if (choice !== content.answer || saving) return;
+      setSaving(true);
+      const { error } = await supabase.rpc("complete_ecolearn_lesson", { p_lesson_id: active.id, p_selected_answer: choice });
+      if (error) { setSaving(false); return Alert.alert("Could not save lesson", error.message); }
+      await onCompleted(); setSaving(false);
+      Alert.alert(alreadyDone ? "Review complete" : "Lesson complete", alreadyDone ? "Your original progress remains saved." : `+${active.xp_reward} XP earned.`, [{ text: "Continue", onPress: closeLesson }]);
+    };
+    return <>
+      <Pressable onPress={closeLesson} style={styles.backButton}><Ionicons name="arrow-back" size={19} color="#286d3b" /><Text style={styles.backText}>All lessons</Text></Pressable>
+      <View style={styles.lessonProgressRow}>{Array.from({ length: totalSteps }).map((_, index) => <View key={index} style={[styles.lessonProgressSegment, index <= step && styles.lessonProgressSegmentActive]} />)}</View>
+      <Text style={styles.kicker}>{active.topic.toUpperCase()} · {step + 1} OF {totalSteps}</Text>
+      <Text style={styles.pageTitle}>{active.title}</Text>
+      {!isQuiz && <View style={styles.lessonBodyCard}>
+        <View style={styles.lessonHeroIcon}><Ionicons name={step === 0 ? "bulb-outline" : "leaf-outline"} size={30} color="#2f7b44" /></View>
+        <Text style={styles.lessonSectionTitle}>{step === 0 ? "Why this matters" : content.facts[step - 1].title}</Text>
+        <Text style={styles.lessonBody}>{step === 0 ? content.intro : content.facts[step - 1].body}</Text>
+      </View>}
+      {isQuiz && <>
+        <View style={styles.quizHeader}><Ionicons name="checkmark-done-circle-outline" size={25} color="#2f7b44" /><View style={styles.flexOne}><Text style={styles.smallLabel}>QUICK CHECK</Text><Text style={styles.rowTitle}>Prove what you learned</Text></View></View>
+        <Text style={styles.question}>{content.question}</Text>
+        {content.choices.map((item, index) => {
+          const selected = choice === index;
+          const correct = checked && index === content.answer;
+          const wrong = checked && selected && index !== content.answer;
+          return <Pressable key={item} disabled={checked} onPress={() => setChoice(index)} style={[styles.answer, selected && styles.answerActive, correct && styles.answerCorrect, wrong && styles.answerWrong]}><View style={[styles.answerIndex, selected && styles.answerIndexActive]}><Text style={[styles.answerIndexText, selected && styles.answerIndexTextActive]}>{String.fromCharCode(65 + index)}</Text></View><Text style={styles.answerText}>{item}</Text>{correct && <Ionicons name="checkmark-circle" size={21} color="#2d7a42" />}{wrong && <Ionicons name="close-circle" size={21} color="#b04c42" />}</Pressable>;
+        })}
+        {checked && <View style={[styles.feedbackCard, choice === content.answer ? styles.feedbackGood : styles.feedbackBad]}><Text style={styles.feedbackTitle}>{choice === content.answer ? "Exactly right" : "Not quite yet"}</Text><Text style={styles.feedbackText}>{choice === content.answer ? content.explanation : "Review the choices and try once more. Your progress is only saved after the correct answer."}</Text></View>}
+      </>}
+      {!isQuiz ? <Pressable style={styles.primaryButton} onPress={() => setStep((value) => value + 1)}><Text style={styles.primaryText}>{step === content.facts.length ? "Take the quiz" : "Continue"}</Text><Ionicons name="arrow-forward" size={18} color="#fff" /></Pressable> : !checked ? <Pressable disabled={choice === null} style={[styles.primaryButton, choice === null && styles.disabled]} onPress={() => setChecked(true)}><Text style={styles.primaryText}>Check answer</Text></Pressable> : choice === content.answer ? <Pressable disabled={saving} style={[styles.primaryButton, saving && styles.disabled]} onPress={() => void complete()}>{saving ? <ActivityIndicator color="#fff" /> : <><Text style={styles.primaryText}>{alreadyDone ? "Finish review" : `Complete · +${active.xp_reward} XP`}</Text><Ionicons name="checkmark" size={19} color="#fff" /></>}</Pressable> : <Pressable style={styles.secondaryButton} onPress={() => { setChoice(null); setChecked(false); }}><Text style={styles.secondaryText}>Try again</Text></Pressable>}
+    </>;
+  }
+  const percentComplete = lessons.length ? Math.round((completed.length / lessons.length) * 100) : 0;
   return <>
-    <Text style={styles.kicker}>MAKE IT A GAME</Text>
-    <Text style={styles.pageTitle}>Quests with purpose.</Text>
-    <Text style={styles.body}>Your real scans and completed lessons count toward these challenges.</Text>
-    {quests.map((quest) => <View key={quest.title} style={questStyles.card}>
-      <Text style={questStyles.reward}>{quest.reward}</Text>
-      <Text style={styles.rowTitle}>{quest.title}</Text>
-      <Text style={styles.body}>{quest.detail}</Text>
-      <View style={questStyles.track}><View style={[questStyles.fill, { width: `${Math.round((quest.current / quest.target) * 100)}%` }]} /></View>
-      <Text style={styles.rowMeta}>{quest.current} of {quest.target} complete</Text>
-    </View>)}
-    <Text style={styles.sectionTitle}>Community ranks</Text>
-    <View style={questStyles.card}>
-      <Text style={styles.rowMeta}>This early community view is motivational only; personal scan history remains private.</Text>
-      {["Maya Green", "Jordan Lee", "You", "Sam Rivera"].map((name, index) => <View key={name} style={questStyles.rankRow}>
-        <Text style={questStyles.rank}>{index + 1}</Text>
-        <Text style={styles.rowTitle}>{name}</Text>
-        <Text style={questStyles.rankXp}>{index === 2 ? `${progress?.xp ?? 0} XP` : `${420 - index * 70} XP`}</Text>
-      </View>)}
-    </View>
+    <Text style={styles.kicker}>LEARN BY DOING</Text>
+    <Text style={styles.pageTitle}>Build skills that stick.</Text>
+    <Text style={styles.body}>Short, reviewed lessons turn Delaware recycling guidance into choices you can use.</Text>
+    <View style={styles.courseSummary}><View><Text style={styles.courseValue}>{completed.length}/{lessons.length}</Text><Text style={styles.rowMeta}>lessons complete</Text></View><View style={styles.courseProgressWrap}><Text style={styles.coursePercent}>{percentComplete}%</Text><View style={questStyles.track}><View style={[questStyles.fill, { width: `${percentComplete}%` }]} /></View></View></View>
+    {!lessons.length && <View style={styles.emptyState}><ActivityIndicator color="#2e7a43" /><Text style={styles.rowMeta}>Loading published lessons…</Text></View>}
+    {lessons.map((lesson, index) => {
+      const done = completed.includes(lesson.id);
+      const unlocked = index === 0 || completed.includes(lessons[index - 1].id);
+      return <Pressable key={lesson.id} disabled={!unlocked} onPress={() => openLesson(lesson)} style={[styles.lessonCard, !unlocked && styles.lockedCard]}><View style={[styles.number, done && styles.numberDone]}>{done ? <Ionicons name="checkmark" size={19} color="#fff" /> : <Text style={styles.numberText}>{index + 1}</Text>}</View><View style={styles.flexOne}><Text style={styles.smallLabel}>{lesson.topic.toUpperCase()} · {lesson.duration_minutes} MIN</Text><Text style={styles.rowTitle}>{lesson.title}</Text><Text style={styles.rowMeta}>{done ? "Completed · tap to review" : unlocked ? `${lesson.xp_reward} XP · includes quiz` : "Complete the previous lesson to unlock"}</Text></View><Ionicons name={unlocked ? "chevron-forward" : "lock-closed"} size={19} color={unlocked ? "#3f864c" : "#9aa49c"} /></Pressable>;
+    })}
   </>;
 }
 
-function LeaderboardScreen({ progress }: { progress: Progress | null }) {
-  const yourXp = progress?.xp ?? 0;
-  const players = [
-    { name: "Maya Chen", initials: "MC", xp: Math.max(yourXp + 1640, 1640), tone: "#f4d2a4" },
-    { name: "Jordan Kim", initials: "JK", xp: Math.max(yourXp + 1215, 1215), tone: "#cde3f5" },
-    { name: "You", initials: "YO", xp: yourXp, tone: "#d9edcf" },
-    { name: "Noah Williams", initials: "NW", xp: Math.max(yourXp - 135, 0), tone: "#ded2f2" },
-  ].sort((left, right) => right.xp - left.xp);
+function QuestsScreen({ progress, claims, achievements, earnedAchievementIds, onRefresh }: { progress: Progress | null; claims: string[]; achievements: Achievement[]; earnedAchievementIds: string[]; onRefresh: () => Promise<void> }) {
+  const [claiming, setClaiming] = useState<string | null>(null);
+  const metric = (name: "scans" | "lessons" | "streak") => name === "scans" ? progress?.total_scans ?? 0 : name === "lessons" ? progress?.total_lessons_completed ?? 0 : progress?.streak_days ?? 0;
+  const claim = async (key: string) => {
+    setClaiming(key);
+    const { error } = await supabase.rpc("claim_ecolearn_reward", { p_reward_key: key });
+    if (error) Alert.alert("Reward unavailable", error.message);
+    else { await onRefresh(); Alert.alert("Quest complete", "Your 15 XP reward was added to your progress."); }
+    setClaiming(null);
+  };
   return <>
-    <Text style={styles.kicker}>COMMUNITY IMPACT</Text>
-    <Text style={styles.pageTitle}>Better together.</Text>
-    <Text style={styles.body}>A friendly view of this week's EcoLearn champions. Your scan history stays private.</Text>
-    <View style={questStyles.card}>
-      <Text style={styles.smallLabel}>DELAWARE</Text>
-      <Text style={styles.rowTitle}>This week's eco champions</Text>
-      {players.map((player, index) => <View key={player.name} style={[questStyles.rankRow, player.name === "You" && questStyles.youRow]}>
-        <Text style={questStyles.rank}>{index + 1}</Text>
-        <View style={[questStyles.avatar, { backgroundColor: player.tone }]}><Text style={questStyles.avatarText}>{player.initials}</Text></View>
-        <Text style={styles.rowTitle}>{player.name}</Text>
-        <Text style={questStyles.rankXp}>{player.xp.toLocaleString()} XP</Text>
-      </View>)}
-    </View>
+    <Text style={styles.kicker}>REAL ACTIONS · REAL PROGRESS</Text>
+    <Text style={styles.pageTitle}>Quests worth completing.</Text>
+    <Text style={styles.body}>Only your verified checks, finished lessons, and actual activity streak count. EcoLearn never invents competitors or progress.</Text>
+    {challengeDefinitions.map((quest) => {
+      const current = Math.min(metric(quest.metric), quest.target);
+      const complete = current >= quest.target;
+      const claimed = claims.includes(quest.key);
+      return <View key={quest.key} style={[questStyles.card, complete && styles.questComplete]}>
+        <View style={styles.cardTopRow}><View style={[styles.questIcon, complete && styles.questIconDone]}><Ionicons name={complete ? "checkmark" : quest.metric === "scans" ? "scan" : quest.metric === "lessons" ? "book" : "flame"} size={21} color={complete ? "#fff" : "#2f7a43"} /></View><View style={styles.flexOne}><Text style={styles.rowTitle}>{quest.title}</Text><Text style={styles.rowMeta}>{quest.description}</Text></View>{quest.xp > 0 && <Text style={questStyles.reward}>+{quest.xp} XP</Text>}</View>
+        <View style={questStyles.track}><View style={[questStyles.fill, { width: `${Math.round((current / quest.target) * 100)}%` }]} /></View>
+        <View style={styles.questFooter}><Text style={styles.rowMeta}>{current} of {quest.target} complete</Text>{quest.claimable && complete && !claimed && <Pressable disabled={claiming !== null} style={styles.claimButton} onPress={() => void claim(quest.key)}>{claiming === quest.key ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.claimText}>Claim reward</Text>}</Pressable>}{claimed && <Text style={styles.claimedText}>Claimed</Text>}{!quest.claimable && complete && <Text style={styles.claimedText}>Complete</Text>}</View>
+      </View>;
+    })}
+    <Text style={styles.sectionTitle}>Achievement collection</Text>
+    <Text style={styles.sectionDescription}>Badges are awarded automatically from your private progress.</Text>
+    <View style={styles.badgeGrid}>{achievements.map((achievement) => {
+      const earned = earnedAchievementIds.includes(achievement.id);
+      const current = Math.min(achievementMetric(achievement, progress), achievement.requirement_value);
+      return <View key={achievement.id} style={[styles.achievementCard, !earned && styles.achievementLocked]}><View style={[styles.achievementIcon, earned && styles.achievementIconEarned]}><Ionicons name={achievement.icon === "book" ? "book" : achievement.icon === "flame" ? "flame" : achievement.icon === "star" ? "star" : "leaf"} size={23} color={earned ? "#fff" : "#7b887e"} /></View><Text style={styles.achievementTitle}>{achievement.title}</Text><Text style={styles.achievementDescription}>{achievement.description}</Text><Text style={[styles.achievementStatus, earned && styles.achievementStatusEarned]}>{earned ? "Earned" : `${current}/${achievement.requirement_value}`}</Text></View>;
+    })}</View>
   </>;
 }
 
-function ToolsScreen() {
+function ToolsScreen({ onBack }: { onBack: () => void }) {
   const [barcode, setBarcode] = useState("");
-  const [barcodeResult, setBarcodeResult] = useState<any>(null);
-  const [labelResult, setLabelResult] = useState<any>(null);
+  const [barcodeResult, setBarcodeResult] = useState<BarcodeResult | null>(null);
+  const [labelResult, setLabelResult] = useState<LabelResult | null>(null);
   const [busyTool, setBusyTool] = useState<"barcode" | "label" | "locations" | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [siteType, setSiteType] = useState("recycling");
@@ -354,7 +616,12 @@ function ToolsScreen() {
     try {
       const { data, error } = await supabase.functions.invoke("lookup-barcode", { body: { barcode: code } });
       if (error) throw error;
-      setBarcodeResult(data);
+      const result = data as Partial<BarcodeResult> | null;
+      setBarcodeResult({
+        found: Boolean(result?.found),
+        name: typeof result?.name === "string" ? result.name : null,
+        guidance: typeof result?.guidance === "string" ? result.guidance : null,
+      });
     } catch {
       Alert.alert("Barcode lookup is unavailable", "Try again shortly or use item scanning.");
     } finally {
@@ -384,7 +651,15 @@ function ToolsScreen() {
                 body: { image: `data:${asset.mimeType ?? "image/jpeg"};base64,${base64}` },
               });
               if (error) throw error;
-              setLabelResult(data);
+              const result = data as Partial<LabelResult> | null;
+              setLabelResult({
+                guidance: typeof result?.guidance === "string" ? result.guidance : "No label guidance was returned.",
+                materials: Array.isArray(result?.materials) ? result.materials.filter((item): item is string => typeof item === "string") : [],
+                text: typeof result?.text === "string" ? result.text : null,
+                recyclingSymbols: Array.isArray(result?.recyclingSymbols)
+                  ? result.recyclingSymbols.filter((item): item is string => typeof item === "string")
+                  : [],
+              });
             } catch {
               Alert.alert("Could not read that label", "Use a clearer, well-lit photo and try again.");
             } finally {
@@ -431,8 +706,10 @@ function ToolsScreen() {
   };
 
   return <>
+    <Pressable onPress={onBack} style={styles.backButton}><Ionicons name="arrow-back" size={19} color="#286d3b" /><Text style={styles.backText}>Item scanner</Text></Pressable>
     <Text style={styles.kicker}>SMART TOOLS</Text>
-    <Text style={styles.pageTitle}>More ways to decide.</Text>
+    <Text style={styles.pageTitle}>Use the right tool.</Text>
+    <Text style={styles.body}>Look up a barcode, read a package label, or find verified disposal locations near you.</Text>
     <View style={styles.toolCard}>
       <Text style={styles.rowTitle}>Barcode lookup</Text>
       <Text style={styles.body}>Enter the digits below a product barcode.</Text>
@@ -498,26 +775,27 @@ function ToolsScreen() {
   </>;
 }
 
-function ProfileScreen({ user, progress }: { user: User; progress: Progress | null }) {
-  const initialName = String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? "");
+function ProfileScreen({ user, progress, achievements, earnedAchievementIds, onNameSaved }: { user: User; progress: Progress | null; achievements: Achievement[]; earnedAchievementIds: string[]; onNameSaved: (name: string) => void }) {
+  const initialName = useMemo(
+    () => String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? ""),
+    [user.user_metadata?.full_name, user.user_metadata?.name],
+  );
   const [name, setName] = useState(initialName);
-  const [notifications, setNotifications] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     void supabase
       .from("user_settings")
-      .select("display_name,notifications_enabled")
+      .select("display_name")
       .eq("user_id", user.id)
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
           setName(data.display_name ?? initialName);
-          setNotifications(data.notifications_enabled ?? true);
         }
       });
-  }, [user.id]);
+  }, [initialName, user.id]);
 
   const save = async () => {
     setSaving(true);
@@ -526,7 +804,6 @@ function ProfileScreen({ user, progress }: { user: User; progress: Progress | nu
       supabase.from("user_settings").upsert({
         user_id: user.id,
         display_name: clean || null,
-        notifications_enabled: notifications,
         updated_at: new Date().toISOString(),
       }),
       supabase.auth.updateUser({ data: { full_name: clean } }),
@@ -535,7 +812,8 @@ function ProfileScreen({ user, progress }: { user: User; progress: Progress | nu
     if (settingError || authError) {
       Alert.alert("Could not save profile", (settingError ?? authError)?.message);
     } else {
-      Alert.alert("Profile updated", "Your preferences are saved.");
+      onNameSaved(clean);
+      Alert.alert("Profile updated", "Your display name is saved across EcoLearn.");
     }
   };
 
@@ -579,32 +857,31 @@ function ProfileScreen({ user, progress }: { user: User; progress: Progress | nu
       ],
     );
   };
+  const profileInitials = (name || user.email || "E").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 
   return <>
-    <View style={styles.profileCircle}><Text style={styles.profileInitials}>{(name || user.email || "E").slice(0, 2).toUpperCase()}</Text></View>
-    <Text style={styles.pageTitle}>{name || "Eco explorer"}</Text>
-    <Text style={styles.body}>{user.email}</Text>
+    <View style={styles.profileHeader}><View style={styles.profileCircle}><Text style={styles.profileInitials}>{profileInitials}</Text></View><View style={styles.flexOne}><Text style={styles.profileName}>{name || "Eco learner"}</Text><Text style={styles.profileEmail}>{user.email}</Text><View style={styles.memberBadge}><Ionicons name="shield-checkmark" size={13} color="#2e7340" /><Text style={styles.memberBadgeText}>Private EcoLearn account</Text></View></View></View>
     <View style={styles.stats}>
       <Stat value={String(progress?.xp ?? 0)} label="XP" />
-      <Stat value={String(progress?.total_scans ?? 0)} label="Scans" />
+      <Stat value={String(progress?.total_scans ?? 0)} label="Checks" />
       <Stat value={String(progress?.total_lessons_completed ?? 0)} label="Lessons" />
     </View>
-    <Text style={styles.sectionTitle}>Profile settings</Text>
-    <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Display name" />
-    <View style={styles.setting}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowTitle}>Notifications</Text>
-        <Text style={styles.rowMeta}>Receive future EcoLearn updates on this device.</Text>
-      </View>
-      <Switch value={notifications} onValueChange={setNotifications} trackColor={{ true: "#74ad76" }} />
-    </View>
+    <Text style={styles.sectionTitle}>Your badges</Text>
+    <View style={styles.profileBadges}>{achievements.map((achievement) => { const earned = earnedAchievementIds.includes(achievement.id); return <View key={achievement.id} style={[styles.miniBadge, !earned && styles.miniBadgeLocked]}><Ionicons name={achievement.icon === "book" ? "book" : achievement.icon === "flame" ? "flame" : achievement.icon === "star" ? "star" : "leaf"} size={19} color={earned ? "#2f7a43" : "#a3aca5"} /><Text style={[styles.miniBadgeText, !earned && styles.miniBadgeTextLocked]} numberOfLines={1}>{achievement.title}</Text></View>; })}</View>
+    <Text style={styles.sectionTitle}>Profile</Text>
+    <Text style={styles.fieldLabel}>DISPLAY NAME</Text>
+    <TextInput style={styles.input} value={name} onChangeText={setName} maxLength={80} autoCorrect placeholder="How should EcoLearn address you?" />
     <Pressable style={styles.primaryButton} onPress={() => void save()} disabled={saving || deleting}>
-      {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Save settings</Text>}
+      {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Save profile</Text>}
     </Pressable>
-    <Text style={styles.sectionTitle}>Legal and account</Text>
-    <Pressable onPress={() => void openPublicPage("/privacy")}><Text style={styles.link}>Privacy Policy</Text></Pressable>
-    <Pressable onPress={() => void openPublicPage("/terms")}><Text style={styles.link}>Terms of Service</Text></Pressable>
-    <Pressable onPress={() => void openPublicPage("/delete-account")}><Text style={styles.link}>Account deletion help</Text></Pressable>
+    <Text style={styles.sectionTitle}>Help, privacy, and account</Text>
+    <View style={styles.settingsCard}>
+      <SettingLink icon="help-circle-outline" label="Support" onPress={() => void openPublicPage("/support")} />
+      <SettingLink icon="lock-closed-outline" label="Privacy Policy" onPress={() => void openPublicPage("/privacy")} />
+      <SettingLink icon="document-text-outline" label="Terms of Service" onPress={() => void openPublicPage("/terms")} />
+      <SettingLink icon="information-circle-outline" label="Account deletion information" onPress={() => void openPublicPage("/delete-account")} last />
+    </View>
+    <Text style={styles.versionText}>EcoLearn {appVersion} · build {nativeBuildVersion}</Text>
     <Pressable style={styles.dangerButton} onPress={confirmDeletion} disabled={saving || deleting}>
       {deleting ? <ActivityIndicator color="#a33c34" /> : <Text style={styles.dangerText}>Delete account</Text>}
     </Pressable>
@@ -615,6 +892,10 @@ function ProfileScreen({ user, progress }: { user: User; progress: Progress | nu
 }
 
 function Stat({ value, label }: { value: string; label: string }) { return <View style={styles.stat}><Text style={styles.statValue}>{value}</Text><Text style={styles.rowMeta}>{label}</Text></View>; }
+
+function SettingLink({ icon, label, onPress, last = false }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void; last?: boolean }) {
+  return <Pressable onPress={onPress} style={[styles.settingLink, !last && styles.settingLinkBorder]}><Ionicons name={icon} size={20} color="#347a46" /><Text style={styles.settingLinkText}>{label}</Text><Ionicons name="open-outline" size={17} color="#849087" /></Pressable>;
+}
 
 const questStyles = StyleSheet.create({
   card: {
@@ -644,22 +925,194 @@ const questStyles = StyleSheet.create({
     marginTop: 16,
   },
   fill: { height: "100%", backgroundColor: "#70ad70" },
-  rankRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#e7ede4",
-    marginTop: 10,
-    paddingTop: 10,
-  },
-  rank: { width: 26, color: "#397d48", fontWeight: "800", textAlign: "center" },
-  rankXp: { marginLeft: "auto", color: "#397d48", fontSize: 12, fontWeight: "800" },
-  youRow: { backgroundColor: "#f1f8ed", marginHorizontal: -6, paddingHorizontal: 6, borderRadius: 10 },
-  avatar: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
-  avatarText: { color: "#24412e", fontSize: 11, fontWeight: "800" },
 });
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#f7f8f4" }, center: { flex: 1, justifyContent: "center", padding: 28 }, page: { padding: 22, paddingBottom: 104 }, authPage: { flexGrow: 1, justifyContent: "center", padding: 26 }, appHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: 22, paddingTop: 10, paddingBottom: 14 }, logo: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: "#173d2a" }, logoText: { color: "#fff", fontSize: 21, fontWeight: "800" }, brand: { marginLeft: 9, color: "#173d2a", fontSize: 21, fontWeight: "800" }, brandLarge: { color: "#173d2a", fontSize: 31, fontWeight: "800", letterSpacing: -1.3 }, xp: { marginLeft: "auto", color: "#337943", fontSize: 13, fontWeight: "800" }, kicker: { color: "#4d9557", fontSize: 11, fontWeight: "800", letterSpacing: 1.3 }, hero: { marginTop: 9, color: "#173d2a", fontSize: 39, lineHeight: 42, fontWeight: "800", letterSpacing: -1.8 }, heroAccent: { color: "#529c5a" }, pageTitle: { marginTop: 8, color: "#173d2a", fontSize: 34, lineHeight: 39, fontWeight: "800", letterSpacing: -1.4 }, body: { marginTop: 10, color: "#66746a", fontSize: 14, lineHeight: 21 }, heroCard: { marginTop: 27, borderRadius: 24, backgroundColor: "#173d2a", padding: 21 }, cardEyebrow: { color: "#a8d697", fontSize: 10, fontWeight: "800", letterSpacing: 1.2 }, cardTitle: { marginTop: 8, color: "#fff", fontSize: 21, fontWeight: "800" }, cardText: { marginTop: 7, color: "#d4e4d1", fontSize: 14, lineHeight: 20 }, lightButton: { alignSelf: "flex-start", marginTop: 18, borderRadius: 12, backgroundColor: "#e5f3dd", paddingHorizontal: 15, paddingVertical: 11 }, lightText: { color: "#214c2e", fontWeight: "800" }, sectionTitle: { marginTop: 28, marginBottom: 12, color: "#173d2a", fontSize: 20, fontWeight: "800" }, rowCard: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 18, backgroundColor: "#fff", padding: 15 }, iconSquare: { width: 43, height: 43, alignItems: "center", justifyContent: "center", borderRadius: 13, backgroundColor: "#e4f3dc" }, smallLabel: { color: "#748177", fontSize: 10, fontWeight: "800", letterSpacing: 0.7 }, rowTitle: { marginTop: 3, color: "#173d2a", fontSize: 16, fontWeight: "800" }, rowMeta: { marginTop: 4, color: "#738075", fontSize: 12, lineHeight: 18 }, chevron: { color: "#3f864c", fontSize: 28 }, nav: { position: "absolute", left: 12, right: 12, bottom: 13, flexDirection: "row", justifyContent: "space-around", borderRadius: 18, backgroundColor: "#173d2a", padding: 7 }, navItem: { borderRadius: 11, paddingHorizontal: 8, paddingVertical: 8 }, navActive: { backgroundColor: "#315845" }, navText: { color: "#b9d2bc", fontSize: 10, fontWeight: "800" }, navTextActive: { color: "#fff" }, input: { marginTop: 12, borderWidth: 1, borderColor: "#d9e3d6", borderRadius: 13, backgroundColor: "#fff", paddingHorizontal: 14, paddingVertical: 13, color: "#173d2a" }, primaryButton: { alignItems: "center", justifyContent: "center", marginTop: 12, borderRadius: 13, backgroundColor: "#173d2a", paddingVertical: 14, paddingHorizontal: 14 }, primaryText: { color: "#fff", fontSize: 14, fontWeight: "800" }, secondaryButton: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#bfd7b9", borderRadius: 13, backgroundColor: "#fff", paddingVertical: 14, paddingHorizontal: 14 }, secondaryText: { color: "#286d3b", fontSize: 14, fontWeight: "800" }, googleButton: { alignItems: "center", marginTop: 27, borderWidth: 1, borderColor: "#d7dfd4", borderRadius: 13, backgroundColor: "#fff", paddingVertical: 14 }, googleText: { color: "#173d2a", fontWeight: "800" }, or: { marginVertical: 20, color: "#8c988e", textAlign: "center", fontSize: 11, fontWeight: "800", letterSpacing: 1 }, link: { marginTop: 18, color: "#287640", textAlign: "center", fontSize: 14, fontWeight: "800" }, legal: { marginTop: 22, color: "#89948b", textAlign: "center", fontSize: 11, lineHeight: 17 }, legalLink: { color: "#287640", fontWeight: "800", textDecorationLine: "underline" }, photoBox: { alignItems: "center", justifyContent: "center", height: 272, marginTop: 24, overflow: "hidden", borderWidth: 1, borderColor: "#bfd7b9", borderRadius: 24, backgroundColor: "#eef8eb" }, photoIcon: { color: "#397e48", fontSize: 52 }, fullImage: { width: "100%", height: "100%" }, row: { flexDirection: "row", gap: 10, marginTop: 13 }, half: { flex: 1 }, scanButton: { alignItems: "center", justifyContent: "center", marginTop: 12, borderRadius: 13, backgroundColor: "#3d8c4c", paddingVertical: 15 }, disabled: { opacity: 0.42 }, resultImage: { width: "100%", aspectRatio: 1, borderRadius: 23, marginBottom: 23 }, badge: { alignSelf: "flex-start", marginTop: 14, borderRadius: 99, paddingHorizontal: 11, paddingVertical: 8 }, goodBadge: { backgroundColor: "#e0f3da" }, warnBadge: { backgroundColor: "#fff0e9" }, badgeText: { fontSize: 12, fontWeight: "800" }, goodText: { color: "#256c38" }, warnText: { color: "#a25143" }, guidanceCard: { marginTop: 18, borderWidth: 1, borderColor: "#dce8d8", borderRadius: 19, backgroundColor: "#fff", padding: 17 }, guidance: { marginTop: 9, color: "#274033", fontSize: 15, lineHeight: 23, fontWeight: "700" }, tip: { marginTop: 9, color: "#617166", fontSize: 13, lineHeight: 19 }, explainButton: { alignItems: "center", justifyContent: "center", marginTop: 12, borderWidth: 1, borderColor: "#6aa574", borderRadius: 13, backgroundColor: "#f5fbf2", paddingVertical: 14 }, explainText: { color: "#286d3b", fontSize: 14, fontWeight: "800" }, helper: { marginTop: 10, color: "#77847a", fontSize: 11, lineHeight: 17 }, explanation: { marginTop: 13, borderWidth: 1, borderColor: "#dce8d8", borderRadius: 17, backgroundColor: "#f7fbf4", padding: 15 }, warnButton: { alignItems: "center", justifyContent: "center", borderRadius: 13, backgroundColor: "#fff0ed", paddingVertical: 14, paddingHorizontal: 14 }, chips: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 12 }, chip: { borderWidth: 1, borderColor: "#d5ded2", borderRadius: 99, backgroundColor: "#fff", paddingHorizontal: 10, paddingVertical: 7 }, chipActive: { borderColor: "#347e45", backgroundColor: "#e6f4e1" }, chipText: { color: "#647368", fontSize: 12, fontWeight: "700" }, chipTextActive: { color: "#286536" }, lessonCard: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 13, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 18, backgroundColor: "#fff", padding: 15 }, number: { width: 37, height: 37, alignItems: "center", justifyContent: "center", borderRadius: 19, backgroundColor: "#e5f3dd" }, numberText: { color: "#357d44", fontWeight: "800" }, question: { marginTop: 24, color: "#173d2a", fontSize: 19, lineHeight: 27, fontWeight: "800" }, answer: { marginTop: 10, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 14, backgroundColor: "#fff", padding: 14 }, answerActive: { borderColor: "#4c9856", backgroundColor: "#e9f5e4" }, answerText: { color: "#365342", fontSize: 14, lineHeight: 20, fontWeight: "700" }, toolCard: { marginTop: 18, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 19, backgroundColor: "#fff", padding: 16 }, siteCard: { marginTop: 10, borderTopWidth: 1, borderTopColor: "#e7ede4", paddingTop: 10 }, profileCircle: { width: 78, height: 78, alignItems: "center", justifyContent: "center", borderRadius: 39, backgroundColor: "#cde9be" }, profileInitials: { color: "#285c35", fontSize: 24, fontWeight: "800" }, stats: { flexDirection: "row", gap: 9, marginTop: 23 }, stat: { flex: 1, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 14, backgroundColor: "#fff", padding: 12 }, statValue: { color: "#1e512f", fontSize: 21, fontWeight: "800" }, setting: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14, borderRadius: 14, backgroundColor: "#fff", padding: 14 }, dangerButton: { alignItems: "center", marginTop: 16, borderWidth: 1, borderColor: "#e8b9b4", borderRadius: 13, backgroundColor: "#fff5f3", paddingVertical: 14, paddingHorizontal: 14 }, dangerText: { color: "#a33c34", fontSize: 14, fontWeight: "800" }, signOut: { alignItems: "center", marginTop: 18, padding: 12 }, signOutText: { color: "#b44b3c", fontSize: 14, fontWeight: "800" },
+  safe: { flex: 1, backgroundColor: "#f7f8f4" },
+  scroll: { flex: 1 },
+  center: { flex: 1, justifyContent: "center", padding: 28 },
+  page: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 28 },
+  authPage: { flexGrow: 1, justifyContent: "center", padding: 26 },
+  appHeader: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#e8ece5", backgroundColor: "#fff", paddingHorizontal: 18, paddingTop: 8, paddingBottom: 12 },
+  logoImage: { width: 42, height: 42, borderRadius: 12 },
+  brand: { color: "#173d2a", fontSize: 19, fontWeight: "800", letterSpacing: -0.4 },
+  headerSubtitle: { marginTop: 1, color: "#7a867d", fontSize: 9, fontWeight: "700", letterSpacing: 0.3 },
+  brandLarge: { color: "#173d2a", fontSize: 31, fontWeight: "800", letterSpacing: -1.3 },
+  kicker: { color: "#438b50", fontSize: 10, fontWeight: "800", letterSpacing: 1.25 },
+  hero: { marginTop: 8, color: "#173d2a", fontSize: 35, lineHeight: 39, fontWeight: "800", letterSpacing: -1.6 },
+  heroAccent: { color: "#529c5a" },
+  pageTitle: { marginTop: 7, color: "#173d2a", fontSize: 31, lineHeight: 36, fontWeight: "800", letterSpacing: -1.25 },
+  body: { marginTop: 9, color: "#66746a", fontSize: 14, lineHeight: 21 },
+  flexOne: { flex: 1 },
+  notice: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 16, borderRadius: 13, backgroundColor: "#fff5df", padding: 12 },
+  noticeText: { flex: 1, color: "#79561e", fontSize: 12, lineHeight: 17 },
+  heroCard: { marginTop: 22, borderRadius: 23, backgroundColor: "#173d2a", padding: 20 },
+  cardTopRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  cardEyebrow: { color: "#a8d697", fontSize: 10, fontWeight: "800", letterSpacing: 1.15 },
+  cardTitle: { marginTop: 6, color: "#fff", fontSize: 21, fontWeight: "800" },
+  cardText: { marginTop: 7, color: "#d4e4d1", fontSize: 12, lineHeight: 18 },
+  levelBadge: { marginLeft: "auto", width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 14, backgroundColor: "#dff0d7" },
+  darkTrack: { height: 8, marginTop: 18, overflow: "hidden", borderRadius: 99, backgroundColor: "#315b45" },
+  darkFill: { height: "100%", borderRadius: 99, backgroundColor: "#8fc886" },
+  heroActions: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 16 },
+  lightButton: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: 12, backgroundColor: "#e5f3dd", paddingHorizontal: 14, paddingVertical: 11 },
+  lightText: { color: "#214c2e", fontSize: 13, fontWeight: "800" },
+  darkGhostButton: { paddingHorizontal: 8, paddingVertical: 11 },
+  darkGhostText: { color: "#d9ead5", fontSize: 12, fontWeight: "800" },
+  metricsRow: { flexDirection: "row", gap: 9, marginTop: 11 },
+  metric: { flex: 1, alignItems: "center", borderWidth: 1, borderColor: "#e0e7dc", borderRadius: 15, backgroundColor: "#fff", paddingHorizontal: 6, paddingVertical: 12 },
+  metricValue: { marginTop: 5, color: "#173d2a", fontSize: 18, fontWeight: "800" },
+  metricLabel: { marginTop: 2, color: "#758178", fontSize: 9, fontWeight: "700", textAlign: "center" },
+  sectionTitle: { marginTop: 25, marginBottom: 10, color: "#173d2a", fontSize: 19, fontWeight: "800", letterSpacing: -0.3 },
+  sectionDescription: { marginTop: -5, marginBottom: 10, color: "#738075", fontSize: 12, lineHeight: 18 },
+  featureCard: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 18, backgroundColor: "#fff", padding: 15 },
+  featureIcon: { width: 45, height: 45, alignItems: "center", justifyContent: "center", borderRadius: 14, backgroundColor: "#e5f3dd" },
+  successCard: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 18, backgroundColor: "#e8f5e2", padding: 16 },
+  quickGrid: { flexDirection: "row", gap: 10, marginTop: 10 },
+  quickCard: { flex: 1, minHeight: 118, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 17, backgroundColor: "#fff", padding: 14 },
+  quickTitle: { marginTop: 11, color: "#173d2a", fontSize: 14, fontWeight: "800" },
+  progressCard: { borderWidth: 1, borderColor: "#dfe7db", borderRadius: 17, backgroundColor: "#fff", padding: 15 },
+  progressValue: { color: "#327844", fontSize: 13, fontWeight: "800" },
+  listCard: { overflow: "hidden", borderWidth: 1, borderColor: "#dfe7db", borderRadius: 18, backgroundColor: "#fff" },
+  activityRow: { flexDirection: "row", alignItems: "center", gap: 11, padding: 14 },
+  activityBorder: { borderTopWidth: 1, borderTopColor: "#edf0eb" },
+  activityIcon: { width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 11 },
+  activityGood: { backgroundColor: "#e5f3df" },
+  activitySpecial: { backgroundColor: "#fff0d8" },
+  activityTitle: { color: "#24412e", fontSize: 13, fontWeight: "800" },
+  activityDate: { color: "#8a958c", fontSize: 10, fontWeight: "700" },
+  emptyState: { alignItems: "center", justifyContent: "center", gap: 6, padding: 25 },
+  emptyTitle: { marginTop: 3, color: "#24412e", fontSize: 15, fontWeight: "800" },
+  smallLabel: { color: "#748177", fontSize: 9, fontWeight: "800", letterSpacing: 0.7 },
+  rowTitle: { marginTop: 3, color: "#173d2a", fontSize: 15, fontWeight: "800" },
+  rowMeta: { marginTop: 3, color: "#738075", fontSize: 11, lineHeight: 16 },
+  input: { marginTop: 10, borderWidth: 1, borderColor: "#d9e3d6", borderRadius: 13, backgroundColor: "#fff", paddingHorizontal: 14, paddingVertical: 13, color: "#173d2a", fontSize: 14 },
+  primaryButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12, borderRadius: 13, backgroundColor: "#173d2a", paddingVertical: 14, paddingHorizontal: 14 },
+  primaryText: { color: "#fff", fontSize: 13, fontWeight: "800" },
+  secondaryButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderWidth: 1, borderColor: "#bfd7b9", borderRadius: 13, backgroundColor: "#fff", paddingVertical: 13, paddingHorizontal: 13 },
+  secondaryText: { color: "#286d3b", fontSize: 13, fontWeight: "800" },
+  noTopMargin: { marginTop: 0 },
+  googleButton: { alignItems: "center", marginTop: 27, borderWidth: 1, borderColor: "#d7dfd4", borderRadius: 13, backgroundColor: "#fff", paddingVertical: 14 },
+  googleText: { color: "#173d2a", fontWeight: "800" },
+  or: { marginVertical: 20, color: "#8c988e", textAlign: "center", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
+  link: { marginTop: 16, color: "#287640", textAlign: "center", fontSize: 13, fontWeight: "800" },
+  legal: { marginTop: 22, color: "#89948b", textAlign: "center", fontSize: 11, lineHeight: 17 },
+  legalLink: { color: "#287640", fontWeight: "800", textDecorationLine: "underline" },
+  scanPanel: { alignItems: "center", marginTop: 20, borderWidth: 1, borderColor: "#cfe0ca", borderRadius: 22, backgroundColor: "#eff8eb", padding: 18 },
+  scanIllustration: { width: 68, height: 68, alignItems: "center", justifyContent: "center", borderRadius: 22, backgroundColor: "#fff" },
+  scanPanelTitle: { marginTop: 13, color: "#173d2a", fontSize: 17, fontWeight: "800" },
+  scanPanelText: { marginTop: 5, color: "#718077", fontSize: 11, lineHeight: 17, textAlign: "center" },
+  dividerRow: { flexDirection: "row", alignItems: "center", gap: 9, marginVertical: 18 },
+  divider: { flex: 1, height: 1, backgroundColor: "#e1e6df" },
+  dividerText: { color: "#8b968e", fontSize: 9, fontWeight: "800", letterSpacing: 0.6 },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: "#d9e3d6", borderRadius: 14, backgroundColor: "#fff", paddingLeft: 13, paddingRight: 5, paddingVertical: 5 },
+  searchInput: { flex: 1, minHeight: 42, color: "#173d2a", fontSize: 14 },
+  searchButton: { minWidth: 68, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: "#173d2a", paddingHorizontal: 12 },
+  searchButtonText: { color: "#fff", fontSize: 12, fontWeight: "800" },
+  suggestionCard: { marginTop: 7, overflow: "hidden", borderWidth: 1, borderColor: "#dfe7db", borderRadius: 14, backgroundColor: "#fff" },
+  suggestionLoading: { flexDirection: "row", alignItems: "center", gap: 9, padding: 14 },
+  suggestionRow: { flexDirection: "row", alignItems: "center", padding: 13 },
+  toolIcon: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 13, backgroundColor: "#e8f4e2" },
+  photoBox: { alignItems: "center", justifyContent: "center", height: 270, marginTop: 20, overflow: "hidden", borderWidth: 1, borderColor: "#bfd7b9", borderRadius: 22, backgroundColor: "#eef8eb" },
+  photoIcon: { color: "#397e48", fontSize: 45 },
+  fullImage: { width: "100%", height: "100%" },
+  row: { flexDirection: "row", gap: 9, marginTop: 12 },
+  half: { flex: 1 },
+  scanButton: { alignItems: "center", justifyContent: "center", marginTop: 12, borderRadius: 13, backgroundColor: "#3d8c4c", paddingVertical: 15 },
+  disabled: { opacity: 0.42 },
+  resultImage: { width: "100%", aspectRatio: 1.25, borderRadius: 22, marginBottom: 20 },
+  badge: { alignSelf: "flex-start", marginTop: 13, borderRadius: 99, paddingHorizontal: 11, paddingVertical: 7 },
+  goodBadge: { backgroundColor: "#e0f3da" },
+  warnBadge: { backgroundColor: "#fff0e9" },
+  badgeText: { fontSize: 11, fontWeight: "800" },
+  goodText: { color: "#256c38" },
+  warnText: { color: "#a25143" },
+  guidanceCard: { marginTop: 17, borderWidth: 1, borderColor: "#dce8d8", borderRadius: 18, backgroundColor: "#fff", padding: 16 },
+  guidance: { marginTop: 9, color: "#274033", fontSize: 14, lineHeight: 22, fontWeight: "700" },
+  tip: { marginTop: 8, color: "#617166", fontSize: 12, lineHeight: 18 },
+  explainButton: { alignItems: "center", justifyContent: "center", marginTop: 12, borderWidth: 1, borderColor: "#6aa574", borderRadius: 13, backgroundColor: "#f5fbf2", paddingVertical: 14 },
+  explainText: { color: "#286d3b", fontSize: 13, fontWeight: "800" },
+  helper: { marginTop: 9, color: "#77847a", fontSize: 10, lineHeight: 16 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 12 },
+  chip: { borderWidth: 1, borderColor: "#d5ded2", borderRadius: 99, backgroundColor: "#fff", paddingHorizontal: 10, paddingVertical: 7 },
+  chipActive: { borderColor: "#347e45", backgroundColor: "#e6f4e1" },
+  chipText: { color: "#647368", fontSize: 11, fontWeight: "700" },
+  chipTextActive: { color: "#286536" },
+  backButton: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6, marginBottom: 15, paddingVertical: 4 },
+  backText: { color: "#286d3b", fontSize: 12, fontWeight: "800" },
+  lessonProgressRow: { flexDirection: "row", gap: 5, marginBottom: 18 },
+  lessonProgressSegment: { flex: 1, height: 5, borderRadius: 99, backgroundColor: "#dfe6dc" },
+  lessonProgressSegmentActive: { backgroundColor: "#57a062" },
+  lessonBodyCard: { marginTop: 19, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 20, backgroundColor: "#fff", padding: 19 },
+  lessonHeroIcon: { width: 55, height: 55, alignItems: "center", justifyContent: "center", borderRadius: 18, backgroundColor: "#e8f4e2" },
+  lessonSectionTitle: { marginTop: 17, color: "#173d2a", fontSize: 21, fontWeight: "800" },
+  lessonBody: { marginTop: 9, color: "#52665a", fontSize: 15, lineHeight: 24 },
+  quizHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 19, borderRadius: 15, backgroundColor: "#eaf5e5", padding: 13 },
+  question: { marginTop: 20, color: "#173d2a", fontSize: 18, lineHeight: 26, fontWeight: "800" },
+  answer: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 9, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 14, backgroundColor: "#fff", padding: 12 },
+  answerActive: { borderColor: "#4c9856", backgroundColor: "#edf7e9" },
+  answerCorrect: { borderColor: "#4c9856", backgroundColor: "#e4f4df" },
+  answerWrong: { borderColor: "#d78d86", backgroundColor: "#fff0ed" },
+  answerIndex: { width: 30, height: 30, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: "#edf1eb" },
+  answerIndexActive: { backgroundColor: "#438b50" },
+  answerIndexText: { color: "#657369", fontSize: 11, fontWeight: "800" },
+  answerIndexTextActive: { color: "#fff" },
+  answerText: { flex: 1, color: "#365342", fontSize: 13, lineHeight: 19, fontWeight: "700" },
+  feedbackCard: { marginTop: 13, borderRadius: 14, padding: 13 },
+  feedbackGood: { backgroundColor: "#e5f4df" },
+  feedbackBad: { backgroundColor: "#fff0ed" },
+  feedbackTitle: { color: "#24412e", fontSize: 13, fontWeight: "800" },
+  feedbackText: { marginTop: 4, color: "#5f6f64", fontSize: 11, lineHeight: 17 },
+  courseSummary: { flexDirection: "row", alignItems: "center", gap: 20, marginTop: 18, borderRadius: 18, backgroundColor: "#173d2a", padding: 17 },
+  courseValue: { color: "#fff", fontSize: 24, fontWeight: "800" },
+  courseProgressWrap: { flex: 1 },
+  coursePercent: { color: "#d7ead2", fontSize: 12, fontWeight: "800", textAlign: "right" },
+  lessonCard: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 11, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 17, backgroundColor: "#fff", padding: 14 },
+  lockedCard: { backgroundColor: "#f0f2ee", opacity: 0.72 },
+  number: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 13, backgroundColor: "#e5f3dd" },
+  numberDone: { backgroundColor: "#438b50" },
+  numberText: { color: "#357d44", fontWeight: "800" },
+  questComplete: { borderColor: "#acd0a8", backgroundColor: "#fbfef9" },
+  questIcon: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 13, backgroundColor: "#e8f4e2" },
+  questIconDone: { backgroundColor: "#438b50" },
+  questFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 9 },
+  claimButton: { minWidth: 98, minHeight: 34, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: "#173d2a", paddingHorizontal: 11 },
+  claimText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  claimedText: { color: "#2e7a43", fontSize: 11, fontWeight: "800" },
+  badgeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  achievementCard: { width: "48%", minHeight: 165, borderWidth: 1, borderColor: "#cfe2cb", borderRadius: 17, backgroundColor: "#fff", padding: 14 },
+  achievementLocked: { borderColor: "#e0e5de", backgroundColor: "#f1f3f0" },
+  achievementIcon: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 13, backgroundColor: "#e3e8e1" },
+  achievementIconEarned: { backgroundColor: "#438b50" },
+  achievementTitle: { marginTop: 12, color: "#173d2a", fontSize: 14, fontWeight: "800" },
+  achievementDescription: { marginTop: 4, color: "#758178", fontSize: 10, lineHeight: 15 },
+  achievementStatus: { marginTop: "auto", paddingTop: 8, color: "#8a958c", fontSize: 10, fontWeight: "800" },
+  achievementStatusEarned: { color: "#2e7a43" },
+  toolCard: { marginTop: 16, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 18, backgroundColor: "#fff", padding: 16 },
+  siteCard: { marginTop: 10, borderTopWidth: 1, borderTopColor: "#e7ede4", paddingTop: 10 },
+  profileHeader: { flexDirection: "row", alignItems: "center", gap: 15 },
+  profileCircle: { width: 70, height: 70, alignItems: "center", justifyContent: "center", borderRadius: 23, backgroundColor: "#cde9be" },
+  profileInitials: { color: "#285c35", fontSize: 22, fontWeight: "800" },
+  profileName: { color: "#173d2a", fontSize: 25, fontWeight: "800", letterSpacing: -0.8 },
+  profileEmail: { marginTop: 3, color: "#758178", fontSize: 11 },
+  memberBadge: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 4, marginTop: 7, borderRadius: 99, backgroundColor: "#e7f3e2", paddingHorizontal: 8, paddingVertical: 4 },
+  memberBadgeText: { color: "#2e7340", fontSize: 9, fontWeight: "800" },
+  stats: { flexDirection: "row", gap: 9, marginTop: 20 },
+  stat: { flex: 1, borderWidth: 1, borderColor: "#dfe7db", borderRadius: 14, backgroundColor: "#fff", padding: 12 },
+  statValue: { color: "#1e512f", fontSize: 20, fontWeight: "800" },
+  profileBadges: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  miniBadge: { width: "48%", flexDirection: "row", alignItems: "center", gap: 7, borderWidth: 1, borderColor: "#cfe2cb", borderRadius: 13, backgroundColor: "#fff", padding: 10 },
+  miniBadgeLocked: { borderColor: "#e1e5df", backgroundColor: "#f1f3f0" },
+  miniBadgeText: { flex: 1, color: "#2f6740", fontSize: 10, fontWeight: "800" },
+  miniBadgeTextLocked: { color: "#929d95" },
+  fieldLabel: { marginTop: 2, color: "#748177", fontSize: 9, fontWeight: "800", letterSpacing: 0.7 },
+  settingsCard: { overflow: "hidden", borderWidth: 1, borderColor: "#dfe7db", borderRadius: 17, backgroundColor: "#fff" },
+  settingLink: { flexDirection: "row", alignItems: "center", gap: 11, minHeight: 52, paddingHorizontal: 14 },
+  settingLinkBorder: { borderBottomWidth: 1, borderBottomColor: "#edf0eb" },
+  settingLinkText: { flex: 1, color: "#24412e", fontSize: 13, fontWeight: "700" },
+  versionText: { marginTop: 14, color: "#8b968e", fontSize: 10, textAlign: "center" },
+  dangerButton: { alignItems: "center", marginTop: 16, borderWidth: 1, borderColor: "#e8b9b4", borderRadius: 13, backgroundColor: "#fff5f3", paddingVertical: 14, paddingHorizontal: 14 },
+  dangerText: { color: "#a33c34", fontSize: 13, fontWeight: "800" },
+  signOut: { alignItems: "center", marginTop: 10, padding: 12 },
+  signOutText: { color: "#a34239", fontSize: 13, fontWeight: "800" },
 });
