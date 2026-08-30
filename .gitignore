@@ -11,6 +11,8 @@ lerna-debug.log*
 node_modules
 .pnpm-store/
 dist-ssr
+/dist/
+/apps/platform-web/dist/
 *.local
 .expo/
 apps/*/android/
