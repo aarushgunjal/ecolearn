@@ -1131,14 +1131,6 @@ export function AuthDialog({ close }: { close: () => void }) {
             placeholder="Email address"
             className="w-full rounded-xl border border-[#dce3d9] px-4 py-3 outline-none focus:border-[#4c9856]"
           />
-          <label className="flex items-center gap-2 px-1 text-sm text-[#65756a]">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(event) => setRemember(event.target.checked)}
-            />{" "}
-            Remember me on this device
-          </label>
           <input
             required
             minLength={6}
@@ -1148,6 +1140,17 @@ export function AuthDialog({ close }: { close: () => void }) {
             placeholder="Password"
             className="w-full rounded-xl border border-[#dce3d9] px-4 py-3 outline-none focus:border-[#4c9856]"
           />
+          {mode === "signin" ? (
+            <label className="flex min-h-8 cursor-pointer items-center gap-2 px-1 text-sm text-[#65756a]">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(event) => setRemember(event.target.checked)}
+                className="h-4 w-4 accent-[#287640]"
+              />
+              <span>Remember me on this device</span>
+            </label>
+          ) : null}
           <button className="w-full rounded-xl bg-[#173d2a] py-3.5 text-sm font-bold text-white">
             {mode === "signup" ? "Create free account" : "Sign in"}
           </button>

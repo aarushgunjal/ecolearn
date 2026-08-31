@@ -148,10 +148,28 @@ test.describe("EcoLearn guest journeys", () => {
     await app.goto();
     await app.openAuthDialog();
     await expect(page.getByRole("button", { name: "Close sign-in dialog" })).toBeVisible();
+    await expect(page.getByLabel("Remember me on this device")).toHaveCount(0);
     await page.getByRole("textbox", { name: "Email address" }).fill("not-an-email");
     await page.getByRole("textbox", { name: "Password" }).fill("short");
     await page.getByRole("button", { name: "Create free account" }).last().click();
     await expect(page.getByRole("heading", { name: "Start your eco journey" })).toBeVisible();
+  });
+
+  test("places remember-me beneath the password only when signing in", async ({ page }) => {
+    const app = new EcoLearnPage(page);
+    await app.goto();
+    await app.openAuthDialog();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+
+    const password = page.getByRole("textbox", { name: "Password" });
+    const remember = page.getByLabel("Remember me on this device");
+    await expect(remember).toBeVisible();
+    const passwordBeforeRemember = await password.evaluate(
+      (element, rememberElement) =>
+        Boolean(element.compareDocumentPosition(rememberElement as Node) & Node.DOCUMENT_POSITION_FOLLOWING),
+      await remember.elementHandle(),
+    );
+    expect(passwordBeforeRemember).toBe(true);
   });
 
   test("requires the correct lesson answer before completion", async ({ page }) => {
