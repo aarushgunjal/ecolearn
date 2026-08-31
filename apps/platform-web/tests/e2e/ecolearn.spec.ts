@@ -177,9 +177,9 @@ test.describe("EcoLearn guest journeys", () => {
     await expect(page).toHaveURL(/\/learn$/);
   });
 
-  test("renders every nearby result on an interactive map", async ({ page, context }) => {
+  test("renders every nearby result on an interactive map", async ({ page, context }, testInfo) => {
     await context.grantPermissions(["geolocation"], {
-      origin: "http://127.0.0.1:8080",
+      origin: new URL(String(testInfo.project.use.baseURL)).origin,
     });
     await context.setGeolocation({ latitude: 39.7391, longitude: -75.5398 });
     let requestedType = "";
@@ -322,4 +322,50 @@ test("privacy, terms, and support pages are directly reachable", async ({ page }
     "href",
     /mailto:aarushgunjal1@gmail\.com/,
   );
+});
+
+test.describe("EcoLearn App Review account", () => {
+  test.skip(
+    !process.env.ECOLEARN_REVIEW_EMAIL ||
+      !process.env.ECOLEARN_REVIEW_PASSWORD,
+    "Reviewer credentials are required for authenticated production checks.",
+  );
+
+  test("opens the complete private admin, community, and school experience", async ({ page }) => {
+    const app = new EcoLearnPage(page);
+    await app.goto();
+    await app.openAuthDialog();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.getByRole("textbox", { name: "Email address" }).fill(
+      process.env.ECOLEARN_REVIEW_EMAIL!,
+    );
+    await page.getByRole("textbox", { name: "Password" }).fill(
+      process.env.ECOLEARN_REVIEW_PASSWORD!,
+    );
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+
+    await app.openPrimarySection("Community");
+    await expect(
+      page.getByRole("heading", { name: "Local action has a home." }),
+    ).toBeVisible();
+    await expect(page.getByText("admin access", { exact: true })).toBeVisible();
+    await expect(page.getByText("EcoLearn App Review School", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Welcome, App Review", { exact: true })).toBeVisible();
+    await expect(page.getByText("Community cleanup demonstration", { exact: true })).toBeVisible();
+
+    await app.openMoreSection("Schools");
+    await expect(
+      page.getByRole("heading", { name: "Learn together. Compete together." }),
+    ).toBeVisible();
+    await expect(page.getByText("Review Classroom A", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Review Classroom B", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Class standings" })).toBeVisible();
+
+    await page.getByRole("button", { name: "More EcoLearn tools" }).first().click();
+    await page.getByRole("button", { name: "Admin portal", exact: true }).last().click();
+    await expect(page.getByRole("heading", { name: "Personal analytics" })).toBeVisible();
+
+    await app.openMoreSection("Profile");
+    await expect(page.getByRole("heading", { name: "Admin review" })).toBeVisible();
+  });
 });

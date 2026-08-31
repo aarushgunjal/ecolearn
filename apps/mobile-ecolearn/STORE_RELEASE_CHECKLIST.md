@@ -66,14 +66,15 @@ DNREC, eco, learning
 - [x] In-app account deletion has two confirmations.
 - [x] A public account-deletion route is implemented for the website.
 - [x] Apple bundle identifier, distribution certificate, provisioning profile, EAS project, and App Store Connect app are configured.
-- [x] App Store Connect received TestFlight build `1.0.0 (3)`.
-- [ ] Deploy and validate the secure community/classroom migration.
-- [ ] Upload a new TestFlight candidate containing the community and primary-map navigation.
+- [x] App Store Connect received TestFlight build `1.0.0 (4)` from commit `d78a56c`.
+- [x] Deploy and validate the secure community/classroom migration.
+- [x] Upload a new TestFlight candidate containing the community and primary-map navigation.
 - [x] Production EAS environment contains both required public Supabase variables.
 - [x] Privacy, Terms, deletion, and support URLs return successfully over HTTPS.
-- [ ] Deploy and test the `delete-account` Supabase Edge Function.
+- [x] Deploy the `delete-account` Supabase Edge Function.
 - [ ] Add `ecolearn-mobile://auth/callback` and `ecolearn-mobile://auth/reset-password` to Supabase Auth redirect URLs.
 - [ ] Test Apple, Google, email/password, reset, and deletion on a physical iPhone using the current release candidate.
+- [x] Validate the dedicated App Review admin account and its private school/classroom demo data on production web.
 - [ ] Capture store screenshots from final real-device builds.
 - [ ] Complete App Privacy, age rating, pricing/availability, reviewer contact, and review notes in App Store Connect.
 

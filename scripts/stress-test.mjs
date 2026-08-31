@@ -8,6 +8,7 @@ const requests = Number(args.get("--requests") ?? 200);
 const concurrency = Number(args.get("--concurrency") ?? 20);
 const method = (args.get("--method") ?? "GET").toUpperCase();
 const body = args.get("--body");
+const headersInput = args.get("--headers") ?? process.env.STRESS_HEADERS_JSON;
 const timeoutMs = Number(args.get("--timeout-ms") ?? 15000);
 const expectedStatuses = new Set(
   (args.get("--expect-status") ?? "200,201,202,204,301,302,304")
@@ -16,8 +17,21 @@ const expectedStatuses = new Set(
 );
 
 if (!url || !Number.isInteger(requests) || requests < 1 || !Number.isInteger(concurrency) || concurrency < 1) {
-  console.error("Usage: node scripts/stress-test.mjs --url <url> [--requests 200] [--concurrency 20] [--method GET] [--body JSON]");
+  console.error("Usage: node scripts/stress-test.mjs --url <url> [--requests 200] [--concurrency 20] [--method GET] [--body JSON] [--headers JSON]");
   process.exit(2);
+}
+
+let requestHeaders = {};
+if (headersInput) {
+  try {
+    requestHeaders = JSON.parse(headersInput);
+  } catch {
+    console.error("--headers or STRESS_HEADERS_JSON must contain a JSON object.");
+    process.exit(2);
+  }
+}
+if (body && !Object.keys(requestHeaders).some((key) => key.toLowerCase() === "content-type")) {
+  requestHeaders["Content-Type"] = "application/json";
 }
 
 const latencies = [];
@@ -35,7 +49,7 @@ const worker = async () => {
     try {
       const response = await fetch(url, {
         method,
-        headers: body ? { "Content-Type": "application/json" } : undefined,
+        headers: Object.keys(requestHeaders).length ? requestHeaders : undefined,
         body: body || undefined,
         signal: AbortSignal.timeout(timeoutMs),
       });

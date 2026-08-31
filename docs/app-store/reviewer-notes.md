@@ -18,9 +18,16 @@ Account deletion is available at Profile > Delete account and uses two destructi
 confirmations. Public deletion instructions are at
 <https://ecolearn.dev/delete-account>.
 
+The dedicated review account has administrator access and private demonstration
+data. Open Community to see its school, announcement, and event. Open More >
+Schools to see two classrooms, the assignment, teacher controls, and aggregate
+class standings. Open More > Admin portal for operational analytics and More >
+Profile for the private feedback-review area. Classroom membership and join codes
+are intentionally unavailable to signed-out users.
+
 EcoLearn is not an official DNREC, DSWA, State of Delaware, or local-government
 application. Source links are shown with verified guidance so users can confirm
 current requirements.
 
-Provide a dedicated reviewer account in App Store Connect immediately before
+Enter the dedicated reviewer account in App Store Connect immediately before
 submission; do not commit its credentials to this repository.
