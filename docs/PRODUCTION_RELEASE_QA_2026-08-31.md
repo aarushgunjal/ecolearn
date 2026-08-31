@@ -1,8 +1,10 @@
 # EcoLearn production release QA
 
-**Date:** August 31, 2026  
-**Production branch:** `main`  
-**Web:** <https://ecolearn.dev>  
+**Date:** August 31, 2026
+
+**Production branch:** `main`
+
+**Web:** <https://ecolearn.dev>
 **iOS candidate:** `1.0.0 (4)`, commit `d78a56c`
 
 ## Release conclusion
