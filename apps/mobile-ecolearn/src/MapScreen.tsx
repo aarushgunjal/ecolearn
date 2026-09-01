@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import * as Location from "expo-location";
@@ -35,17 +36,28 @@ const categories = [
 ] as const;
 const milesFromKm = (kilometers: number) => kilometers * 0.621371;
 
-export function MapScreen() {
+export function MapScreen({
+  initialItem,
+  searchRequestId,
+  onInitialSearchHandled,
+}: {
+  initialItem?: string;
+  searchRequestId?: number;
+  onInitialSearchHandled?: () => void;
+}) {
   const [siteType, setSiteType] = useState("recycling");
+  const [itemQuery, setItemQuery] = useState(initialItem ?? "");
   const [sites, setSites] = useState<Site[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [searchedFor, setSearchedFor] = useState<string | null>(null);
   const [location, setLocation] = useState<{
     latitude: number;
     longitude: number;
   } | null>(null);
   const mapRef = useRef<MapView | null>(null);
+  const handledSearchRequest = useRef<number | null>(null);
 
   useEffect(() => {
     if (!location || !mapRef.current) return;
@@ -55,7 +67,8 @@ export function MapScreen() {
     );
   }, [location, sites]);
 
-  const search = async () => {
+  const search = useCallback(async (itemOverride?: string) => {
+    const officialItem = (itemOverride ?? itemQuery).trim();
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted)
       return Alert.alert(
@@ -75,17 +88,25 @@ export function MapScreen() {
       setLocation(coordinates);
       const { data, error } = await supabase.functions.invoke(
         "find-disposal-sites",
-        { body: { ...coordinates, type: siteType } },
+        {
+          body: {
+            ...coordinates,
+            ...(officialItem ? { item: officialItem } : { type: siteType }),
+          },
+        },
       );
       if (error) throw error;
       const results = (data?.sites ?? []) as Site[];
       setSites(results);
       setSelected(null);
+      setSearchedFor(officialItem || categories.find(([value]) => value === siteType)?.[1] || "Recycling");
       setNotice(data?.notice ?? null);
       if (!results.length)
         Alert.alert(
           "No nearby matches",
-          "Try a different service or check the official DSWA facility directory.",
+          officialItem
+            ? `No mapped locations were returned for ${officialItem}. Review its official protocol or try a broader service category.`
+            : "Try a different service or check the official DSWA facility directory.",
         );
     } catch {
       Alert.alert(
@@ -95,7 +116,15 @@ export function MapScreen() {
     } finally {
       setBusy(false);
     }
-  };
+  }, [itemQuery, siteType]);
+
+  useEffect(() => {
+    if (!initialItem || searchRequestId == null || handledSearchRequest.current === searchRequestId) return;
+    handledSearchRequest.current = searchRequestId;
+    setItemQuery(initialItem);
+    onInitialSearchHandled?.();
+    void search(initialItem);
+  }, [initialItem, onInitialSearchHandled, search, searchRequestId]);
 
   const focus = (site: Site) => {
     setSelected(site.id);
@@ -125,14 +154,34 @@ export function MapScreen() {
           choose approximate location in your device settings. It is not saved.
         </Text>
       </View>
+      <Text style={s.fieldLabel}>ITEM OR MATERIAL</Text>
+      <View style={s.itemInputRow}>
+        <Ionicons name="search" size={18} color="#738078" />
+        <TextInput
+          value={itemQuery}
+          onChangeText={setItemQuery}
+          onSubmitEditing={() => void search()}
+          placeholder="Try “aluminum cans”"
+          returnKeyType="search"
+          autoCorrect
+          style={s.itemInput}
+          accessibilityLabel="Item or material for nearby location search"
+        />
+        {itemQuery ? (
+          <Pressable onPress={() => { setItemQuery(""); setSearchedFor(null); }} accessibilityLabel="Clear item search">
+            <Ionicons name="close-circle" size={20} color="#879289" />
+          </Pressable>
+        ) : null}
+      </View>
+      <Text style={s.orLabel}>{itemQuery ? "OR CHOOSE A BROADER SERVICE" : "CHOOSE A SERVICE"}</Text>
       <View style={s.chips}>
         {categories.map(([value, label]) => (
           <Pressable
             key={value}
-            onPress={() => setSiteType(value)}
-            style={[s.chip, siteType === value && s.chipActive]}
+            onPress={() => { setSiteType(value); setItemQuery(""); setSearchedFor(null); }}
+            style={[s.chip, !itemQuery && siteType === value && s.chipActive]}
           >
-            <Text style={[s.chipText, siteType === value && s.chipTextActive]}>
+            <Text style={[s.chipText, !itemQuery && siteType === value && s.chipTextActive]}>
               {label}
             </Text>
           </Pressable>
@@ -152,6 +201,7 @@ export function MapScreen() {
           </>
         )}
       </Pressable>
+      {searchedFor && !busy ? <Text style={s.queryStatus}>Nearby results for {searchedFor}</Text> : null}
       {location && (
         <MapView
           ref={mapRef}
@@ -245,6 +295,21 @@ const s = StyleSheet.create({
     marginTop: 20,
   },
   privacyText: { color: "#405c48", flex: 1, fontSize: 12, lineHeight: 18 },
+  fieldLabel: { color: "#6d796f", fontSize: 10, fontWeight: "900", letterSpacing: 1.4, marginTop: 20 },
+  itemInputRow: {
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    borderWidth: 1,
+    borderColor: "#d7e1d4",
+    borderRadius: 15,
+    backgroundColor: "#fff",
+    paddingHorizontal: 14,
+    marginTop: 8,
+  },
+  itemInput: { flex: 1, color: "#173d2a", fontSize: 14, fontWeight: "700" },
+  orLabel: { color: "#879188", fontSize: 9, fontWeight: "900", letterSpacing: 1.2, marginTop: 14 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 18 },
   chip: {
     borderWidth: 1,
@@ -269,6 +334,7 @@ const s = StyleSheet.create({
   },
   searchText: { color: "#fff", fontWeight: "900" },
   disabled: { opacity: 0.6 },
+  queryStatus: { color: "#366f43", fontSize: 12, fontWeight: "800", marginTop: 12 },
   map: { height: 310, borderRadius: 22, marginTop: 18, overflow: "hidden" },
   notice: { color: "#78694e", fontSize: 11, lineHeight: 17, marginTop: 10 },
   site: {

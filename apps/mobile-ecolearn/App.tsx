@@ -48,6 +48,7 @@ type ScanHistoryItem = { id: string; item_name: string; category: string | null;
 type DelawareSuggestion = { title: string; category: string };
 type BarcodeResult = { found: boolean; name?: string | null; guidance?: string | null };
 type LabelResult = { guidance: string; materials: string[]; text?: string | null; recyclingSymbols?: string[] };
+type MapSearchRequest = { item: string; requestId: number };
 
 const usingExpoGo = Constants.appOwnership === "expo";
 const publicSiteUrl = "https://ecolearn.dev";
@@ -252,6 +253,8 @@ function PasswordRecoveryScreen({ onComplete }: { onComplete: () => void }) {
 function EcoLearnApp({ user }: { user: User }) {
   const [tab, setTab] = useState<Tab>("Home");
   const [showScanTools, setShowScanTools] = useState(false);
+  const [mapSearchRequest, setMapSearchRequest] = useState<MapSearchRequest | null>(null);
+  const mapSearchRequestId = useRef(0);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [completed, setCompleted] = useState<string[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -289,13 +292,24 @@ function EcoLearnApp({ user }: { user: User }) {
   }, [user.id]);
   useEffect(() => { void refresh(); }, [refresh]);
   const refreshAll = async () => { setRefreshing(true); await refresh(); setRefreshing(false); };
-  const openTab = (next: Tab, tools = false) => { setShowScanTools(tools); setTab(next); };
+  const openTab = (next: Tab, tools = false) => {
+    setShowScanTools(tools);
+    if (next === "Map") setMapSearchRequest(null);
+    setTab(next);
+  };
+  const openMapForItem = (item: string) => {
+    mapSearchRequestId.current += 1;
+    setShowScanTools(false);
+    setMapSearchRequest({ item, requestId: mapSearchRequestId.current });
+    setTab("Map");
+  };
+  const consumeMapSearchRequest = useCallback(() => setMapSearchRequest(null), []);
   const screen = tab === "Home"
     ? <Home user={user} displayName={displayName} progress={progress} lessons={lessons} completed={completed} achievements={achievements} earnedAchievementIds={earnedAchievementIds} recentScans={recentScans} onScan={() => openTab("Scan")} onLearn={() => openTab("Learn")} onMap={() => openTab("Map")} onCommunity={() => openTab("Community")} onChallenges={() => openTab("Challenges")} />
     : tab === "Scan"
-      ? showScanTools ? <ToolsScreen onBack={() => setShowScanTools(false)} /> : <ScanScreen onRecorded={refresh} onTools={() => setShowScanTools(true)} />
+      ? showScanTools ? <ToolsScreen onBack={() => setShowScanTools(false)} /> : <ScanScreen onRecorded={refresh} onTools={() => setShowScanTools(true)} onNearby={openMapForItem} />
       : tab === "Map"
-        ? <MapScreen />
+        ? <MapScreen initialItem={mapSearchRequest?.item} searchRequestId={mapSearchRequest?.requestId} onInitialSearchHandled={consumeMapSearchRequest} />
       : tab === "Learn"
         ? <LearnScreen lessons={lessons} completed={completed} onCompleted={refresh} />
         : tab === "Community"
@@ -382,7 +396,7 @@ function achievementMetric(achievement: Achievement, progress: Progress | null) 
   return progress.level;
 }
 
-function ScanScreen({ onRecorded, onTools }: { onRecorded: () => Promise<void>; onTools: () => void }) {
+function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promise<void>; onTools: () => void; onNearby: (item: string) => void }) {
   const [photo, setPhoto] = useState<Photo | null>(null); const [result, setResult] = useState<ScanResult | null>(null); const [busy, setBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<DelawareSuggestion[]>([]);
@@ -499,7 +513,8 @@ function ScanScreen({ onRecorded, onTools }: { onRecorded: () => Promise<void>; 
     <View style={styles.guidanceCard}><Text style={styles.smallLabel}>OFFICIAL DELAWARE DNREC PROTOCOL</Text><Text style={styles.guidance}>{official.instructions}</Text><Pressable onPress={() => void Linking.openURL(official.sourceUrl)}><Text style={styles.link}>Open Delaware DNREC source</Text></Pressable></View>
     {relatedVideo && <Pressable style={styles.explainButton} onPress={() => void Linking.openURL(relatedVideo.url)}><Text style={styles.explainText}>{relatedVideo.title}</Text></Pressable>}
     <Text style={styles.helper}>The image was used for this visual check only and is not stored or used for training.</Text>
-    <Pressable style={styles.scanButton} onPress={resetScan}><Text style={styles.primaryText}>Scan another item</Text></Pressable>
+    <Pressable style={styles.primaryButton} onPress={() => onNearby(official.title)} accessibilityLabel={`Search nearby locations for ${official.title}`}><Ionicons name="location" size={18} color="#fff" /><Text style={styles.primaryText}>Search nearby locations</Text></Pressable>
+    <Pressable style={[styles.secondaryButton, styles.resultSecondaryButton]} onPress={resetScan}><Ionicons name="scan-outline" size={18} color="#286d3b" /><Text style={styles.secondaryText}>Scan another item</Text></Pressable>
   </>;
 }
 
@@ -1006,6 +1021,7 @@ const styles = StyleSheet.create({
   secondaryButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderWidth: 1, borderColor: "#bfd7b9", borderRadius: 13, backgroundColor: "#fff", paddingVertical: 13, paddingHorizontal: 13 },
   secondaryText: { color: "#286d3b", fontSize: 13, fontWeight: "800" },
   noTopMargin: { marginTop: 0 },
+  resultSecondaryButton: { marginTop: 10 },
   googleButton: { alignItems: "center", marginTop: 27, borderWidth: 1, borderColor: "#d7dfd4", borderRadius: 13, backgroundColor: "#fff", paddingVertical: 14 },
   googleText: { color: "#173d2a", fontWeight: "800" },
   or: { marginVertical: 20, color: "#8c988e", textAlign: "center", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
