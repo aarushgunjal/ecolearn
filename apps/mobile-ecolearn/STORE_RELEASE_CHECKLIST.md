@@ -66,7 +66,7 @@ DNREC, eco, learning
 - [x] In-app account deletion has two confirmations.
 - [x] A public account-deletion route is implemented for the website.
 - [x] Apple bundle identifier, distribution certificate, provisioning profile, EAS project, and App Store Connect app are configured.
-- [x] App Store Connect received TestFlight build `1.0.0 (4)` from commit `d78a56c`.
+- [x] App Store Connect received TestFlight build `1.0.0 (5)` from commit `566baa8`.
 - [x] Deploy and validate the secure community/classroom migration.
 - [x] Upload a new TestFlight candidate containing the community and primary-map navigation.
 - [x] Production EAS environment contains both required public Supabase variables.
@@ -76,7 +76,9 @@ DNREC, eco, learning
 - [ ] Test Apple, Google, email/password, reset, and deletion on a physical iPhone using the current release candidate.
 - [x] Validate the dedicated App Review admin account and its private school/classroom demo data on production web.
 - [ ] Capture store screenshots from final real-device builds.
-- [ ] Complete App Privacy, age rating, pricing/availability, reviewer contact, and review notes in App Store Connect.
+- [x] Publish App Privacy responses and the privacy/account-choice URLs in App Store Connect.
+- [x] Enter reviewer contact information, release notes, and manual-release preference.
+- [ ] Complete age rating, content-rights, pricing/availability, reviewer credentials, and screenshots in App Store Connect.
 
 The maintained App Store package now lives in `../../docs/app-store/`. Use those
 files for release status, listing copy, privacy answers, reviewer notes,
@@ -116,10 +118,10 @@ Play Data safety questions.
 
 ## Release gates requiring a decision
 
-- [ ] **Youth/privacy model:** the current Privacy Policy says EcoLearn is not
-  directed to children under 13, while the broader product includes school and
-  primary-education ideas. Resolve the intended audience, parent/teacher consent,
-  classroom ownership, and DSWA role before publication.
+- [ ] **Youth/privacy operations:** the current Privacy Policy permits under-13 use
+  only with parent/guardian or authorized-school supervision. Complete the direct
+  notice, authorization, retention, and school-deployment process before a broad
+  child-directed classroom rollout.
 - [ ] **Publisher ownership:** decide whether the developer accounts and app
   identifiers belong to the individual project owner or a DSWA/partner organization.
 - [ ] **Legal review:** confirm the Privacy Policy, Terms, retention promises,

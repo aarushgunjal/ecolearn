@@ -5,12 +5,13 @@
 **Production branch:** `main`
 
 **Web:** <https://ecolearn.dev>
-**iOS candidate:** `1.0.0 (4)`, commit `d78a56c`
+**iOS candidate:** `1.0.0 (5)`, commit `566baa8`
 
 ## Release conclusion
 
 The website is live and the current iOS candidate is available in App Store
-Connect/TestFlight. The production community/classroom schema and all current
+Connect/TestFlight. App Privacy responses are published and build 5 includes the
+matching native privacy manifest. The production community/classroom schema and all current
 local Edge Functions are deployed. Automated web, backend, build, and security
 checks pass, with the limitations listed below.
 
@@ -82,8 +83,9 @@ approval, distributed load generators, paid quotas, and monitoring.
 5. Repeat scanner, barcode, label, lessons, XP, community, and offline/weak-network
    journeys after force-closing and reopening the app.
 6. Capture final App Store screenshots from the accepted physical-device build.
-7. Complete App Privacy, age rating, pricing/availability, review contact, build
-   selection, reviewer credentials, reviewer notes, and release method.
+7. Complete age rating, content rights, pricing/availability, build selection,
+   reviewer credentials, and screenshots. App Privacy, review contact, reviewer
+   notes, and the manual-release preference are already complete.
 8. Resolve whether the public launch is general-audience education or an
    authorized child-directed/school deployment before marketing classroom use.
 9. Confirm that no legacy client uses the remote-only `classify-delaware-scan`

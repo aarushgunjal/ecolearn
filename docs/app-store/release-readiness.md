@@ -8,7 +8,7 @@ Updated: August 31, 2026
 - Bundle identifier: `com.ecolearn.mobile`
 - Expo project: `@aarugunj/ecolearn-mobile`
 - Public website: <https://ecolearn.dev>
-- TestFlight release candidate: `1.0.0 (4)` from commit `d78a56c`
+- TestFlight release candidate: `1.0.0 (5)` from commit `566baa8`
 - Production branch: `main`
 - iPhone-only first release; iPad support is intentionally disabled until tablet QA is complete.
 - A dedicated, email-confirmed App Review account exists in production, has the
@@ -30,6 +30,8 @@ Updated: August 31, 2026
 - Production hub load check: 250/250 successful requests at 20 concurrent clients
 - Production EAS environment: required Supabase public variables configured
 - Privacy, Terms, support, and account-deletion URLs: HTTP 200 over HTTPS
+- App Privacy responses: published in App Store Connect on August 31, 2026
+- Native iOS privacy manifest: included in build 5 and aligned with the published responses
 - Secure community/classroom migration: deployed and validated
 - All 14 current local Edge Functions: deployed; `delete-account` is active
 - Production scanner check: Pepsi can correctly resolves to the official
@@ -42,7 +44,7 @@ Updated: August 31, 2026
 - Test camera denial, gallery denial, location denial, weak network, and offline recovery.
 - Verify visual scan, manual catalog autocomplete, barcode, label reading, nearby map, all six lessons, quests, achievements, profile editing, legal links, and account deletion.
 - Capture current iPhone screenshots only after the candidate passes.
-- Complete App Privacy, age rating, pricing and availability, review contact, and reviewer notes.
+- Complete age rating, pricing and availability, content-rights, and reviewer-credential fields.
 - Resolve the under-13/classroom privacy model before describing EcoLearn as a child-directed classroom product.
 - Do not claim 5,000-10,000-user readiness from the current Netlify tier. A
   high-concurrency production test triggered hosting protection; use staging,

@@ -10,8 +10,8 @@ Learn. Scan. Act sustainably.
 
 ## Promotional text
 
-Turn everyday choices into practical sustainability skills with reviewed lessons,
-real progress, and Delaware-first disposal guidance.
+Learn, scan, and take action through classroom challenges, verified Delaware
+disposal guidance, and real sustainability progress.
 
 ## Description
 
@@ -36,7 +36,9 @@ Features:
 - Honest quests, achievements, streaks, and scan history
 - In-app profile management and account deletion
 
-Classroom features should be included in the public store listing only after the youth/privacy model and school authorization process are approved.
+EcoLearn supports families, communities, educators, and authorized classroom use.
+Learners under 13 should use EcoLearn only with authorization and supervision
+from a parent, guardian, school, or district.
 
 EcoLearn is an independent educational product and is not an official DNREC,
 DSWA, State of Delaware, or local-government application. Confirm hazardous,
