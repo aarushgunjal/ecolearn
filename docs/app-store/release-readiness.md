@@ -9,6 +9,10 @@ Updated: August 31, 2026
 - Expo project: `@aarugunj/ecolearn-mobile`
 - Public website: <https://ecolearn.dev>
 - TestFlight release candidate: `1.0.0 (5)` from commit `566baa8`
+- App Store version `1.0` is attached to build `5` and configured for manual release.
+- Subtitle: `Learn. Scan. Act sustainably.`
+- Primary category: Education; secondary category: Lifestyle.
+- TestFlight description, feedback contact, marketing URL, privacy URL, and beta review notes are saved.
 - Production branch: `main`
 - iPhone-only first release; iPad support is intentionally disabled until tablet QA is complete.
 - A dedicated, email-confirmed App Review account exists in production, has the
@@ -44,7 +48,7 @@ Updated: August 31, 2026
 - Test camera denial, gallery denial, location denial, weak network, and offline recovery.
 - Verify visual scan, manual catalog autocomplete, barcode, label reading, nearby map, all six lessons, quests, achievements, profile editing, legal links, and account deletion.
 - Capture current iPhone screenshots only after the candidate passes.
-- Complete age rating, pricing and availability, content-rights, and reviewer-credential fields.
+- Complete age rating, pricing and availability, and content-rights declarations.
 - Resolve the under-13/classroom privacy model before describing EcoLearn as a child-directed classroom product.
 - Do not claim 5,000-10,000-user readiness from the current Netlify tier. A
   high-concurrency production test triggered hosting protection; use staging,

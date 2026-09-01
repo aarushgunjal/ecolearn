@@ -75,7 +75,7 @@ approval, distributed load generators, paid quotas, and monitoring.
 
 ## Remaining manual release gates
 
-1. Install build 4 from TestFlight on a physical iPhone.
+1. Install build 5 from TestFlight on a physical iPhone.
 2. Test Apple, Google, and email sign-in; password reset; sign-out; and account
    deletion with disposable accounts.
 3. Test camera, gallery, and location grant/deny/re-enable behavior.
@@ -83,9 +83,10 @@ approval, distributed load generators, paid quotas, and monitoring.
 5. Repeat scanner, barcode, label, lessons, XP, community, and offline/weak-network
    journeys after force-closing and reopening the app.
 6. Capture final App Store screenshots from the accepted physical-device build.
-7. Complete age rating, content rights, pricing/availability, build selection,
-   reviewer credentials, and screenshots. App Privacy, review contact, reviewer
-   notes, and the manual-release preference are already complete.
+7. Complete age rating, content rights, pricing/availability, and screenshots.
+   Build 5 selection, App Privacy, listing categories, review contact, reviewer
+   credentials, reviewer notes, TestFlight information, and the manual-release
+   preference are already complete.
 8. Resolve whether the public launch is general-audience education or an
    authorized child-directed/school deployment before marketing classroom use.
 9. Confirm that no legacy client uses the remote-only `classify-delaware-scan`
