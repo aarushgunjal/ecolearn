@@ -1,22 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 export function useAchievements() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [achievements, setAchievements] = useState<any[]>([]);
-  const [userAchievements, setUserAchievements] = useState<any[]>([]);
+  type Achievement = Database['public']['Tables']['achievements']['Row'];
+  type UserAchievement = Database['public']['Tables']['user_achievements']['Row'];
+  type UserProgress = Database['public']['Tables']['user_progress']['Row'];
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [userAchievements, setUserAchievements] = useState<UserAchievement[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      fetchAchievements();
-    }
-  }, [user]);
-
-  const fetchAchievements = async () => {
+  const fetchAchievements = useCallback(async () => {
     if (!user) return;
 
     const { data: allAchievements } = await supabase
@@ -25,15 +23,19 @@ export function useAchievements() {
 
     const { data: earned } = await supabase
       .from('user_achievements')
-      .select('*, achievements(*)')
+      .select('*')
       .eq('user_id', user.id);
 
     setAchievements(allAchievements || []);
     setUserAchievements(earned || []);
     setLoading(false);
-  };
+  }, [user]);
 
-  const checkAndAwardAchievements = async (progress: any) => {
+  useEffect(() => {
+    if (user) void fetchAchievements();
+  }, [fetchAchievements, user]);
+
+  const checkAndAwardAchievements = async (progress: UserProgress) => {
     if (!user || !progress) return;
 
     const earnedIds = userAchievements.map(ua => ua.achievement_id);
@@ -45,16 +47,16 @@ export function useAchievements() {
       
       switch (achievement.requirement_type) {
         case 'scans':
-          shouldAward = progress.total_scans >= achievement.requirement_value;
+          shouldAward = (progress.total_scans ?? 0) >= achievement.requirement_value;
           break;
         case 'lessons':
-          shouldAward = progress.total_lessons_completed >= achievement.requirement_value;
+          shouldAward = (progress.total_lessons_completed ?? 0) >= achievement.requirement_value;
           break;
         case 'streak':
-          shouldAward = progress.streak_days >= achievement.requirement_value;
+          shouldAward = (progress.streak_days ?? 0) >= achievement.requirement_value;
           break;
         case 'level':
-          shouldAward = progress.level >= achievement.requirement_value;
+          shouldAward = (progress.level ?? 1) >= achievement.requirement_value;
           break;
       }
 

@@ -50,6 +50,8 @@ const locationTypes = [
   ["textile", "Textiles"],
 ] as const;
 
+const milesFromKm = (kilometers: number) => kilometers * 0.621371;
+
 const readAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -195,7 +197,9 @@ export function ScanUtilities({
           setPlacesSourceUrl(data?.sourceUrl ?? null);
           setPlacesMatchedTag(data?.matchedTag ?? null);
           setPlacesNotice(data?.notice ?? null);
-          setSelectedSiteId(data?.sites?.[0]?.id ?? null);
+          // Keep the first view centered on the person who asked for nearby
+          // results. Selecting a result then focuses that facility.
+          setSelectedSiteId(null);
           if (!(data?.sites || []).length)
             toast({
               title: "No nearby matches yet",
@@ -223,7 +227,7 @@ export function ScanUtilities({
           variant: "destructive",
         });
       },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
     );
   };
 
@@ -368,7 +372,7 @@ export function ScanUtilities({
               <h2 className="font-semibold">Nearby recycling and disposal locations</h2>
               <p className="text-sm text-[#718076]">
                 {verifiedItem
-                  ? `Official Delaware options for ${verifiedItem}. Your approximate location is used only for this search.`
+                  ? `Official Delaware options for ${verifiedItem}. EcoLearn requests precise location only for this search; your device can provide approximate location if you choose.`
                   : allowGenericLocations
                     ? "Choose a service and find nearby Delaware facilities. Confirm accepted materials and current hours before visiting."
                     : "Scan or select an exact Delaware item first to see relevant locations."}
@@ -408,6 +412,11 @@ export function ScanUtilities({
               </button>
             ))}
           </div>
+        )}
+        {canSearchPlaces && (
+          <p className="mt-3 text-xs leading-5 text-[#718076]">
+            EcoLearn requests precise location for a better distance estimate. Your browser may let you share approximate location instead. Coordinates are used for this lookup and are not saved to your profile.
+          </p>
         )}
         {mapCenter && (
           <div className="mt-5 overflow-hidden rounded-xl">
@@ -462,7 +471,7 @@ export function ScanUtilities({
                     {site.name}
                   </p>
                   <p className="mt-2 text-sm text-[#607066]">
-                    {site.type} · {site.distanceKm.toFixed(1)} km away
+                    {site.type} · {milesFromKm(site.distanceKm).toFixed(1)} miles away
                   </p>
                   {site.address && (
                     <p className="mt-1 text-xs text-[#7b887d]">{site.address}</p>

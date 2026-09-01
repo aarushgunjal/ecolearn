@@ -24,7 +24,7 @@ import * as WebBrowser from "expo-web-browser";
 import * as FileSystem from "expo-file-system/legacy";
 import Constants from "expo-constants";
 import MapView, { Marker } from "react-native-maps";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Session, User } from "@supabase/supabase-js";
 import { isConfigured, supabase } from "./src/supabase";
 import { challengeDefinitions, dswaVideoForItem, lessonEditorial } from "./src/content";
@@ -41,6 +41,7 @@ type DelawareGuidance = { title: string; category: string; curbside: boolean; in
 type VisionScanResponse = { verified: boolean; guidance: DelawareGuidance | null; observedItem: string | null; material: string | null; confidence: number; imageStatus: "single_item" | "multiple_items" | "unclear"; visibleEvidence: string | null; nextSteps: string[]; message: string };
 type Progress = { xp: number; level: number; total_scans: number; total_lessons_completed: number; streak_days: number; last_activity_date?: string | null };
 type Site = { id: string; name: string; type: string; latitude: number; longitude: number; distanceKm: number; address?: string; services?: string[]; sourceUrl?: string; provider?: string };
+const milesFromKm = (kilometers: number) => kilometers * 0.621371;
 type Lesson = { id: string; slug: string; title: string; topic: string; description: string | null; duration_minutes: number; xp_reward: number; sort_order: number };
 type Achievement = { id: string; title: string; description: string | null; icon: string; requirement_type: "scans" | "lessons" | "streak" | "level"; requirement_value: number };
 type ScanHistoryItem = { id: string; item_name: string; category: string | null; is_recyclable: boolean; created_at: string };
@@ -50,7 +51,7 @@ type LabelResult = { guidance: string; materials: string[]; text?: string | null
 
 const usingExpoGo = Constants.appOwnership === "expo";
 const publicSiteUrl = "https://ecolearn.dev";
-const openPublicPage = (path: "/privacy" | "/terms" | "/delete-account" | "/support") =>
+const openPublicPage = (path: "/privacy" | "/terms" | "/delete-account" | "/support" | "/licenses") =>
   Linking.openURL(`${publicSiteUrl}${path}`);
 const appVersion = Constants.expoConfig?.version ?? "1.0.0";
 const nativeBuildVersion = Constants.nativeBuildVersion ?? "1";
@@ -229,7 +230,7 @@ function AuthScreen() {
     if (error) return Alert.alert("Could not send reset email", error.message);
     Alert.alert("Check your email", "Open the EcoLearn password-reset link on this device to choose a new password.");
   };
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><Text style={styles.brandLarge}>ecolearn</Text><Text style={styles.pageTitle}>{mode === "signin" ? "Welcome back." : "Start your impact."}</Text><Text style={styles.body}>Save scans, learn sustainable habits, and build a more circular world.</Text>{Platform.OS === "ios" && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={13} style={extras.appleButton} onPress={() => void apple()} />}<Pressable onPress={() => void google()} disabled={busy} style={[styles.googleButton, Platform.OS === "ios" && extras.googleAfterApple, usingExpoGo && styles.disabled]}><Text style={styles.googleText}>{usingExpoGo ? "Google sign-in needs development build" : "Continue with Google"}</Text></Pressable>{usingExpoGo && <Text style={styles.helper}>For Expo Go testing, use email/password. Google works in the later EcoLearn development build.</Text>}<Text style={styles.or}>OR WITH EMAIL</Text><TextInput value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="Email address" style={styles.input} /><TextInput value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === "signin" ? "current-password" : "new-password"} placeholder="Password" style={styles.input} /><Pressable onPress={() => void submit()} disabled={busy} style={styles.primaryButton}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{mode === "signin" ? "Sign in" : "Create account"}</Text>}</Pressable>{mode === "signin" && <Pressable onPress={() => void resetPassword()} disabled={busy}><Text style={styles.link}>Forgot password?</Text></Pressable>}<Pressable onPress={() => setMode(mode === "signin" ? "signup" : "signin")}><Text style={styles.link}>{mode === "signin" ? "New to EcoLearn? Create an account" : "Already a member? Sign in"}</Text></Pressable><Text style={styles.legal}>By continuing, you agree to EcoLearn’s <Text style={styles.legalLink} onPress={() => void openPublicPage("/terms")}>Terms of Service</Text> and <Text style={styles.legalLink} onPress={() => void openPublicPage("/privacy")}>Privacy Policy</Text>.</Text></ScrollView></SafeAreaView>;
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><Text style={styles.brandLarge}>ecolearn</Text><Text style={styles.pageTitle}>{mode === "signin" ? "Welcome back." : "Start your impact."}</Text><Text style={styles.body}>Save scans, learn sustainable habits, and build a more circular world.</Text>{Platform.OS === "ios" && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={13} style={extras.appleButton} onPress={() => void apple()} />}<Pressable onPress={() => void google()} disabled={busy} style={[styles.googleButton, Platform.OS === "ios" && extras.googleAfterApple, usingExpoGo && styles.disabled]}><Text style={styles.googleText}>{usingExpoGo ? "Google sign-in needs development build" : "Continue with Google"}</Text></Pressable>{usingExpoGo && <Text style={styles.helper}>For Expo Go testing, use email/password. Google works in the later EcoLearn development build.</Text>}<Text style={styles.or}>OR WITH EMAIL</Text><TextInput value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="Email address" style={styles.input} /><TextInput value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === "signin" ? "current-password" : "new-password"} placeholder="Password" style={styles.input} /><Pressable onPress={() => void submit()} disabled={busy} style={styles.primaryButton}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{mode === "signin" ? "Sign in" : "Create account"}</Text>}</Pressable>{mode === "signin" && <Pressable onPress={() => void resetPassword()} disabled={busy}><Text style={styles.link}>Forgot password?</Text></Pressable>}<Pressable onPress={() => setMode(mode === "signin" ? "signup" : "signin")}><Text style={styles.link}>{mode === "signin" ? "New to EcoLearn? Create an account" : "Already a member? Sign in"}</Text></Pressable><Text style={styles.legal}>By continuing, you agree to EcoLearn’s <Text style={styles.legalLink} onPress={() => void openPublicPage("/terms")}>Terms of Service</Text> and <Text style={styles.legalLink} onPress={() => void openPublicPage("/privacy")}>Privacy Policy</Text>.</Text>{mode === "signup" && <Text style={styles.legal}>Learners under 13 need a parent, guardian, or authorized school to create and manage their account.</Text>}</ScrollView></SafeAreaView>;
 }
 
 function PasswordRecoveryScreen({ onComplete }: { onComplete: () => void }) {
@@ -415,12 +416,14 @@ function ScanScreen({ onRecorded, onTools }: { onRecorded: () => Promise<void>; 
     }, 280);
     return () => { active = false; clearTimeout(timer); };
   }, [searchQuery, photo, result]);
-  const searchCatalog = async (value = searchQuery) => {
+  const searchCatalog = async (value = searchQuery, inputMethod: "typed_search" | "suggestion" = "typed_search") => {
     const item = value.trim();
     if (!item || busy) return;
     setBusy(true); setSuggestions([]); setResult(null); requestId.current = newRequestId();
     try {
-      const { data, error } = await supabase.functions.invoke("delaware-guidance", { body: { item } });
+      const { data, error } = await supabase.functions.invoke("delaware-guidance", {
+        body: { item, inputMethod, clientPlatform: "mobile" },
+      });
       if (error) throw error;
       const guidance = data?.verified ? data.guidance as DelawareGuidance | null : null;
       const checked: ScanResult = guidance
@@ -437,7 +440,9 @@ function ScanScreen({ onRecorded, onTools }: { onRecorded: () => Promise<void>; 
     setBusy(true);
     try {
       const base64 = photo.base64 ?? await FileSystem.readAsStringAsync(photo.uri, { encoding: FileSystem.EncodingType.Base64 });
-      const { data, error } = await supabase.functions.invoke("explain-scan", { body: { image: `data:${photo.mimeType};base64,${base64}` } });
+      const { data, error } = await supabase.functions.invoke("explain-scan", {
+        body: { image: `data:${photo.mimeType};base64,${base64}`, clientPlatform: "mobile" },
+      });
       if (error) throw new Error(await functionErrorMessage(error));
       const identified = data as VisionScanResponse;
       const guidance = identified.guidance;
@@ -464,7 +469,7 @@ function ScanScreen({ onRecorded, onTools }: { onRecorded: () => Promise<void>; 
     </View>
     <View style={styles.dividerRow}><View style={styles.divider} /><Text style={styles.dividerText}>OR SEARCH THE CATALOG</Text><View style={styles.divider} /></View>
     <View style={styles.searchRow}><Ionicons name="search" size={19} color="#78847b" /><TextInput value={searchQuery} onChangeText={setSearchQuery} onSubmitEditing={() => void searchCatalog()} returnKeyType="search" autoCorrect placeholder="Try “soda can”" style={styles.searchInput} /><Pressable disabled={!searchQuery.trim() || busy} onPress={() => void searchCatalog()} style={[styles.searchButton, (!searchQuery.trim() || busy) && styles.disabled]}>{busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.searchButtonText}>Check</Text>}</Pressable></View>
-    {(suggestionsLoading || suggestions.length > 0) && <View style={styles.suggestionCard}>{suggestionsLoading ? <View style={styles.suggestionLoading}><ActivityIndicator color="#2e7a43" /><Text style={styles.rowMeta}>Searching official items…</Text></View> : suggestions.map((suggestion, index) => <Pressable key={suggestion.title} onPress={() => { setSearchQuery(suggestion.title); void searchCatalog(suggestion.title); }} style={[styles.suggestionRow, index > 0 && styles.activityBorder]}><View style={styles.flexOne}><Text style={styles.activityTitle}>{suggestion.title}</Text><Text style={styles.rowMeta}>{suggestion.category}</Text></View><Ionicons name="arrow-forward" size={18} color="#3d834b" /></Pressable>)}</View>}
+    {(suggestionsLoading || suggestions.length > 0) && <View style={styles.suggestionCard}>{suggestionsLoading ? <View style={styles.suggestionLoading}><ActivityIndicator color="#2e7a43" /><Text style={styles.rowMeta}>Searching official items…</Text></View> : suggestions.map((suggestion, index) => <Pressable key={suggestion.title} onPress={() => { setSearchQuery(suggestion.title); void searchCatalog(suggestion.title, "suggestion"); }} style={[styles.suggestionRow, index > 0 && styles.activityBorder]}><View style={styles.flexOne}><Text style={styles.activityTitle}>{suggestion.title}</Text><Text style={styles.rowMeta}>{suggestion.category}</Text></View><Ionicons name="arrow-forward" size={18} color="#3d834b" /></Pressable>)}</View>}
     <Pressable style={extras.toolsLinkCard} onPress={onTools}><View style={styles.toolIcon}><Ionicons name="location-outline" size={22} color="#2f7b44" /></View><View style={styles.flexOne}><Text style={styles.smallLabel}>MORE WAYS TO CHECK</Text><Text style={styles.rowTitle}>Barcode, label, and nearby sites</Text><Text style={styles.rowMeta}>Use the right tool for the item in front of you.</Text></View><Ionicons name="chevron-forward" size={21} color="#3f864c" /></Pressable>
   </>;
   if (!result) return <><Text style={styles.kicker}>ITEM SCANNER</Text><Text style={styles.pageTitle}>Ready to scan?</Text><Text style={styles.body}>One visual check will identify the item, then EcoLearn will search the official Delaware catalog.</Text><View style={styles.photoBox}><Image source={{ uri: photo!.uri }} style={styles.fullImage} /></View><View style={styles.row}><Pressable style={[styles.secondaryButton, styles.half]} onPress={() => void choose(false)}><Text style={styles.secondaryText}>Choose another</Text></Pressable><Pressable style={[styles.primaryButton, styles.half]} onPress={() => void choose(true)}><Text style={styles.primaryText}>Use camera</Text></Pressable></View><Pressable disabled={busy} style={[styles.scanButton, busy && styles.disabled]} onPress={() => void scan()}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Identify + check DNREC</Text>}</Pressable></>;
@@ -608,11 +613,10 @@ function ToolsScreen({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     if (!userLocation || !mapRef.current) return;
-    const coordinates = [userLocation, ...sites.map(({ latitude, longitude }) => ({ latitude, longitude }))];
-    mapRef.current.fitToCoordinates(coordinates, {
-      edgePadding: { top: 55, right: 45, bottom: 55, left: 45 },
-      animated: true,
-    });
+    mapRef.current.animateToRegion(
+      { ...userLocation, latitudeDelta: 0.18, longitudeDelta: 0.18 },
+      350,
+    );
   }, [sites, userLocation]);
 
   const lookupBarcode = async () => {
@@ -687,7 +691,7 @@ function ToolsScreen({ onBack }: { onBack: () => void }) {
     setSites([]);
     setLocationNotice(null);
     try {
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const current = { latitude: location.coords.latitude, longitude: location.coords.longitude };
       setUserLocation(current);
       const { data, error } = await supabase.functions.invoke("find-disposal-sites", {
@@ -696,7 +700,7 @@ function ToolsScreen({ onBack }: { onBack: () => void }) {
       if (error) throw error;
       const nextSites = (data?.sites ?? []) as Site[];
       setSites(nextSites);
-      setSelectedSiteId(nextSites[0]?.id ?? null);
+      setSelectedSiteId(null);
       setLocationNotice(data?.notice ?? null);
       if (!nextSites.length) Alert.alert("No nearby matches", "Try another category or check the DSWA facility directory.");
     } catch {
@@ -738,7 +742,7 @@ function ToolsScreen({ onBack }: { onBack: () => void }) {
     </View>
     <View style={styles.toolCard}>
       <Text style={styles.rowTitle}>Nearby recycling and disposal locations</Text>
-      <Text style={styles.body}>Choose a service, see every result on the map, then confirm accepted materials and hours.</Text>
+      <Text style={styles.body}>Choose a service, then use your location to see nearby results. EcoLearn requests precise location for this lookup; you can choose approximate location in device settings. Your location is not saved.</Text>
       <View style={styles.chips}>
         {[["recycling", "Recycling"], ["battery", "Batteries"], ["electronics", "Electronics"], ["hazardous", "Hazardous"], ["compost", "Yard waste"], ["textile", "Textiles"]].map(([value, label]) => (
           <Pressable key={value} onPress={() => setSiteType(value)} style={[styles.chip, siteType === value && styles.chipActive]}>
@@ -761,7 +765,7 @@ function ToolsScreen({ onBack }: { onBack: () => void }) {
           key={site.id}
           coordinate={{ latitude: site.latitude, longitude: site.longitude }}
           title={`${index + 1}. ${site.name}`}
-          description={`${site.type} · ${site.distanceKm.toFixed(1)} km away`}
+          description={`${site.type} · ${milesFromKm(site.distanceKm).toFixed(1)} miles away`}
           pinColor={selectedSiteId === site.id ? "#e38b24" : "#28763f"}
           onPress={() => setSelectedSiteId(site.id)}
         />)}
@@ -770,7 +774,7 @@ function ToolsScreen({ onBack }: { onBack: () => void }) {
       {sites.map((site, index) => <View key={site.id} style={[styles.siteCard, selectedSiteId === site.id && extras.selectedSite]}>
         <Pressable onPress={() => focusSite(site)} accessibilityLabel={`Show ${site.name} on map`}>
           <Text style={styles.rowTitle}>{index + 1}. {site.name}</Text>
-          <Text style={styles.rowMeta}>{site.address ?? site.type} · {site.distanceKm.toFixed(1)} km away</Text>
+          <Text style={styles.rowMeta}>{site.address ?? site.type} · {milesFromKm(site.distanceKm).toFixed(1)} miles away</Text>
           {site.services?.length ? <Text style={styles.helper}>Services: {site.services.join(", ")}</Text> : null}
         </Pressable>
         <View style={extras.siteActions}>
@@ -888,6 +892,7 @@ function ProfileScreen({ user, progress, achievements, earnedAchievementIds, onN
       <SettingLink icon="help-circle-outline" label="Support" onPress={() => void openPublicPage("/support")} />
       <SettingLink icon="lock-closed-outline" label="Privacy Policy" onPress={() => void openPublicPage("/privacy")} />
       <SettingLink icon="document-text-outline" label="Terms of Service" onPress={() => void openPublicPage("/terms")} />
+      <SettingLink icon="code-slash-outline" label="Open source licenses" onPress={() => void openPublicPage("/licenses")} />
       <SettingLink icon="information-circle-outline" label="Account deletion information" onPress={() => void openPublicPage("/delete-account")} last />
     </View>
     <Text style={styles.versionText}>EcoLearn {appVersion} · build {nativeBuildVersion}</Text>

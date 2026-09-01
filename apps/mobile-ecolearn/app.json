@@ -16,7 +16,7 @@
         "LSApplicationCategoryType": "public.app-category.education",
         "NSCameraUsageDescription": "EcoLearn uses your camera to identify a disposal item.",
         "NSPhotoLibraryUsageDescription": "EcoLearn lets you choose item and package-label photos.",
-        "NSLocationWhenInUseUsageDescription": "EcoLearn uses your location to find nearby disposal sites."
+        "NSLocationWhenInUseUsageDescription": "EcoLearn requests your precise location only when you ask to find nearby disposal sites. Your location is not saved to your profile."
       },
       "config": {
         "usesNonExemptEncryption": false

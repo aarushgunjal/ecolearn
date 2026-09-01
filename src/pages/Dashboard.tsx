@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -13,19 +13,19 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useProgress } from "@/hooks/useProgress";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+
+type DailyQuest = Database["public"]["Tables"]["daily_quests"]["Row"] & {
+  current_progress: number;
+  completed: boolean;
+};
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
   const { progress, loading } = useProgress();
-  const [dailyQuests, setDailyQuests] = useState<any[]>([]);
+  const [dailyQuests, setDailyQuests] = useState<DailyQuest[]>([]);
 
-  useEffect(() => {
-    if (user) {
-      fetchDailyQuests();
-    }
-  }, [user]);
-
-  const fetchDailyQuests = async () => {
+  const fetchDailyQuests = useCallback(async () => {
     if (!user) return;
     
     const { data: quests } = await supabase
@@ -49,10 +49,14 @@ export default function Dashboard() {
     });
 
     setDailyQuests(questsWithProgress);
-  };
+  }, [user]);
 
-  const xpToNextLevel = progress ? ((progress.level) * 100) - progress.xp : 100;
-  const xpProgress = progress ? (progress.xp % 100) : 0;
+  useEffect(() => {
+    if (user) void fetchDailyQuests();
+  }, [fetchDailyQuests, user]);
+
+  const xpToNextLevel = progress ? ((progress.level ?? 1) * 100) - (progress.xp ?? 0) : 100;
+  const xpProgress = progress ? ((progress.xp ?? 0) % 100) : 0;
 
   if (loading) {
     return (

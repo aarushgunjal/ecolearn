@@ -18,6 +18,10 @@ interface AuthContextType {
   signUp: (email: string, password: string, remember?: boolean) => Promise<{ error: AuthError | null }>;
   signInWithGoogle: (remember?: boolean) => Promise<void>;
   signInWithGithub: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
+  updatePassword: (password: string) => Promise<{ error: AuthError | null }>;
+  recoveringPassword: boolean;
+  dismissPasswordRecovery: () => void;
   signOut: () => Promise<void>;
   loading: boolean;
 }
@@ -32,14 +36,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recoveringPassword, setRecoveringPassword] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+      if (event === "PASSWORD_RECOVERY") setRecoveringPassword(true);
       setLoading(false);
     });
 
@@ -139,6 +145,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${getRedirectUrl()}/reset-password`,
+    });
+
+    if (error) {
+      toast({
+        title: "Could not send reset email",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+
+    return { error };
+  };
+
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+
+    if (error) {
+      toast({
+        title: "Could not update password",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+
+    return { error };
+  };
+
+  const dismissPasswordRecovery = () => {
+    setRecoveringPassword(false);
+    if (window.location.pathname === "/reset-password") {
+      window.history.replaceState({}, "", "/");
+    }
+  };
+
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
 
@@ -160,6 +203,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUp,
         signInWithGoogle,
         signInWithGithub,
+        resetPassword,
+        updatePassword,
+        recoveringPassword,
+        dismissPasswordRecovery,
         signOut,
         loading,
       }}

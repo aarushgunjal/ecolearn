@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -17,20 +17,22 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Zap, Trash2, Leaf, Car, CheckCircle, BookOpen, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProgress } from "@/hooks/useProgress";
 import { useAchievements } from "@/hooks/useAchievements";
 import { useToast } from "@/hooks/use-toast";
+import type { Database } from "@/integrations/supabase/types";
 
-const categoryIcons: any = {
+const categoryIcons: Record<string, LucideIcon> = {
   "Energy Saving": Zap,
   "Waste Reduction": Trash2,
   "Sustainable Food": Leaf,
   "Eco Travel": Car,
 };
 
-const difficultyColors: any = {
+const difficultyColors: Record<string, string> = {
   beginner: "bg-success/10 text-success border-success/20",
   intermediate: "bg-primary/10 text-primary border-primary/20",
   advanced: "bg-destructive/10 text-destructive border-destructive/20",
@@ -1045,15 +1047,18 @@ Start small, build your collection, and enjoy a healthier home!
   },
 ];
 
+type Lesson = (typeof defaultLessons)[number];
+type LessonProgress = Database["public"]["Tables"]["user_lesson_progress"]["Row"];
+
 export default function Lessons() {
   const { user } = useAuth();
   const { addXP, incrementLessons, updateStreak, progress } = useProgress();
   const { checkAndAwardAchievements } = useAchievements();
   const { toast } = useToast();
-  const [userProgress, setUserProgress] = useState<any[]>([]);
+  const [userProgress, setUserProgress] = useState<LessonProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
-  const [selectedLesson, setSelectedLesson] = useState<any>(null);
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const categories = [
@@ -1064,15 +1069,7 @@ export default function Lessons() {
     "Eco Travel",
   ];
 
-  useEffect(() => {
-    if (user) {
-      fetchProgress();
-    } else {
-      setLoading(false);
-    }
-  }, [user]);
-
-  const fetchProgress = async () => {
+  const fetchProgress = useCallback(async () => {
     if (!user) return;
 
     const { data: progressData } = await supabase
@@ -1082,9 +1079,17 @@ export default function Lessons() {
 
     setUserProgress(progressData || []);
     setLoading(false);
-  };
+  }, [user]);
 
-  const openLesson = (lesson: any) => {
+  useEffect(() => {
+    if (user) {
+      void fetchProgress();
+    } else {
+      setLoading(false);
+    }
+  }, [fetchProgress, user]);
+
+  const openLesson = (lesson: Lesson) => {
     setSelectedLesson(lesson);
     setIsDialogOpen(true);
   };

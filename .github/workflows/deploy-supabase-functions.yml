@@ -6,7 +6,7 @@ on:
       source_ref:
         description: Git branch whose Supabase function source should be deployed
         required: true
-        default: platform-rebuild
+        default: main
         type: string
 
 permissions:

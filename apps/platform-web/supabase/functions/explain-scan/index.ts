@@ -7,6 +7,7 @@ import {
   findLiveDelawareGuidance,
   toGuidancePayload,
 } from "../_shared/dnrec.ts";
+import { recordItemInteraction } from "../_shared/analytics.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
@@ -109,7 +110,7 @@ serve(async (request) => {
     const { data: { user } } = await client.auth.getUser();
     if (!user) return errorResponse("Sign in to identify an item.", 401, "AUTH_REQUIRED");
 
-    const { image } = await request.json();
+    const { image, clientPlatform } = await request.json();
     if (
       typeof image !== "string" ||
       !/^data:image\/(jpeg|png|webp);base64,/.test(image) ||
@@ -309,6 +310,17 @@ serve(async (request) => {
       const message = status === "multiple_items"
         ? "Multiple or mixed items were detected. Scan one item at a time for a reliable Delaware match."
         : "EcoLearn could not identify one item clearly enough to check the Delaware catalog.";
+      await recordItemInteraction(admin, {
+        eventKind: "scan",
+        inputMethod: "photo",
+        identifiedItem: observedItem,
+        material,
+        verified: false,
+        confusing: true,
+        confidencePercent: confidence,
+        imageStatus: status,
+        clientPlatform,
+      });
       return Response.json({ ...baseResult, message }, { headers: { ...cors, "Cache-Control": "no-store" } });
     }
 
@@ -343,6 +355,17 @@ serve(async (request) => {
       (candidate.score >= 0.96 || !runnerUp || candidate.score - runnerUp.score >= 0.12),
     );
     if (!candidate || !strongUniqueMatch) {
+      await recordItemInteraction(admin, {
+        eventKind: "scan",
+        inputMethod: "photo",
+        identifiedItem: observedItem,
+        material,
+        verified: false,
+        confusing: true,
+        confidencePercent: confidence,
+        imageStatus: status,
+        clientPlatform,
+      });
       return Response.json({
         ...baseResult,
         message: `EcoLearn identified ${observedItem || "the item"}, but found no strong official DNREC catalog match.`,
@@ -356,6 +379,19 @@ serve(async (request) => {
     } catch (liveError) {
       console.warn("Live DNREC lookup unavailable; using the synced official record", liveError);
     }
+
+    await recordItemInteraction(admin, {
+      eventKind: "scan",
+      inputMethod: "photo",
+      identifiedItem: observedItem,
+      resolvedItem: verifiedMatch.row.title,
+      material,
+      verified: true,
+      confusing: false,
+      confidencePercent: confidence,
+      imageStatus: status,
+      clientPlatform,
+    });
 
     return Response.json({
       ...baseResult,

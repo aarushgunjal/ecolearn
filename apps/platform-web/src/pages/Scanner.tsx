@@ -133,12 +133,17 @@ const fallbackLookup = (query: string): ScanResult => {
   };
 };
 
-const lookup = async (query: string): Promise<ScanResult> => {
+const lookup = async (
+  query: string,
+  inputMethod: "typed_search" | "suggestion" = "typed_search",
+): Promise<ScanResult> => {
   const item = query.trim();
   if (!item) return fallbackLookup(query);
 
   try {
-    const { data, error } = await supabase.functions.invoke("delaware-guidance", { body: { item } });
+    const { data, error } = await supabase.functions.invoke("delaware-guidance", {
+      body: { item, inputMethod, clientPlatform: "web" },
+    });
     if (error || !data?.verified || !data.guidance) return fallbackLookup(item);
     const guidance = data.guidance as DelawareGuidance;
     return {
@@ -287,7 +292,7 @@ export default function Scanner() {
     try {
       const image = await readAsVisionDataUrl(file);
       const { data, error } = await supabase.functions.invoke("explain-scan", {
-        body: { image },
+        body: { image, clientPlatform: "web" },
       });
       if (error) throw new Error(await functionErrorMessage(error));
       clearTimeout(delayedNotice);
@@ -345,7 +350,7 @@ export default function Scanner() {
     setSuggestions([]);
     setResult(null);
     setIsScanning(true);
-    window.setTimeout(() => void lookup(searchQuery).then(finish), 550);
+    window.setTimeout(() => void lookup(searchQuery, "typed_search").then(finish), 550);
   };
 
   const chooseSuggestion = (title: string) => {
@@ -355,7 +360,7 @@ export default function Scanner() {
     setSuggestions([]);
     setResult(null);
     setIsScanning(true);
-    window.setTimeout(() => void lookup(title).then(finish), 100);
+    window.setTimeout(() => void lookup(title, "suggestion").then(finish), 100);
   };
 
   const reset = () => {
@@ -679,28 +684,28 @@ function ResultCard({
         </div>
       </div>
       {result.dnrec && (
-        <button
-          type="button"
-          onClick={() => document.getElementById("available-locations")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#a8cc9e] bg-[#f4faef] px-4 py-3 text-sm font-semibold text-[#286d3b] transition hover:bg-[#e9f5e4]"
-        >
-          <MapPin size={17} /> See available locations
-        </button>
+        <div className="mt-4 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
+          <button
+            type="button"
+            onClick={() => document.getElementById("available-locations")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#a8cc9e] bg-[#f4faef] px-4 py-3 text-sm font-semibold text-[#286d3b] transition hover:bg-[#e9f5e4]"
+          >
+            <MapPin size={17} /> See available locations
+          </button>
+          <a
+            href={result.dnrec.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="min-w-0 break-words text-xs font-bold leading-5 text-[#287640] underline underline-offset-2"
+          >
+            Verified source: Delaware DNREC Recyclopedia ↗
+          </a>
+        </div>
       )}
       {result.dnrec && /see solutions below/i.test(result.instructions) && (
         <p className="mt-3 text-xs leading-5 text-[#617166]">
           DNREC uses “solutions” to mean its mapped facilities and approved programs. Use <span className="font-semibold">See available locations</span> to find nearby options for this item.
         </p>
-      )}
-      {result.dnrec && (
-        <a
-          href={result.dnrec.sourceUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-3 inline-flex text-xs font-bold text-[#287640] underline underline-offset-2"
-        >
-          Verified source: Delaware DNREC Recyclopedia ↗
-        </a>
       )}
       {relatedVideos.length > 0 && (
         <section className="mt-6 rounded-2xl bg-[#f4f8f0] p-4 sm:p-5">

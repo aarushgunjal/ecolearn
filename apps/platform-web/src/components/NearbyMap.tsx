@@ -36,6 +36,13 @@ const userIcon = L.divIcon({
   iconSize: [20, 20],
 });
 
+const milesFromKm = (kilometers: number) => kilometers * 0.621371;
+const validCoordinate = (latitude: number, longitude: number) =>
+  Number.isFinite(latitude) &&
+  Number.isFinite(longitude) &&
+  latitude >= 37.5 && latitude <= 41 &&
+  longitude >= -77.5 && longitude <= -73.5;
+
 export function NearbyMap({
   userLocation,
   sites,
@@ -64,8 +71,14 @@ export function NearbyMap({
     }).addTo(map);
     mapRef.current = map;
     layerRef.current = L.layerGroup().addTo(map);
+    const syncZoom = () => {
+      if (elementRef.current) elementRef.current.dataset.mapZoom = String(map.getZoom());
+    };
+    map.on("zoomend", syncZoom);
+    syncZoom();
     window.setTimeout(() => map.invalidateSize(), 0);
     return () => {
+      map.off("zoomend", syncZoom);
       map.remove();
       mapRef.current = null;
       layerRef.current = null;
@@ -80,16 +93,19 @@ export function NearbyMap({
 
     const userMarker = L.marker(
       [userLocation.latitude, userLocation.longitude],
-      { icon: userIcon, keyboard: true, title: "Your approximate location" },
-    ).bindTooltip("Your approximate location");
+      { icon: userIcon, keyboard: true, title: "Your device location" },
+    ).bindTooltip("Your device location");
     layer.addLayer(userMarker);
 
-    sites.forEach((site, index) => {
+    const validSites = sites.filter((site) =>
+      validCoordinate(site.latitude, site.longitude) && Number.isFinite(site.distanceKm),
+    );
+    validSites.forEach((site, index) => {
       const popup = document.createElement("div");
       const name = document.createElement("strong");
       const detail = document.createElement("div");
       name.textContent = site.name;
-      detail.textContent = `${site.type} · ${site.distanceKm.toFixed(1)} km away`;
+      detail.textContent = `${site.type} · ${milesFromKm(site.distanceKm).toFixed(1)} miles away`;
       popup.append(name, detail);
 
       const marker = L.marker([site.latitude, site.longitude], {
@@ -103,16 +119,19 @@ export function NearbyMap({
       if (site.id === selectedSiteId) marker.openPopup();
     });
 
-    const points: L.LatLngExpression[] = [
-      [userLocation.latitude, userLocation.longitude],
-      ...sites.map(
-        (site) => [site.latitude, site.longitude] as L.LatLngExpression,
-      ),
-    ];
-    if (points.length === 1) {
-      map.setView(points[0], 11);
+    const selectedSite = validSites.find((site) => site.id === selectedSiteId);
+    if (selectedSite) {
+      map.fitBounds(
+        L.latLngBounds([
+          [userLocation.latitude, userLocation.longitude],
+          [selectedSite.latitude, selectedSite.longitude],
+        ]),
+        { padding: [45, 45], maxZoom: 13 },
+      );
     } else {
-      map.fitBounds(L.latLngBounds(points), { padding: [35, 35], maxZoom: 13 });
+      // A nearby search is about the user first. Do not let a bad upstream
+      // coordinate zoom the map out to a world view.
+      map.setView([userLocation.latitude, userLocation.longitude], 11);
     }
     window.setTimeout(() => map.invalidateSize(), 0);
   }, [onSelect, selectedSiteId, sites, userLocation]);

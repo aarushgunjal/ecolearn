@@ -199,6 +199,14 @@ export function Admin() {
     [],
   );
   const [scanStats, setScanStats] = useState({ total: 0, avgConfidence: 0 });
+  const [itemAnalytics, setItemAnalytics] = useState<Array<{
+    item_name: string;
+    searches: number;
+    scans: number;
+    confusing_events: number;
+    confusion_rate: number;
+  }>>([]);
+  const [itemAnalyticsReady, setItemAnalyticsReady] = useState(true);
   const [reviewQueued, setReviewQueued] = useState(
     () => localStorage.getItem("ecolearn-review-queued") === "true",
   );
@@ -236,15 +244,33 @@ export function Admin() {
         avgConfidence:
           confidenceCount > 0 ? confidenceTotal / confidenceCount : 0,
       });
-      setScanCategories(
-        sorted.length > 0
-          ? sorted
-          : [["Plastic containers", Math.max(1, progress?.total_scans ?? 1)]],
-      );
+      setScanCategories(sorted);
     };
 
     void loadScanCategories();
   }, [progress?.total_scans]);
+  useEffect(() => {
+    const loadItemAnalytics = async () => {
+      const { data, error } = await supabase.rpc("get_item_interaction_analytics", {
+        p_days: 30,
+        p_limit: 12,
+      });
+      if (error) {
+        console.warn("Item analytics unavailable", error);
+        setItemAnalyticsReady(false);
+        return;
+      }
+      setItemAnalyticsReady(true);
+      setItemAnalytics((data ?? []).map((row) => ({
+        item_name: String(row.item_name ?? "Unknown item"),
+        searches: Number(row.searches ?? 0),
+        scans: Number(row.scans ?? 0),
+        confusing_events: Number(row.confusing_events ?? 0),
+        confusion_rate: Number(row.confusion_rate ?? 0),
+      })));
+    };
+    void loadItemAnalytics();
+  }, []);
   return (
     <Hub
       title="Personal analytics"
@@ -263,7 +289,11 @@ export function Admin() {
       <section className="mt-6 grid gap-5 lg:grid-cols-2">
         <div className="rounded-2xl border border-[#e0e7dc] bg-white p-6">
           <h2 className="font-semibold">Popular scan categories</h2>
-          <div className="mt-5 space-y-4">
+          {scanCategories.length === 0 ? (
+            <p className="mt-5 text-sm leading-6 text-[#6b796f]">
+              No saved scans yet. Real categories will appear after scans are completed.
+            </p>
+          ) : <div className="mt-5 space-y-4">
             {scanCategories.map(([name, count], index) => {
               const maxCount = scanCategories[0]?.[1] || count || 1;
               const width = Math.max(12, Math.round((count / maxCount) * 100));
@@ -282,7 +312,7 @@ export function Admin() {
                 </div>
               );
             })}
-          </div>
+          </div>}
         </div>
         <div className="rounded-2xl border border-[#e0e7dc] bg-white p-6">
           <h2 className="font-semibold">Operations</h2>
@@ -319,6 +349,53 @@ export function Admin() {
             <ChevronRight className="ml-auto" size={17} />
           </button>
         </div>
+      </section>
+      <section className="mt-5 rounded-2xl border border-[#e0e7dc] bg-white p-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">Item demand and confusion</h2>
+            <p className="mt-1 text-sm text-[#6b796f]">
+              Aggregate searches and scans from the last 30 days. Photos, locations, and user identities are not recorded here.
+            </p>
+          </div>
+          <span className="rounded-full bg-[#edf7e8] px-3 py-1 text-xs font-bold text-[#347a43]">
+            {itemAnalytics.reduce((total, row) => total + row.searches + row.scans, 0)} interactions
+          </span>
+        </div>
+        {!itemAnalyticsReady ? (
+          <p className="mt-5 rounded-xl bg-[#fff7e6] p-4 text-sm text-[#76551f]">
+            Apply the item-interaction analytics migration to begin collecting aggregate results.
+          </p>
+        ) : itemAnalytics.length === 0 ? (
+          <p className="mt-5 text-sm text-[#6b796f]">
+            No item analytics have been collected yet.
+          </p>
+        ) : (
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[600px] text-left text-sm">
+              <thead className="text-xs uppercase tracking-[.08em] text-[#748177]">
+                <tr>
+                  <th className="pb-3 pr-4">Item</th>
+                  <th className="pb-3 pr-4">Searches</th>
+                  <th className="pb-3 pr-4">Scans</th>
+                  <th className="pb-3 pr-4">Confusing</th>
+                  <th className="pb-3">Confusion rate</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#e8ede5]">
+                {itemAnalytics.map((row) => (
+                  <tr key={row.item_name}>
+                    <td className="py-3 pr-4 font-semibold text-[#294332]">{row.item_name}</td>
+                    <td className="py-3 pr-4">{row.searches}</td>
+                    <td className="py-3 pr-4">{row.scans}</td>
+                    <td className="py-3 pr-4">{row.confusing_events}</td>
+                    <td className="py-3">{row.confusion_rate.toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </Hub>
   );

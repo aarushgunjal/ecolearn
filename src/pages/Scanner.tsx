@@ -21,6 +21,16 @@ import { useAchievements } from "@/hooks/useAchievements";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+type ScanResult = {
+  item: string;
+  recyclable: boolean;
+  confidence: number;
+  category: string;
+  instructions: string;
+  tips: string[];
+  impact: { co2Saved: string; energySaved: string };
+};
+
 const compressImage = (
   file: File,
   maxSize: number,
@@ -71,7 +81,7 @@ const compressImage = (
 
 export default function Scanner() {
   const [isScanning, setIsScanning] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ScanResult | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
@@ -80,7 +90,7 @@ export default function Scanner() {
   const { checkAndAwardAchievements } = useAchievements();
   const { toast } = useToast();
 
-  const saveScanToHistory = async (result: any) => {
+  const saveScanToHistory = async (result: ScanResult) => {
     // Only save if user is logged in
     if (!user) return;
 

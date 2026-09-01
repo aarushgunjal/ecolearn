@@ -7,6 +7,7 @@ import {
   findLiveDelawareGuidance,
   toGuidancePayload,
 } from "../_shared/dnrec.ts";
+import { recordItemInteraction } from "../_shared/analytics.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
@@ -26,7 +27,7 @@ serve(async (request) => {
     const { data: { user } } = await authClient.auth.getUser();
     if (!user) return Response.json({ error: "Authentication required" }, { status: 401, headers: cors });
 
-    const { item, mode } = await request.json();
+    const { item, mode, clientPlatform, inputMethod } = await request.json();
     if (typeof item !== "string" || !item.trim() || item.length > 120) {
       return Response.json({ error: "Provide an item name up to 120 characters." }, { status: 400, headers: cors });
     }
@@ -60,6 +61,17 @@ serve(async (request) => {
       candidate &&
       (candidate.score >= 0.96 || !runnerUp || candidate.score - runnerUp.score >= 0.12),
     );
+
+    await recordItemInteraction(admin, {
+      eventKind: "search",
+      inputMethod: inputMethod === "suggestion" ? "suggestion" : "typed_search",
+      queryText: item,
+      resolvedItem: uniqueMatch && candidate ? candidate.row.title : null,
+      verified: uniqueMatch,
+      confusing: !uniqueMatch,
+      confidencePercent: candidate ? candidate.score * 100 : 0,
+      clientPlatform,
+    });
 
     return Response.json({
       query: item.trim(),

@@ -1,6 +1,6 @@
 import { ArrowLeft, Leaf, ShieldCheck } from "lucide-react";
 
-type LegalPage = "privacy" | "terms" | "delete-account" | "support";
+type LegalPage = "privacy" | "terms" | "delete-account" | "support" | "licenses";
 
 export function Legal({
   page,
@@ -12,12 +12,15 @@ export function Legal({
   const privacy = page === "privacy";
   const deletion = page === "delete-account";
   const support = page === "support";
+  const licenses = page === "licenses";
   const heading = privacy
     ? "Privacy Policy"
     : deletion
       ? "Delete your EcoLearn account"
       : support
         ? "EcoLearn Support"
+        : licenses
+          ? "Open Source Licenses"
         : "Terms of Service";
   return (
     <div className="min-h-screen bg-[#f7f8f4] text-[#16251e]">
@@ -51,9 +54,9 @@ export function Legal({
           {heading}
         </h1>
         <p className="mt-3 text-sm text-[#728076]">
-          Last updated: August 29, 2026
+          Last updated: August 31, 2026
         </p>
-        {privacy ? <PrivacyContent /> : deletion ? <AccountDeletionContent /> : support ? <SupportContent /> : <TermsContent />}
+        {privacy ? <PrivacyContent /> : deletion ? <AccountDeletionContent /> : support ? <SupportContent /> : licenses ? <LicensesContent /> : <TermsContent />}
         <section className="mt-10 rounded-2xl bg-[#e9f4e4] p-5 text-sm leading-6 text-[#42604b]">
           Questions or requests? Contact EcoLearn at{" "}
           <a
@@ -66,6 +69,43 @@ export function Legal({
         </section>
       </main>
     </div>
+  );
+}
+
+function LicensesContent() {
+  return (
+    <article className="legal-copy mt-9 space-y-8 text-[15px] leading-7 text-[#435248]">
+      <Section title="EcoLearn software">
+        EcoLearn is proprietary software. No permission to copy, modify, or
+        redistribute EcoLearn&apos;s own source code is granted by this page.
+      </Section>
+      <Section title="Open-source components">
+        EcoLearn includes open-source software distributed under permissive
+        licenses, including React, React Native, Expo, Supabase&apos;s JavaScript
+        client, Leaflet, Lucide, Radix UI, and their dependencies. Their
+        licenses and copyright notices remain the property of their respective
+        authors.
+      </Section>
+      <Section title="Maps, product data, and educational sources">
+        Map data is © OpenStreetMap contributors and is available under the
+        Open Database License. Product information may be provided by Open Food
+        Facts under its applicable database and content licenses. Delaware
+        disposal guidance and linked educational media remain attributed to
+        DNREC and DSWA.
+      </Section>
+      <Section title="Complete notices">
+        The complete package list, license texts, source links, and required
+        attributions are maintained in EcoLearn&apos;s Third-Party Notices file.
+        <div className="mt-4">
+          <a
+            className="inline-flex rounded-xl bg-[#173d2a] px-4 py-3 font-bold text-white"
+            href="/third-party-notices.txt"
+          >
+            Read Third-Party Notices
+          </a>
+        </div>
+      </Section>
+    </article>
   );
 }
 
@@ -104,8 +144,11 @@ function PrivacyContent() {
             an account.
           </li>
           <li>
-            <b>App activity:</b> scans, lesson progress, XP, streaks, and
-            settings.
+            <b>App activity:</b> scans, searches, lesson progress, XP, streaks,
+            and settings. EcoLearn also records aggregate item-search and scan
+            outcomes so administrators can see commonly requested or confusing
+            items. Those aggregate events do not include photos, coordinates,
+            or account identifiers.
           </li>
           <li>
             <b>Photos:</b> a photo you select is processed to provide the scan
@@ -113,9 +156,11 @@ function PrivacyContent() {
             store those photos or use them for model training.
           </li>
           <li>
-            <b>Approximate location:</b> only when you ask to find nearby
-            disposal options. It is used for that search and is not retained by
-            EcoLearn for this feature.
+            <b>Location:</b> EcoLearn requests precise location only when you
+            ask to find nearby disposal options. Your browser or device may let
+            you share approximate location instead. Coordinates are sent to the
+            lookup service for that search and are not saved to your EcoLearn
+            profile by this feature.
           </li>
         </ul>
       </Section>
@@ -126,11 +171,12 @@ function PrivacyContent() {
       </Section>
       <Section title="4. Service providers and disclosures">
         EcoLearn uses service providers to deliver the product, including
-        Supabase for authentication, database, and storage; Google for optional
-        Google sign-in; and, when you enable or separately consent to an AI
-        feature, an approved AI provider for that requested analysis. Barcode
-        and map features may query public product or map-data services. We share
-        only the information needed to provide the feature you requested.
+        Supabase for authentication, database, storage, and server functions;
+        Apple and Google for optional sign-in; and OpenRouter and the selected
+        model provider when you request an AI photo or label analysis. Barcode
+        lookups may query Open Food Facts, maps may use OpenStreetMap data, and
+        embedded educational videos may connect to YouTube. We share only the
+        information needed to provide the feature you requested.
       </Section>
       <Section title="5. Your choices">
         You can permanently delete your account and associated app data from
@@ -144,9 +190,33 @@ function PrivacyContent() {
         information while needed to operate EcoLearn. The current scanner does
         not retain submitted scan or package-label photos.
       </Section>
-      <Section title="7. Children and changes">
-        EcoLearn is not directed to children under 13. We may update this policy
-        as the product changes and will post the new effective date here.
+      <Section title="7. Elementary students and children under 13">
+        EcoLearn is designed for educators, families, communities, and students,
+        including elementary-school students. A child under 13 may use an
+        account only with authorization and supervision from a parent or legal
+        guardian, or through a school or district that is authorized to consent
+        for the educational use. Children under 13 should not independently
+        create an account or provide a personal email address.
+        <p className="mt-3">
+          For authorized student use, EcoLearn may process a student-safe alias,
+          classroom or community membership, learning progress, XP, scans, and
+          the optional photo or location information described above. EcoLearn
+          does not sell this information, serve behavioral advertising, or use
+          scanner photos to train models. Information authorized by a school is
+          used only to provide the requested educational service.
+        </p>
+        <p className="mt-3">
+          Parents, guardians, and authorizing schools may contact EcoLearn to
+          review or request deletion of a child&apos;s information, stop further
+          collection, or ask questions about the information used by the
+          service. Before a classroom rollout, EcoLearn will provide the school
+          or parent with direct notice of the applicable collection and obtain
+          the authorization required for that deployment.
+        </p>
+      </Section>
+      <Section title="8. Changes">
+        We may update this policy as the product changes and will post the new
+        effective date here.
       </Section>
     </article>
   );
@@ -204,6 +274,9 @@ function TermsContent() {
         credentials secure. Do not misuse the service, interfere with its
         operation, attempt unauthorized access, upload unlawful or harmful
         content, or use EcoLearn to infringe another person's rights.
+        Children under 13 may use EcoLearn only through a parent, legal guardian,
+        or authorized school arrangement; they may not independently create a
+        personal account.
       </Section>
       <Section title="4. Your content">
         You retain ownership of content you submit. You grant EcoLearn the

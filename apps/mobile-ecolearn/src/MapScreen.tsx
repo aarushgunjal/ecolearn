@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import * as Location from "expo-location";
 import MapView, { Marker } from "react-native-maps";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { supabase } from "./supabase";
 
 type Site = {
@@ -33,6 +33,7 @@ const categories = [
   ["compost", "Yard waste"],
   ["textile", "Textiles"],
 ] as const;
+const milesFromKm = (kilometers: number) => kilometers * 0.621371;
 
 export function MapScreen() {
   const [siteType, setSiteType] = useState("recycling");
@@ -48,15 +49,9 @@ export function MapScreen() {
 
   useEffect(() => {
     if (!location || !mapRef.current) return;
-    mapRef.current.fitToCoordinates(
-      [
-        location,
-        ...sites.map(({ latitude, longitude }) => ({ latitude, longitude })),
-      ],
-      {
-        edgePadding: { top: 60, right: 45, bottom: 60, left: 45 },
-        animated: true,
-      },
+    mapRef.current.animateToRegion(
+      { ...location, latitudeDelta: 0.18, longitudeDelta: 0.18 },
+      350,
     );
   }, [location, sites]);
 
@@ -71,7 +66,7 @@ export function MapScreen() {
     setNotice(null);
     try {
       const current = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.High,
       });
       const coordinates = {
         latitude: current.coords.latitude,
@@ -85,7 +80,7 @@ export function MapScreen() {
       if (error) throw error;
       const results = (data?.sites ?? []) as Site[];
       setSites(results);
-      setSelected(results[0]?.id ?? null);
+      setSelected(null);
       setNotice(data?.notice ?? null);
       if (!results.length)
         Alert.alert(
@@ -126,8 +121,8 @@ export function MapScreen() {
       <View style={s.privacy}>
         <Ionicons name="shield-checkmark-outline" size={19} color="#276f3c" />
         <Text style={s.privacyText}>
-          Your location is used only when you tap search. It is not saved to
-          your profile.
+          EcoLearn requests precise location only when you tap search. You can
+          choose approximate location in your device settings. It is not saved.
         </Text>
       </View>
       <View style={s.chips}>
@@ -178,7 +173,7 @@ export function MapScreen() {
                 longitude: site.longitude,
               }}
               title={`${index + 1}. ${site.name}`}
-              description={`${site.type} · ${site.distanceKm.toFixed(1)} km away`}
+              description={`${site.type} · ${milesFromKm(site.distanceKm).toFixed(1)} miles away`}
               pinColor={selected === site.id ? "#e38b24" : "#28763f"}
               onPress={() => setSelected(site.id)}
             />
@@ -196,7 +191,7 @@ export function MapScreen() {
               {index + 1}. {site.name}
             </Text>
             <Text style={s.siteMeta}>
-              {site.address ?? site.type} · {site.distanceKm.toFixed(1)} km away
+              {site.address ?? site.type} · {milesFromKm(site.distanceKm).toFixed(1)} miles away
             </Text>
             {site.services?.length ? (
               <Text style={s.services}>{site.services.join(" · ")}</Text>

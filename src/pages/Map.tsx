@@ -13,12 +13,15 @@ import {
   ExternalLink
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+
+type RecyclingCenter = Database["public"]["Tables"]["recycling_centers"]["Row"];
 
 export default function Map() {
   const [searchParams] = useSearchParams();
-  const [centers, setCenters] = useState<any[]>([]);
+  const [centers, setCenters] = useState<RecyclingCenter[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCenter, setSelectedCenter] = useState<any>(null);
+  const [selectedCenter, setSelectedCenter] = useState<RecyclingCenter | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,7 +55,7 @@ export default function Map() {
     }
   };
 
-  const getDirections = (center: any) => {
+  const getDirections = (center: RecyclingCenter) => {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${center.latitude},${center.longitude}`;
     window.open(url, '_blank');
   };

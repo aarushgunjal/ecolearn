@@ -188,7 +188,9 @@ const mapDnrecOrganizations = (organizations: Record<string, unknown>[], latitud
       type: String(organization.pickup ?? "Delaware disposal solution"),
       latitude: siteLatitude,
       longitude: siteLongitude,
-      distanceKm: Number(organization.distance ?? distanceKm(latitude, longitude, siteLatitude, siteLongitude)),
+      // Recalculate from coordinates so every provider uses one known unit.
+      // Upstream `distance` fields are not guaranteed to be kilometers.
+      distanceKm: distanceKm(latitude, longitude, siteLatitude, siteLongitude),
       address: [organization.location_street1, organization.location_city, organization.location_region ?? "DE", organization.location_postal_code].filter(Boolean).join(", "),
       official: true, provider: "DNREC", sourceName: "Delaware DNREC Recyclopedia", sourceUrl,
     };
@@ -242,7 +244,13 @@ const uniqueSites = (sites: DisposalSite[]) => {
     seen.add(key); return true;
   });
 };
-const sortedSites = (sites: DisposalSite[]) => uniqueSites(sites)
+const validDelawareAreaSite = (site: DisposalSite) =>
+  Number.isFinite(site.latitude) &&
+  Number.isFinite(site.longitude) &&
+  Number.isFinite(site.distanceKm) &&
+  site.latitude >= 37.5 && site.latitude <= 41 &&
+  site.longitude >= -77.5 && site.longitude <= -73.5;
+const sortedSites = (sites: DisposalSite[]) => uniqueSites(sites.filter(validDelawareAreaSite))
   .sort((left, right) => left.distanceKm - right.distanceKm || left.name.localeCompare(right.name)).slice(0, 24);
 
 serve(async (request) => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -6,21 +6,19 @@ import { Trophy, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProgress } from "@/hooks/useProgress";
+import type { Database } from "@/integrations/supabase/types";
+
+type Achievement = Database["public"]["Tables"]["achievements"]["Row"];
+type UserAchievement = Database["public"]["Tables"]["user_achievements"]["Row"];
 
 export default function Achievements() {
   const { user } = useAuth();
   const { progress } = useProgress();
-  const [achievements, setAchievements] = useState<any[]>([]);
-  const [userAchievements, setUserAchievements] = useState<any[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [userAchievements, setUserAchievements] = useState<UserAchievement[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      fetchAchievements();
-    }
-  }, [user]);
-
-  const fetchAchievements = async () => {
+  const fetchAchievements = useCallback(async () => {
     if (!user) return;
 
     const { data: allAchievements } = await supabase
@@ -36,28 +34,32 @@ export default function Achievements() {
     setAchievements(allAchievements || []);
     setUserAchievements(earned || []);
     setLoading(false);
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) void fetchAchievements();
+  }, [fetchAchievements, user]);
 
   const isAchievementEarned = (achievementId: string) => {
     return userAchievements.some(ua => ua.achievement_id === achievementId);
   };
 
-  const getProgressValue = (achievement: any) => {
+  const getProgressValue = (achievement: Achievement) => {
     if (!progress) return 0;
     
     let current = 0;
     switch (achievement.requirement_type) {
       case 'scans':
-        current = progress.total_scans;
+        current = progress.total_scans ?? 0;
         break;
       case 'lessons':
-        current = progress.total_lessons_completed;
+        current = progress.total_lessons_completed ?? 0;
         break;
       case 'streak':
-        current = progress.streak_days;
+        current = progress.streak_days ?? 0;
         break;
       case 'level':
-        current = progress.level;
+        current = progress.level ?? 1;
         break;
     }
     

@@ -60,7 +60,7 @@ const paths = {
 } as const;
 
 type Section = keyof typeof paths;
-type LegalPage = "privacy" | "terms" | "delete-account" | "support";
+type LegalPage = "privacy" | "terms" | "delete-account" | "support" | "licenses";
 
 const activeForPath = (path: string): Section =>
   (Object.entries(paths).find(([, value]) => value === path)?.[0] as Section | undefined) ??
@@ -68,9 +68,9 @@ const activeForPath = (path: string): Section =>
 
 const readLegalPage = (): LegalPage | null => {
   const hash = window.location.hash.replace("#", "").toLowerCase();
-  if (hash === "privacy" || hash === "terms" || hash === "delete-account" || hash === "support") return hash;
+  if (hash === "privacy" || hash === "terms" || hash === "delete-account" || hash === "support" || hash === "licenses") return hash;
   const path = window.location.pathname.toLowerCase();
-  if (path === "/privacy" || path === "/terms" || path === "/delete-account" || path === "/support") {
+  if (path === "/privacy" || path === "/terms" || path === "/delete-account" || path === "/support" || path === "/licenses") {
     return path.slice(1) as LegalPage;
   }
   return null;
@@ -81,7 +81,7 @@ function AppShell() {
   const [legalPage, setLegalPage] = useState<LegalPage | null>(() => readLegalPage());
   const [authOpen, setAuthOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const { user } = useAuth();
+  const { user, recoveringPassword } = useAuth();
   const { isAdmin, loading: adminLoading } = useAdmin();
   const { progress } = useProgress();
 
@@ -125,6 +125,7 @@ function AppShell() {
       terms: "Terms",
       "delete-account": "Account deletion",
       support: "Support",
+      licenses: "Open source licenses",
     };
     const title = legalPage ? legalTitles[legalPage] : active;
     document.title = title === "Home" ? "EcoLearn Delaware" : `${title} · EcoLearn Delaware`;
@@ -149,7 +150,7 @@ function AppShell() {
             </span>
             <span className="text-xl font-semibold tracking-[-0.05em]">ecolearn</span>
           </button>
-          <nav className="hidden items-center rounded-full border border-[#e5e9e1] bg-white p-1 md:flex" aria-label="Main navigation">
+          <nav className="hidden items-center rounded-full border border-[#e5e9e1] bg-white p-1 lg:flex" aria-label="Main navigation">
             {navigation.slice(0, 5).map(({ label, icon: Icon }) => (
               <button
                 key={label}
@@ -182,7 +183,7 @@ function AppShell() {
             </button>
             <button
               onClick={() => setMoreOpen((open) => !open)}
-              className="grid h-10 w-10 place-items-center rounded-full bg-white text-[#5f6d63] ring-1 ring-[#e5e9e1] md:hidden"
+              className="grid h-10 w-10 place-items-center rounded-full bg-white text-[#5f6d63] ring-1 ring-[#e5e9e1] lg:hidden"
               aria-label="More EcoLearn tools"
               aria-expanded={moreOpen}
             >
@@ -243,10 +244,11 @@ function AppShell() {
           <a href="/terms" onClick={(event) => { event.preventDefault(); openLegal("terms"); }} className="hover:text-[#286b3a]">Terms of Service</a>
           <a href="/delete-account" onClick={(event) => { event.preventDefault(); openLegal("delete-account"); }} className="hover:text-[#286b3a]">Delete account</a>
           <a href="/support" onClick={(event) => { event.preventDefault(); openLegal("support"); }} className="hover:text-[#286b3a]">Support</a>
+          <a href="/licenses" onClick={(event) => { event.preventDefault(); openLegal("licenses"); }} className="hover:text-[#286b3a]">Licenses</a>
         </div>
       </footer>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[#e5e9e1] bg-white/95 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden" aria-label="Mobile navigation">
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[#e5e9e1] bg-white/95 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur lg:hidden" aria-label="Mobile navigation">
         {navigation.map(({ label, icon: Icon }) => (
           <button key={label} onClick={() => navigate(label)} className={`flex min-w-14 flex-col items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold ${active === label ? "text-[#237342]" : "text-[#56645a]"}`}>
             <Icon size={19} />
@@ -254,7 +256,7 @@ function AppShell() {
           </button>
         ))}
       </nav>
-      {authOpen && <AuthDialog close={() => setAuthOpen(false)} />}
+      {(authOpen || recoveringPassword) && <AuthDialog close={() => setAuthOpen(false)} />}
     </div>
   );
 }

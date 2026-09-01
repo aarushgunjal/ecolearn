@@ -1069,14 +1069,73 @@ export function Profile() {
 }
 
 export function AuthDialog({ close }: { close: () => void }) {
-  const { signIn, signUp, signInWithGoogle } = useAuth();
+  const {
+    signIn,
+    signUp,
+    signInWithGoogle,
+    resetPassword,
+    updatePassword,
+    recoveringPassword,
+    dismissPasswordRecovery,
+  } = useAuth();
   const { toast } = useToast();
-  const [mode, setMode] = useState<"signin" | "signup">("signup");
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot" | "recovery">(
+    recoveringPassword ? "recovery" : "signup",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
   const [remember, setRemember] = useState(true);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (recoveringPassword) setMode("recovery");
+  }, [recoveringPassword]);
+  const closeDialog = () => {
+    if (recoveringPassword) dismissPasswordRecovery();
+    close();
+  };
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (mode === "forgot") {
+      setBusy(true);
+      const { error } = await resetPassword(email.trim());
+      setBusy(false);
+      if (!error) {
+        toast({
+          title: "Check your email",
+          description: "If an EcoLearn account exists for that address, a secure reset link is on its way.",
+        });
+        setMode("signin");
+      }
+      return;
+    }
+    if (mode === "recovery") {
+      if (password.length < 8) {
+        toast({
+          title: "Use a stronger password",
+          description: "Your new password must contain at least eight characters.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (password !== confirmation) {
+        toast({
+          title: "Passwords do not match",
+          description: "Enter the same new password twice.",
+          variant: "destructive",
+        });
+        return;
+      }
+      setBusy(true);
+      const { error } = await updatePassword(password);
+      setBusy(false);
+      if (!error) {
+        toast({ title: "Password updated", description: "Your new EcoLearn password is ready." });
+        dismissPasswordRecovery();
+        close();
+      }
+      return;
+    }
     const { error } =
       mode === "signin"
         ? await signIn(email, password, remember)
@@ -1089,14 +1148,21 @@ export function AuthDialog({ close }: { close: () => void }) {
             ? "You’re signed in."
             : "Confirm your email to finish setting up.",
       });
-      if (mode === "signin") close();
+      if (mode === "signin") closeDialog();
     }
   };
+  const heading = mode === "signup"
+    ? "Start your eco journey"
+    : mode === "signin"
+      ? "Welcome back"
+      : mode === "forgot"
+        ? "Reset your password"
+        : "Choose a new password";
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[#102b1d]/45 p-4 backdrop-blur-sm">
       <div className="relative w-full max-w-md rounded-[1.75rem] bg-white p-7 shadow-2xl">
         <button
-          onClick={close}
+          onClick={closeDialog}
           className="absolute right-5 top-5 text-[#7a877d]"
           aria-label="Close sign-in dialog"
         >
@@ -1106,40 +1172,65 @@ export function AuthDialog({ close }: { close: () => void }) {
           <Leaf fill="currentColor" />
         </span>
         <h2 className="mt-5 text-2xl font-semibold tracking-[-.04em]">
-          {mode === "signup" ? "Start your eco journey" : "Welcome back"}
+          {heading}
         </h2>
         <p className="mt-2 text-sm leading-6 text-[#58675d]">
-          Track actions, build habits, and make a measurable difference.
+          {mode === "forgot"
+            ? "Enter your account email and we’ll send a secure reset link."
+            : mode === "recovery"
+              ? "Use at least eight characters and keep your new password private."
+              : "Track actions, build habits, and make a measurable difference."}
         </p>
-        <button
-          onClick={() => void signInWithGoogle(remember)}
-          className="mt-6 flex w-full items-center justify-center gap-3 rounded-xl border border-[#dce3d9] py-3 text-sm font-semibold"
-        >
-          <GoogleMark /> Continue with Google
-        </button>
-        <div className="my-5 flex items-center gap-3 text-xs text-[#99a299]">
-          <span className="h-px flex-1 bg-[#e8ece6]" />
-          OR WITH EMAIL
-          <span className="h-px flex-1 bg-[#e8ece6]" />
-        </div>
+        {(mode === "signup" || mode === "signin") && (
+          <>
+            <button
+              onClick={() => void signInWithGoogle(remember)}
+              className="mt-6 flex w-full items-center justify-center gap-3 rounded-xl border border-[#dce3d9] py-3 text-sm font-semibold"
+            >
+              <GoogleMark /> Continue with Google
+            </button>
+            <div className="my-5 flex items-center gap-3 text-xs text-[#99a299]">
+              <span className="h-px flex-1 bg-[#e8ece6]" />
+              OR WITH EMAIL
+              <span className="h-px flex-1 bg-[#e8ece6]" />
+            </div>
+          </>
+        )}
         <form onSubmit={submit} className="space-y-3">
-          <input
-            required
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email address"
-            className="w-full rounded-xl border border-[#dce3d9] px-4 py-3 outline-none focus:border-[#4c9856]"
-          />
-          <input
-            required
-            minLength={6}
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            className="w-full rounded-xl border border-[#dce3d9] px-4 py-3 outline-none focus:border-[#4c9856]"
-          />
+          {mode !== "recovery" && (
+            <input
+              required
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email address"
+              className="w-full rounded-xl border border-[#dce3d9] px-4 py-3 outline-none focus:border-[#4c9856]"
+            />
+          )}
+          {mode !== "forgot" && (
+            <input
+              required
+              minLength={mode === "recovery" ? 8 : 6}
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={mode === "recovery" ? "New password" : "Password"}
+              autoComplete={mode === "recovery" ? "new-password" : mode === "signin" ? "current-password" : "new-password"}
+              className="w-full rounded-xl border border-[#dce3d9] px-4 py-3 outline-none focus:border-[#4c9856]"
+            />
+          )}
+          {mode === "recovery" && (
+            <input
+              required
+              minLength={8}
+              type="password"
+              value={confirmation}
+              onChange={(e) => setConfirmation(e.target.value)}
+              placeholder="Confirm new password"
+              autoComplete="new-password"
+              className="w-full rounded-xl border border-[#dce3d9] px-4 py-3 outline-none focus:border-[#4c9856]"
+            />
+          )}
           {mode === "signin" ? (
             <label className="flex min-h-8 cursor-pointer items-center gap-2 px-1 text-sm text-[#65756a]">
               <input
@@ -1151,24 +1242,39 @@ export function AuthDialog({ close }: { close: () => void }) {
               <span>Remember me on this device</span>
             </label>
           ) : null}
-          <button className="w-full rounded-xl bg-[#173d2a] py-3.5 text-sm font-bold text-white">
-            {mode === "signup" ? "Create free account" : "Sign in"}
+          <button disabled={busy} className="w-full rounded-xl bg-[#173d2a] py-3.5 text-sm font-bold text-white disabled:opacity-60">
+            {busy
+              ? "Please wait…"
+              : mode === "signup"
+                ? "Create free account"
+                : mode === "signin"
+                  ? "Sign in"
+                  : mode === "forgot"
+                    ? "Send reset link"
+                    : "Save new password"}
           </button>
         </form>
-        <p className="mt-5 text-center text-sm text-[#748176]">
-          {mode === "signup" ? "Already a member?" : "New to EcoLearn?"}{" "}
-          <button
-            onClick={() => setMode(mode === "signup" ? "signin" : "signup")}
-            className="font-bold text-[#287640]"
-          >
-            {mode === "signup" ? "Sign in" : "Create an account"}
+        {mode === "signin" && (
+          <button onClick={() => setMode("forgot")} className="mt-4 w-full text-center text-sm font-bold text-[#287640]">
+            Forgot password?
           </button>
-        </p>
-        <p className="mt-4 text-center text-xs leading-5 text-[#879289]">
+        )}
+        {mode !== "recovery" && (
+          <p className="mt-4 text-center text-sm text-[#748176]">
+            {mode === "signup" ? "Already a member?" : mode === "forgot" ? "Remembered it?" : "New to EcoLearn?"}{" "}
+            <button
+              onClick={() => setMode(mode === "signup" ? "signin" : mode === "forgot" ? "signin" : "signup")}
+              className="font-bold text-[#287640]"
+            >
+              {mode === "signup" ? "Sign in" : mode === "forgot" ? "Back to sign in" : "Create an account"}
+            </button>
+          </p>
+        )}
+        {(mode === "signup" || mode === "signin") && <p className="mt-4 text-center text-xs leading-5 text-[#879289]">
           By continuing, you agree to the{" "}
           <a
             href="#terms"
-            onClick={close}
+            onClick={closeDialog}
             className="font-semibold underline underline-offset-2"
           >
             Terms of Service
@@ -1176,13 +1282,18 @@ export function AuthDialog({ close }: { close: () => void }) {
           and acknowledge the{" "}
           <a
             href="#privacy"
-            onClick={close}
+            onClick={closeDialog}
             className="font-semibold underline underline-offset-2"
           >
             Privacy Policy
           </a>
           .
-        </p>
+        </p>}
+        {mode === "signup" && (
+          <p className="mt-3 text-center text-xs leading-5 text-[#879289]">
+            Learners under 13 need a parent, guardian, or authorized school to create and manage their account.
+          </p>
+        )}
       </div>
     </div>
   );

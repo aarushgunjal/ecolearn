@@ -1,6 +1,6 @@
 # EcoLearn — Current Features
 
-_Platform snapshot — August 7, 2026_
+_Platform snapshot — August 31, 2026_
 
 EcoLearn is a Delaware-first learning and waste-guidance platform for students,
 beginning with primary-school use cases. The platform combines official DNREC
@@ -24,16 +24,27 @@ Recyclopedia data, guided learning, progress, and privacy-conscious scanning.
   fallback.
 - Separate gallery and camera controls, image resizing/type validation, student
   privacy reminders, and no storage of images used only for the visual check.
+- Privacy-preserving aggregate search/scan analytics capture intentional text
+  searches, photo outcomes, verified matches, and confusing/no-match results.
+  Analytics deliberately exclude photos, coordinates, and account identifiers.
+- The admin dashboard summarizes frequently searched, scanned, and confusing
+  items over the last 30 days without displaying fabricated placeholder rows.
+- Nearby-location results request high-accuracy coordinates only after the user
+  taps search, use miles in the U.S. interface, and recenter on the user before
+  a chosen result is focused. Users may choose approximate location at the OS/browser level,
+  and coordinates are not retained by EcoLearn.
 
 ## Learning, motivation, and accounts
 
 - Six Delaware-aware lessons with quizzes, ordered unlocking, and saved
   completion state.
 - XP, levels, streaks, achievements, quests, and scan history.
-- Email/password and Google authentication with a remember-me preference.
+- Email/password and Google authentication, plus native Sign in with Apple on
+  iOS and an app-deep-linked password recovery flow.
 - Profile, notification, school, organization, community, local-rules, and
   scanner-tool surfaces.
-- Shareable routes for the main platform areas, privacy policy, and terms.
+- Shareable routes for the main platform areas and public Privacy, Terms,
+  Account deletion, and Support pages.
 
 ## Security and responsible improvement
 
@@ -50,7 +61,8 @@ Recyclopedia data, guided learning, progress, and privacy-conscious scanning.
 
 - Both mobile apps target Expo SDK 57 and React Native 0.86.
 - Expo EcoLearn companion with authentication, verified scanning, lessons,
-  quests, profile, account deletion, and practical tools.
+  quests, profile, account deletion, practical tools, production EAS profiles,
+  locked store identifiers, and App Store release documentation.
 - Standalone Expo scanner aligned with the signed-in one-call visual identifier
   and the same verified DNREC boundary as the main mobile app.
 

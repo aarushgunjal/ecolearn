@@ -1,0 +1,28 @@
+ECOLEARN THIRD-PARTY NOTICES
+Last reviewed: August 31, 2026
+
+EcoLearn is proprietary software. Third-party components retain their own licenses and copyrights.
+
+Open-source software used by EcoLearn includes React, React Native, Expo, Expo Vector Icons, React Native Async Storage, React Native Maps, Supabase JavaScript, Radix UI, clsx, tailwind-merge, and react-native-url-polyfill under the MIT License; Leaflet under the BSD 2-Clause License; Lucide under the ISC License; and class-variance-authority under Apache License 2.0.
+
+MIT LICENSE
+Permission is hereby granted, free of charge, to any person obtaining a copy of the applicable third-party software and associated documentation files, to deal in that software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies, subject to inclusion of the applicable copyright and permission notice. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+Expo is copyright (c) 2015-present 650 Industries, Inc. (aka Expo).
+
+LEAFLET — BSD 2-CLAUSE
+Copyright (c) 2010-2026, Vladimir Agafonkin. Copyright (c) 2010-2011, CloudMade. All rights reserved. Redistribution and use in source and binary forms, with or without modification, are permitted provided that source redistributions retain the copyright, conditions, and disclaimer and binary redistributions reproduce them in documentation and/or other materials. THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY.
+
+LUCIDE — ISC
+Copyright (c) 2020, Lucide Contributors. Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is granted, provided the copyright and permission notice appear in all copies. THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY.
+
+CLASS-VARIANCE-AUTHORITY — APACHE-2.0
+Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+DATA ATTRIBUTIONS
+Map data © OpenStreetMap contributors, ODbL: https://www.openstreetmap.org/copyright
+Product information © Open Food Facts contributors, ODbL/content terms: https://world.openfoodfacts.org/terms-of-use
+Delaware guidance: Delaware DNREC Recyclopedia: https://dnrec.delaware.gov/waste-hazardous/recycling/what/
+Educational videos and facility information: Delaware Solid Waste Authority: https://dswaeducation.com/videos/ and https://dswa.com/facility/
+
+The detailed dependency and compliance audit is maintained in the EcoLearn source repository at docs/compliance/OPEN_SOURCE_AND_THIRD_PARTY_AUDIT.md.

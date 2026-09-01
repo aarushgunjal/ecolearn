@@ -86,6 +86,7 @@ test.describe("EcoLearn guest journeys", () => {
   });
 
   test("selects the electronics DSWA video from the verified catalog category", async ({ page }) => {
+    let lookupPayload: Record<string, unknown> | null = null;
     await page.route("**/functions/v1/delaware-guidance", async (route) => {
       const payload = route.request().postDataJSON();
       if (payload?.mode === "suggestions") {
@@ -96,6 +97,7 @@ test.describe("EcoLearn guest journeys", () => {
         });
         return;
       }
+      lookupPayload = payload;
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -128,6 +130,27 @@ test.describe("EcoLearn guest journeys", () => {
       "src",
       /youtube-nocookie\.com\/embed\//,
     );
+    expect(lookupPayload).toMatchObject({
+      item: "can opener",
+      inputMethod: "typed_search",
+      clientPlatform: "web",
+    });
+    const locationButton = page.getByRole("button", { name: "See available locations" });
+    const sourceLink = page.getByRole("link", { name: /Verified source: Delaware DNREC Recyclopedia/ });
+    const [buttonBox, sourceBox] = await Promise.all([
+      locationButton.boundingBox(),
+      sourceLink.boundingBox(),
+    ]);
+    expect(buttonBox).not.toBeNull();
+    expect(sourceBox).not.toBeNull();
+    const overlaps = Boolean(
+      buttonBox && sourceBox &&
+      buttonBox.x < sourceBox.x + sourceBox.width &&
+      buttonBox.x + buttonBox.width > sourceBox.x &&
+      buttonBox.y < sourceBox.y + sourceBox.height &&
+      buttonBox.y + buttonBox.height > sourceBox.y
+    );
+    expect(overlaps).toBe(false);
   });
 
   test("offers gallery and camera selection as separate mobile-safe controls", async ({ page }) => {
@@ -170,6 +193,28 @@ test.describe("EcoLearn guest journeys", () => {
       await remember.elementHandle(),
     );
     expect(passwordBeforeRemember).toBe(true);
+  });
+
+  test("requests a secure password-reset link from the web sign-in flow", async ({ page }) => {
+    let resetRequest: { email?: string } | null = null;
+    let redirectTarget = "";
+    await page.route("**/auth/v1/recover**", async (route) => {
+      resetRequest = route.request().postDataJSON();
+      redirectTarget = new URL(route.request().url()).searchParams.get("redirect_to") ?? "";
+      await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+    });
+
+    const app = new EcoLearnPage(page);
+    await app.goto();
+    await app.openAuthDialog();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.getByRole("button", { name: "Forgot password?" }).click();
+    await page.getByRole("textbox", { name: "Email address" }).fill("reviewer@example.com");
+    await page.getByRole("button", { name: "Send reset link" }).click();
+
+    await expect(page.getByText("Check your email", { exact: true }).first()).toBeVisible();
+    expect(resetRequest).toMatchObject({ email: "reviewer@example.com" });
+    expect(redirectTarget).toBe("http://127.0.0.1:8080/reset-password");
   });
 
   test("requires the correct lesson answer before completion", async ({ page }) => {
@@ -247,9 +292,12 @@ test.describe("EcoLearn guest journeys", () => {
 
     await expect(page.getByRole("application", { name: /Nearby disposal map with 2 locations/ })).toBeVisible();
     await expect(page.locator(".ecolearn-map-marker")).toHaveCount(2);
-    await expect(page.getByText("Delaware Recycling Center", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Show Delaware Recycling Center on map" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Show NERDiT Recycles on map" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Get directions ↗" }).first()).toHaveAttribute("href", /google\.com\/maps\/dir/);
+    await expect(page.getByText(/1\.2 miles away/).first()).toBeVisible();
+    const mapZoom = Number(await page.getByRole("application", { name: /Nearby disposal map/ }).getAttribute("data-map-zoom"));
+    expect(mapZoom).toBeGreaterThanOrEqual(10);
     expect(requestedType).toBe("electronics");
   });
 
@@ -332,6 +380,8 @@ test("public account-deletion instructions are reachable without signing in", as
 test("privacy, terms, and support pages are directly reachable", async ({ page }) => {
   await page.goto("/privacy");
   await expect(page.getByRole("heading", { name: "Privacy Policy" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "7. Elementary students and children under 13" })).toBeVisible();
+  await expect(page.getByText(/EcoLearn is designed for educators, families, communities, and students/)).toBeVisible();
   await page.goto("/terms");
   await expect(page.getByRole("heading", { name: "Terms of Service" })).toBeVisible();
   await page.goto("/support");
@@ -339,6 +389,12 @@ test("privacy, terms, and support pages are directly reachable", async ({ page }
   await expect(page.getByRole("article").getByRole("link", { name: "aarushgunjal1@gmail.com" })).toHaveAttribute(
     "href",
     /mailto:aarushgunjal1@gmail\.com/,
+  );
+  await page.goto("/licenses");
+  await expect(page.getByRole("heading", { name: "Open Source Licenses" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Read Third-Party Notices" })).toHaveAttribute(
+    "href",
+    "/third-party-notices.txt",
   );
 });
 

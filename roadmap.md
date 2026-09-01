@@ -18,18 +18,30 @@ take priority over novelty.
       the learner-facing feedback prompt is intentionally removed.
 - [x] Server-controlled progress, lesson completion, rewards, and achievements.
 - [x] Expo scanner and EcoLearn companion foundations.
+- [x] iOS release package: native Apple sign-in, password recovery, public
+      support/legal/deletion routes, EAS production profile, metadata, privacy
+      inventory, review notes, screenshot plan, and TestFlight checklist.
 - [x] Shareable platform routes and protected admin navigation.
+- [x] Privacy-preserving aggregate item demand/confusion analytics across web
+      and mobile, with an admin 30-day summary.
+- [x] High-accuracy-on-request nearby search, U.S. miles display, defensive
+      Delaware coordinate validation, and useful user-centered map zoom before
+      a selected facility is focused.
 
 ## Now: pilot readiness
 
 - [ ] Apply and verify all Supabase migrations in order, including
-  `202608020001_secure_delaware_platform.sql`.
+  `202608020001_secure_delaware_platform.sql` and
+  `202608310001_item_interaction_analytics.sql`.
 - [ ] Deploy the current Edge Functions and run the DNREC refresh workflow.
 - [ ] Run authenticated end-to-end tests against a dedicated staging Supabase
   project, including rate limits, duplicate requests, consent, and admin review.
 - [ ] Build a Delaware-relevant validation set and record exact-item match,
   no-match, and location accuracy.
 - [ ] Complete WCAG 2.2 AA and mobile-device testing.
+- [ ] When Apple membership activates, create the locked
+      `com.ecolearn.mobile` App ID, finish Supabase Apple configuration, run the
+      signed EAS production build, and complete real-device TestFlight QA.
 - [ ] Replace remaining motivational sample data before a public launch.
 
 ## School pilot decisions
