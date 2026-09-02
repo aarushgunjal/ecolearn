@@ -1,6 +1,6 @@
 # EcoLearn iOS release readiness
 
-Updated: August 31, 2026
+Updated: September 1, 2026
 
 ## Current release state
 
@@ -8,8 +8,10 @@ Updated: August 31, 2026
 - Bundle identifier: `com.ecolearn.mobile`
 - Expo project: `@aarugunj/ecolearn-mobile`
 - Public website: <https://ecolearn.dev>
-- TestFlight release candidate: `1.0.0 (5)` from commit `566baa8`
-- App Store version `1.0` is attached to build `5` and configured for manual release.
+- TestFlight release candidate: `1.0.0 (6)` from commit `1fc6e56`; uploaded to
+  App Store Connect on September 1, 2026 and awaiting Apple processing.
+- App Store version `1.0` remains configured for manual release. Attach build
+  `6` after Apple finishes processing it, replacing build `5`.
 - Subtitle: `Learn. Scan. Act sustainably.`
 - Primary category: Education; secondary category: Lifestyle.
 - TestFlight description, feedback contact, marketing URL, privacy URL, and beta review notes are saved.
@@ -35,7 +37,9 @@ Updated: August 31, 2026
 - Production EAS environment: required Supabase public variables configured
 - Privacy, Terms, support, and account-deletion URLs: HTTP 200 over HTTPS
 - App Privacy responses: published in App Store Connect on August 31, 2026
-- Native iOS privacy manifest: included in build 5 and aligned with the published responses
+- Native iOS privacy manifest: included in build 6 and aligned with the published responses
+- Verified scan results can hand the exact official DNREC item to the map,
+  prefill the material search, and automatically query nearby locations.
 - Secure community/classroom migration: deployed and validated
 - All 14 current local Edge Functions: deployed; `delete-account` is active
 - Production scanner check: Pepsi can correctly resolves to the official
