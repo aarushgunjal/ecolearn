@@ -103,11 +103,19 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [recoveringPassword, setRecoveringPassword] = useState(false);
+  const handledAuthLinks = useRef(new Set<string>());
 
   useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoadingSession(false); });
     const consumeAuthLink = async (url: string) => {
+      if (handledAuthLinks.current.has(url)) return;
+      handledAuthLinks.current.add(url);
       const callback = new URL(url.replace("#", "?"));
+      const authError = callback.searchParams.get("error_description") ?? callback.searchParams.get("error");
+      if (authError) {
+        Alert.alert("Could not confirm email", authError);
+        return;
+      }
       const accessToken = callback.searchParams.get("access_token");
       const refreshToken = callback.searchParams.get("refresh_token");
       if (!accessToken || !refreshToken) return;
@@ -116,7 +124,15 @@ export default function App() {
         Alert.alert("Could not open sign-in link", error.message);
         return;
       }
-      if (callback.searchParams.get("type") === "recovery") setRecoveringPassword(true);
+      const linkType = callback.searchParams.get("type");
+      if (linkType === "recovery") {
+        setRecoveringPassword(true);
+      } else if (linkType === "signup" || linkType === "email" || linkType === "invite") {
+        Alert.alert(
+          "Your email is confirmed",
+          "Welcome to EcoLearn. You’re signed in and ready to get started.",
+        );
+      }
     };
     void ExpoLinking.getInitialURL().then((url) => { if (url) void consumeAuthLink(url); });
     const linkListener = ExpoLinking.addEventListener("url", ({ url }) => { void consumeAuthLink(url); });
@@ -151,10 +167,21 @@ function AuthScreen() {
   const submit = async () => {
     if (!email.trim() || password.length < 6) return Alert.alert("Check your details", "Enter an email and a password with at least six characters.");
     setBusy(true);
-    const response = mode === "signin" ? await supabase.auth.signInWithPassword({ email: email.trim(), password }) : await supabase.auth.signUp({ email: email.trim(), password });
+    const response = mode === "signin"
+      ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      : await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: { emailRedirectTo: ExpoLinking.createURL("auth/callback") },
+        });
     setBusy(false);
     if (response.error) return Alert.alert("Could not continue", response.error.message);
-    if (mode === "signup" && !response.data.session) Alert.alert("Check your email", "Confirm your email, then return here to sign in.");
+    if (mode === "signup" && !response.data.session) {
+      Alert.alert(
+        "Check your email",
+        "Open the EcoLearn confirmation link on this device. EcoLearn will reopen, confirm your email, and sign you in automatically.",
+      );
+    }
   };
   const google = async () => {
     if (usingExpoGo) {
