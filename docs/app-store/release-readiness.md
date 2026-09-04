@@ -1,6 +1,6 @@
 # EcoLearn iOS release readiness
 
-Updated: September 1, 2026
+Updated: September 4, 2026
 
 ## Current release state
 
@@ -8,11 +8,14 @@ Updated: September 1, 2026
 - Bundle identifier: `com.ecolearn.mobile`
 - Expo project: `@aarugunj/ecolearn-mobile`
 - Public website: <https://ecolearn.dev>
-- Release candidate: `1.0.0 (6)` from commit `1fc6e56`; processed, attached to
-  App Store version `1.0`, and submitted to App Review on September 1, 2026 at
-  9:18 PM EDT.
-- App Review status: **Waiting for Review**. Submission ID:
-  `f61171d6-6dec-43f0-bc77-69f9c6e18dd5`.
+- Previous submitted build: `1.0.0 (6)` from commit `1fc6e56`.
+- Current release candidate: `1.0.0 (7)` from commit `9532d65`; EAS build
+  `cf48f0e0-8a3b-4388-a775-5b62e5d37d9d` completed and its App Store upload
+  was scheduled as EAS submission `a47cc6c6-0a9f-4f17-87e4-cf7a0ded3029`.
+- App Review status: **Information Needed** under Guideline 2.1. Apple requested
+  a physical-device recording plus six written disclosures. The complete reply
+  and condensed App Review Notes are in
+  `docs/app-store/guideline-2.1-information-response.md`.
 - Release remains manual after approval. Pricing is free, availability is
   United States only, distribution is public and discoverable, and Apple
   Silicon Mac and Apple Vision Pro availability are disabled.
@@ -32,13 +35,13 @@ Updated: September 1, 2026
 
 ## Automated gates passed
 
-- Expo Doctor: 21/21 checks
+- Expo Doctor: 21/21 checks on the build 7 dependency set
 - TypeScript: pass
 - iOS production JavaScript bundle: pass
 - Android production JavaScript bundle: pass
 - Root and platform-web production builds: pass
 - Root and platform-web lint: zero errors (existing fast-refresh warnings only)
-- Local and production Playwright coverage includes 34 passed, 2 intentionally skipped
+- Current local Playwright coverage: 36 passed, 4 credential-dependent scenarios skipped
 - Authenticated production community integration: pass across admin, teacher,
   student, and unauthorized-user scenarios
 - Production hub load check: 250/250 successful requests at 20 concurrent clients
@@ -49,6 +52,8 @@ Updated: September 1, 2026
 - Verified scan results can hand the exact official DNREC item to the map,
   prefill the material search, and automatically query nearby locations.
 - Secure community/classroom migration: deployed and validated
+- Server-enforced community content filtering, reporting, blocking, scoped
+  moderation, soft removal, and RLS visibility controls: deployed and validated
 - All 14 current local Edge Functions: deployed; `delete-account` is active
 - Production scanner check: Pepsi can correctly resolves to the official
   `Aluminum cans` DNREC item
