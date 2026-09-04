@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -12,15 +13,19 @@ import {
   CalendarDays,
   Check,
   ClipboardCopy,
+  Flag,
   GraduationCap,
   LoaderCircle,
   Megaphone,
   Plus,
   School,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Trophy,
+  UserRoundCheck,
   UserRoundCog,
+  UserRoundX,
   Users,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +37,7 @@ import {
   type ClassroomDashboard,
   type Community,
   type CommunityEvent,
+  type ModerationReport,
   type SchoolStanding,
   useCommunityHub,
 } from "@/hooks/useCommunityHub";
@@ -90,6 +96,9 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
   const [eventDescription, setEventDescription] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [eventLocation, setEventLocation] = useState("");
+  const [moderationReports, setModerationReports] = useState<
+    ModerationReport[]
+  >([]);
 
   const schoolCommunities = useMemo(
     () => hub.data.communities.filter((item) => item.kind === "school"),
@@ -116,8 +125,15 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
     hub.data.profile.role === "admin";
   const canManageClassroom =
     selectedClassroom?.role === "teacher" || canManageCommunity;
+  const canModerate =
+    hub.data.profile.role === "admin" ||
+    hub.data.communities.some(
+      (item) => item.role === "owner" || item.role === "manager",
+    ) ||
+    hub.data.classrooms.some((item) => item.role === "teacher");
   const getSchoolStandings = hub.getSchoolStandings;
   const getClassroomDashboard = hub.getClassroomDashboard;
+  const getModerationQueue = hub.getModerationQueue;
 
   useEffect(() => setAlias(hub.data.profile.alias), [hub.data.profile.alias]);
   useEffect(() => {
@@ -151,6 +167,17 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
       .then(setDashboard)
       .catch(() => setDashboard(null));
   }, [canManageClassroom, getClassroomDashboard, selectedClassroom]);
+  const refreshModeration = useCallback(async () => {
+    if (!canModerate) return setModerationReports([]);
+    try {
+      setModerationReports(await getModerationQueue());
+    } catch {
+      setModerationReports([]);
+    }
+  }, [canModerate, getModerationQueue]);
+  useEffect(() => {
+    void refreshModeration();
+  }, [refreshModeration, hub.data.announcements, hub.data.events]);
 
   const action = async (
     key: string,
@@ -337,6 +364,14 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
               }
             />
           )}
+          <SafetyCenter
+            hub={hub}
+            reports={moderationReports}
+            canModerate={canModerate}
+            busy={busy}
+            action={action}
+            refreshModeration={refreshModeration}
+          />
         </aside>
 
         <main className="min-w-0 space-y-5">
@@ -558,8 +593,17 @@ function CommunityDetail({
                     {item.body}
                   </p>
                   <p className="mt-2 text-xs text-[#879188]">
-                    {new Date(item.created_at).toLocaleDateString()}
+                    {item.creator_alias} · {new Date(item.created_at).toLocaleDateString()}
                   </p>
+                  <SafetyActions
+                    targetType="announcement"
+                    targetId={item.id}
+                    createdBy={item.created_by}
+                    creatorAlias={item.creator_alias}
+                    hub={hub}
+                    busy={busy}
+                    action={action}
+                  />
                 </article>
               ))}
             </div>
@@ -633,6 +677,9 @@ function CommunityDetail({
                   <p className="mt-2 text-sm leading-6 text-[#718076]">
                     {event.description}
                   </p>
+                  <p className="mt-2 text-xs text-[#879188]">
+                    Posted by {event.creator_alias}
+                  </p>
                   <button
                     className={`${secondary} mt-3`}
                     disabled={event.rsvped || busy !== null}
@@ -648,6 +695,15 @@ function CommunityDetail({
                       ? "Going"
                       : `RSVP · ${event.rsvp_count} going`}
                   </button>
+                  <SafetyActions
+                    targetType="event"
+                    targetId={event.id}
+                    createdBy={event.created_by}
+                    creatorAlias={event.creator_alias}
+                    hub={hub}
+                    busy={busy}
+                    action={action}
+                  />
                 </article>
               ))}
             </div>
@@ -716,6 +772,228 @@ function CommunityDetail({
         </div>
       </section>
     </>
+  );
+}
+
+const reportReasons: Array<[ModerationReport["reason"], string]> = [
+  ["inappropriate", "Inappropriate content"],
+  ["bullying", "Bullying or harassment"],
+  ["spam", "Spam or misleading content"],
+  ["privacy", "Personal or private information"],
+  ["other", "Another safety concern"],
+];
+
+function SafetyActions({
+  targetType,
+  targetId,
+  createdBy,
+  creatorAlias,
+  hub,
+  busy,
+  action,
+}: {
+  targetType: "announcement" | "event";
+  targetId: string;
+  createdBy: string;
+  creatorAlias: string;
+  hub: HubController;
+  busy: string | null;
+  action: Action;
+}) {
+  if (!createdBy || createdBy === hub.user?.id) return null;
+  const report = () => {
+    const entered = window.prompt(
+      `Why are you reporting this ${targetType}?\n\nEnter: inappropriate, bullying, spam, privacy, or other`,
+      "inappropriate",
+    );
+    if (!entered) return;
+    const reason = entered.trim().toLowerCase() as ModerationReport["reason"];
+    if (!reportReasons.some(([value]) => value === reason)) {
+      window.alert("Choose inappropriate, bullying, spam, privacy, or other.");
+      return;
+    }
+    const details = window.prompt(
+      "Add optional details for the community moderator (500 characters maximum).",
+      "",
+    );
+    if (details === null) return;
+    void action(
+      `report-${targetId}`,
+      () => hub.reportContent(targetType, targetId, reason, details.slice(0, 500)),
+      "Report sent to the community moderator",
+    );
+  };
+  const block = () => {
+    if (
+      !window.confirm(
+        `Block ${creatorAlias}? Their announcements and events will disappear for you. You can unblock them from Safety & moderation.`,
+      )
+    )
+      return;
+    void action(
+      `block-${createdBy}`,
+      () => hub.blockUser(createdBy),
+      `${creatorAlias} blocked`,
+    );
+  };
+  return (
+    <div className="mt-3 flex flex-wrap gap-2 border-t border-[#e5ebe2] pt-3">
+      <button
+        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-bold text-[#69766d] hover:bg-[#f2f5f0]"
+        disabled={busy !== null}
+        onClick={report}
+      >
+        <Flag size={14} /> Report
+      </button>
+      <button
+        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-bold text-[#69766d] hover:bg-[#f2f5f0]"
+        disabled={busy !== null}
+        onClick={block}
+      >
+        <UserRoundX size={14} /> Block {creatorAlias}
+      </button>
+    </div>
+  );
+}
+
+function SafetyCenter({
+  hub,
+  reports,
+  canModerate,
+  busy,
+  action,
+  refreshModeration,
+}: {
+  hub: HubController;
+  reports: ModerationReport[];
+  canModerate: boolean;
+  busy: string | null;
+  action: Action;
+  refreshModeration: () => Promise<void>;
+}) {
+  return (
+    <section className="rounded-2xl border border-[#dde6da] bg-white p-5">
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#eaf4e5] text-[#347b45]">
+          <ShieldAlert size={20} />
+        </span>
+        <div>
+          <h2 className="font-semibold">Safety &amp; moderation</h2>
+          <p className="mt-1 text-xs leading-5 text-[#718076]">
+            Teacher-managed publishing, automatic safety filtering, member reporting, and blocking help keep shared spaces appropriate.
+          </p>
+        </div>
+      </div>
+
+      {hub.data.blocked_users.length > 0 && (
+        <div className="mt-4 border-t border-[#e6ebe3] pt-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-[#617067]">
+            Blocked accounts
+          </p>
+          <div className="mt-2 space-y-2">
+            {hub.data.blocked_users.map((blocked) => (
+              <div
+                key={blocked.user_id}
+                className="flex items-center justify-between gap-3 rounded-xl bg-[#f5f8f3] px-3 py-2"
+              >
+                <span className="text-sm font-semibold text-[#294233]">
+                  {blocked.alias}
+                </span>
+                <button
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-[#2d7340]"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    void action(
+                      `unblock-${blocked.user_id}`,
+                      () => hub.unblockUser(blocked.user_id),
+                      `${blocked.alias} unblocked`,
+                    )
+                  }
+                >
+                  <UserRoundCheck size={14} /> Unblock
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {canModerate && (
+        <div className="mt-4 border-t border-[#e6ebe3] pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-bold uppercase tracking-wider text-[#617067]">
+              Moderator queue
+            </p>
+            <span className="rounded-full bg-[#eef6ea] px-2.5 py-1 text-[10px] font-bold text-[#347744]">
+              {reports.length} open
+            </span>
+          </div>
+          {reports.length ? (
+            <div className="mt-3 space-y-3">
+              {reports.map((report) => (
+                <article
+                  key={report.id}
+                  className="rounded-xl border border-[#e1e7de] p-3"
+                >
+                  <p className="text-sm font-semibold text-[#294233]">
+                    {report.target_title}
+                  </p>
+                  <p className="mt-1 line-clamp-3 text-xs leading-5 text-[#718076]">
+                    {report.target_body}
+                  </p>
+                  <p className="mt-2 text-[11px] text-[#7b877e]">
+                    {reportReasons.find(([value]) => value === report.reason)?.[1] ?? report.reason} · reported by {report.reporter_alias}
+                  </p>
+                  {report.details && (
+                    <p className="mt-1 text-[11px] italic text-[#7b877e]">
+                      “{report.details}”
+                    </p>
+                  )}
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#173d2a] px-3 py-2 text-xs font-bold text-white"
+                      disabled={busy !== null}
+                      onClick={() =>
+                        void action(
+                          `remove-${report.id}`,
+                          async () => {
+                            await hub.resolveReport(report.id, "remove");
+                            await refreshModeration();
+                          },
+                          "Content removed",
+                        )
+                      }
+                    >
+                      <ShieldCheck size={14} /> Remove
+                    </button>
+                    <button
+                      className={`${secondary} min-h-0 px-3 py-2 text-xs`}
+                      disabled={busy !== null}
+                      onClick={() =>
+                        void action(
+                          `dismiss-${report.id}`,
+                          async () => {
+                            await hub.resolveReport(report.id, "dismiss");
+                            await refreshModeration();
+                          },
+                          "Report dismissed",
+                        )
+                      }
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs leading-5 text-[#718076]">
+              No reports need attention.
+            </p>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 

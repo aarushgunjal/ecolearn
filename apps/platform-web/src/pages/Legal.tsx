@@ -54,7 +54,7 @@ export function Legal({
           {heading}
         </h1>
         <p className="mt-3 text-sm text-[#728076]">
-          Last updated: August 31, 2026
+          Last updated: September 4, 2026
         </p>
         {privacy ? <PrivacyContent /> : deletion ? <AccountDeletionContent /> : support ? <SupportContent /> : licenses ? <LicensesContent /> : <TermsContent />}
         <section className="mt-10 rounded-2xl bg-[#e9f4e4] p-5 text-sm leading-6 text-[#42604b]">
@@ -122,7 +122,7 @@ function SupportContent() {
         Use one clear photo of a single item. EcoLearn only presents Delaware disposal instructions when it can verify a match against DNREC Recyclopedia data. A no-match response is intentional and safer than guessing. For hazardous, medical, battery, electronics, or chemical waste, confirm requirements with the responsible Delaware program before acting.
       </Section>
       <Section title="Privacy and safety">
-        Never send support messages containing a password, precise home address, full student roster, or other sensitive student information. Review the <a className="font-bold underline underline-offset-2" href="/privacy">Privacy Policy</a> for details about current data handling.
+        Never send support messages containing a password, precise home address, full student roster, or other sensitive student information. Community members can report an announcement or event and block its publisher directly in Community. Managers and EcoLearn administrators review reported content and may remove it. Review the <a className="font-bold underline underline-offset-2" href="/privacy">Privacy Policy</a> for details about current data handling.
       </Section>
     </article>
   );
@@ -151,6 +151,13 @@ function PrivacyContent() {
             or account identifiers.
           </li>
           <li>
+            <b>Community content and safety records:</b> a student-safe public
+            alias, classroom/community membership, manager-published
+            announcements and events, event responses, reports, blocks, and
+            moderator decisions. Reports include the selected reason and any
+            optional details the reporter provides.
+          </li>
+          <li>
             <b>Photos:</b> a photo you select is processed to provide the scan
             or package-label result you request. The current scanner does not
             store those photos or use them for model training.
@@ -166,8 +173,9 @@ function PrivacyContent() {
       </Section>
       <Section title="3. How we use information">
         We use information to operate the app, save your progress, improve scan
-        guidance, prevent abuse, and respond to support requests. We do not sell
-        personal information.
+        guidance, prevent abuse, enforce community safety rules, investigate
+        reports, hide blocked publishers, and respond to support requests. We do
+        not sell personal information.
       </Section>
       <Section title="4. Service providers and disclosures">
         EcoLearn uses service providers to deliver the product, including
@@ -183,6 +191,8 @@ function PrivacyContent() {
         Profile settings in the mobile app. You may also use the public
         account-deletion page or contact us to request access to or correction
         of your personal information, subject to legal and operational limits.
+        You can report community content, block its publisher, and later unblock
+        that account from the Safety &amp; moderation section.
       </Section>
       <Section title="6. Security and retention">
         We use reasonable administrative and technical safeguards. No internet
@@ -280,9 +290,11 @@ function TermsContent() {
       </Section>
       <Section title="4. Your content">
         You retain ownership of content you submit. You grant EcoLearn the
-        limited permission needed to process a scan or label photo to provide
-        the feature you request. The current scanner does not store those photos
-        or use them for model training.
+        limited permission needed to operate, display, protect, and moderate the
+        feature you request. Manager-published announcements and events must be
+        appropriate for the shared educational space and may be filtered,
+        reported, or removed. Members may block a publisher. The current scanner
+        does not store scan photos or use them for model training.
       </Section>
       <Section title="5. Availability and third-party services">
         We may modify, suspend, or discontinue features. Some features depend on

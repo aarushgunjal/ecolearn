@@ -50,6 +50,8 @@ export type Announcement = {
   created_at: string;
   scope: "community" | "classroom";
   scope_id: string;
+  created_by: string;
+  creator_alias: string;
 };
 export type CommunityEvent = {
   id: string;
@@ -60,6 +62,22 @@ export type CommunityEvent = {
   location: string;
   rsvp_count: number;
   rsvped: boolean;
+  created_by: string;
+  creator_alias: string;
+};
+export type BlockedUser = { user_id: string; alias: string };
+export type ModerationReport = {
+  id: string;
+  target_type: "announcement" | "event";
+  target_id: string;
+  target_title: string;
+  target_body: string;
+  reported_alias: string;
+  reporter_alias: string;
+  reason: "inappropriate" | "bullying" | "spam" | "privacy" | "other";
+  details: string;
+  status: "pending" | "reviewed";
+  created_at: string;
 };
 export type HubData = {
   profile: { role: AccountRole; alias: string };
@@ -68,6 +86,7 @@ export type HubData = {
   assignments: Assignment[];
   announcements: Announcement[];
   events: CommunityEvent[];
+  blocked_users: BlockedUser[];
 };
 export type ClassroomDashboard = {
   students: Array<{
@@ -106,6 +125,7 @@ const emptyHub: HubData = {
   assignments: [],
   announcements: [],
   events: [],
+  blocked_users: [],
 };
 
 const messageFor = (error: unknown) =>
@@ -172,6 +192,13 @@ export function useCommunityHub() {
     );
     if (requestError) throw new Error(requestError.message);
     return (response ?? []) as unknown as SchoolStanding[];
+  }, []);
+  const getModerationQueue = useCallback(async () => {
+    const { data: response, error: requestError } = await supabase.rpc(
+      "ecolearn_get_moderation_queue",
+    );
+    if (requestError) throw new Error(requestError.message);
+    return (response ?? []) as unknown as ModerationReport[];
   }, []);
 
   return {
@@ -250,7 +277,34 @@ export function useCommunityHub() {
       }),
     rsvpEvent: (eventId: string) =>
       run("ecolearn_rsvp_event", { p_event_id: eventId, p_status: "going" }),
+    reportContent: (
+      targetType: "announcement" | "event",
+      targetId: string,
+      reason: ModerationReport["reason"],
+      details: string,
+    ) =>
+      run("ecolearn_report_content", {
+        p_target_type: targetType,
+        p_target_id: targetId,
+        p_reason: reason,
+        p_details: details,
+      }),
+    blockUser: (userId: string) =>
+      run("ecolearn_block_user", { p_user_id: userId }),
+    unblockUser: (userId: string) =>
+      run("ecolearn_unblock_user", { p_user_id: userId }),
+    resolveReport: (
+      reportId: string,
+      reportAction: "remove" | "dismiss",
+      note = "",
+    ) =>
+      run("ecolearn_resolve_report", {
+        p_report_id: reportId,
+        p_action: reportAction,
+        p_note: note,
+      }),
     getClassroomDashboard,
     getSchoolStandings,
+    getModerationQueue,
   };
 }

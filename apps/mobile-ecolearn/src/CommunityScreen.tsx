@@ -52,6 +52,8 @@ type Announcement = {
   created_at: string;
   scope: "community" | "classroom";
   scope_id: string;
+  created_by: string;
+  creator_alias: string;
 };
 type Event = {
   id: string;
@@ -62,6 +64,22 @@ type Event = {
   location: string;
   rsvp_count: number;
   rsvped: boolean;
+  created_by: string;
+  creator_alias: string;
+};
+type BlockedUser = { user_id: string; alias: string };
+type ModerationReport = {
+  id: string;
+  target_type: "announcement" | "event";
+  target_id: string;
+  target_title: string;
+  target_body: string;
+  reported_alias: string;
+  reporter_alias: string;
+  reason: "inappropriate" | "bullying" | "spam" | "privacy" | "other";
+  details: string;
+  status: "pending" | "reviewed";
+  created_at: string;
 };
 type Hub = {
   profile: { role: Role; alias: string };
@@ -70,6 +88,7 @@ type Hub = {
   assignments: Assignment[];
   announcements: Announcement[];
   events: Event[];
+  blocked_users: BlockedUser[];
 };
 type StudentMetric = {
   user_id: string;
@@ -97,6 +116,7 @@ const emptyHub: Hub = {
   assignments: [],
   announcements: [],
   events: [],
+  blocked_users: [],
 };
 
 export function CommunityScreen({
@@ -133,6 +153,10 @@ export function CommunityScreen({
   const [eventDescription, setEventDescription] = useState("");
   const [eventStarts, setEventStarts] = useState("");
   const [eventLocation, setEventLocation] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [moderationReports, setModerationReports] = useState<
+    ModerationReport[]
+  >([]);
   const [expanded, setExpanded] = useState<
     "join" | "create" | "class" | "assignment" | "announcement" | "event" | null
   >(null);
@@ -156,6 +180,9 @@ export function CommunityScreen({
   }, []);
   useEffect(() => {
     void refresh();
+    void supabase.auth.getUser().then(({ data }) =>
+      setCurrentUserId(data.user?.id ?? null),
+    );
   }, [refresh]);
   useEffect(() => {
     void supabase
@@ -219,6 +246,24 @@ export function CommunityScreen({
   const managedClassroom = hub.classrooms.find(
     (item) => item.id === selectedClassroom && item.role === "teacher",
   );
+  const canModerate =
+    hub.profile.role === "admin" ||
+    hub.communities.some(
+      (item) => item.role === "owner" || item.role === "manager",
+    ) ||
+    hub.classrooms.some((item) => item.role === "teacher");
+
+  const refreshModeration = useCallback(async () => {
+    if (!canModerate) return setModerationReports([]);
+    const { data, error: requestError } = await supabase.rpc(
+      "ecolearn_get_moderation_queue",
+    );
+    if (requestError) return setModerationReports([]);
+    setModerationReports((data ?? []) as unknown as ModerationReport[]);
+  }, [canModerate]);
+  useEffect(() => {
+    void refreshModeration();
+  }, [refreshModeration, hub.announcements, hub.events]);
 
   const run = async (
     name: string,
@@ -263,6 +308,75 @@ export function CommunityScreen({
       `Share ${String(data)} only with an authorized educator.`,
     );
   };
+  const submitReport = (
+    targetType: "announcement" | "event",
+    targetId: string,
+    reason: ModerationReport["reason"],
+  ) =>
+    Alert.prompt(
+      "Add report details",
+      "Optional: briefly tell the moderator what is wrong with this content.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send report",
+          onPress: (details?: string) =>
+            void run(
+              "ecolearn_report_content",
+              {
+                p_target_type: targetType,
+                p_target_id: targetId,
+                p_reason: reason,
+                p_details: (details ?? "").slice(0, 500),
+              },
+              "Report sent to the community moderator",
+            ),
+        },
+      ],
+      "plain-text",
+      "",
+    );
+  const reportContent = (
+    targetType: "announcement" | "event",
+    targetId: string,
+  ) =>
+    Alert.alert("Report content", "What is the main concern?", [
+      {
+        text: "Inappropriate",
+        onPress: () => submitReport(targetType, targetId, "inappropriate"),
+      },
+      {
+        text: "Bullying",
+        onPress: () => submitReport(targetType, targetId, "bullying"),
+      },
+      {
+        text: "Spam",
+        onPress: () => submitReport(targetType, targetId, "spam"),
+      },
+      {
+        text: "Privacy",
+        onPress: () => submitReport(targetType, targetId, "privacy"),
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  const blockUser = (userId: string, name: string) =>
+    Alert.alert(
+      `Block ${name}?`,
+      "Their announcements and events will disappear for you. You can unblock them from Safety & moderation.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: () =>
+            void run(
+              "ecolearn_block_user",
+              { p_user_id: userId },
+              `${name} blocked`,
+            ),
+        },
+      ],
+    );
 
   if (loading)
     return (
@@ -877,8 +991,28 @@ export function CommunityScreen({
               <Text style={s.cardTitle}>{item.title}</Text>
               <Text style={s.body}>{item.body}</Text>
               <Text style={s.meta}>
-                {new Date(item.created_at).toLocaleDateString()}
+                {item.creator_alias} · {new Date(item.created_at).toLocaleDateString()}
               </Text>
+              {Boolean(currentUserId) && item.created_by !== currentUserId && (
+                <View style={s.safetyActions}>
+                  <Pressable
+                    style={s.safetyButton}
+                    onPress={() => reportContent("announcement", item.id)}
+                  >
+                    <Ionicons name="flag-outline" size={15} color="#65736a" />
+                    <Text style={s.safetyButtonText}>Report</Text>
+                  </Pressable>
+                  <Pressable
+                    style={s.safetyButton}
+                    onPress={() =>
+                      blockUser(item.created_by, item.creator_alias)
+                    }
+                  >
+                    <Ionicons name="person-remove-outline" size={15} color="#65736a" />
+                    <Text style={s.safetyButtonText}>Block</Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
           ))}
         </>
@@ -893,6 +1027,7 @@ export function CommunityScreen({
               <Text style={s.meta}>
                 {new Date(item.starts_at).toLocaleString()} · {item.location}
               </Text>
+              <Text style={s.meta}>Posted by {item.creator_alias}</Text>
               <Pressable
                 disabled={item.rsvped}
                 onPress={() =>
@@ -909,10 +1044,138 @@ export function CommunityScreen({
                     : `RSVP · ${item.rsvp_count} going`}
                 </Text>
               </Pressable>
+              {Boolean(currentUserId) && item.created_by !== currentUserId && (
+                <View style={s.safetyActions}>
+                  <Pressable
+                    style={s.safetyButton}
+                    onPress={() => reportContent("event", item.id)}
+                  >
+                    <Ionicons name="flag-outline" size={15} color="#65736a" />
+                    <Text style={s.safetyButtonText}>Report</Text>
+                  </Pressable>
+                  <Pressable
+                    style={s.safetyButton}
+                    onPress={() =>
+                      blockUser(item.created_by, item.creator_alias)
+                    }
+                  >
+                    <Ionicons name="person-remove-outline" size={15} color="#65736a" />
+                    <Text style={s.safetyButtonText}>Block</Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
           ))}
         </>
       )}
+
+      <Text style={s.section}>Safety &amp; moderation</Text>
+      <View style={s.safetyCard}>
+        <View style={s.row}>
+          <View style={s.icon}>
+            <Ionicons name="shield-checkmark-outline" size={21} color="#28723d" />
+          </View>
+          <View style={s.flex}>
+            <Text style={s.cardTitle}>A safer shared space</Text>
+            <Text style={s.meta}>
+              Publishing is teacher-managed and safety-filtered. Members can report content or block its publisher at any time.
+            </Text>
+          </View>
+        </View>
+
+        {hub.blocked_users.map((blocked) => (
+          <View key={blocked.user_id} style={s.blockedRow}>
+            <Text style={s.cardTitle}>{blocked.alias}</Text>
+            <Pressable
+              disabled={saving}
+              onPress={() =>
+                void run(
+                  "ecolearn_unblock_user",
+                  { p_user_id: blocked.user_id },
+                  `${blocked.alias} unblocked`,
+                )
+              }
+            >
+              <Text style={s.link}>Unblock</Text>
+            </Pressable>
+          </View>
+        ))}
+
+        {canModerate && (
+          <View style={s.moderatorBox}>
+            <View style={s.rowBetween}>
+              <Text style={s.cardTitle}>Moderator queue</Text>
+              <Text style={s.queueCount}>{moderationReports.length} open</Text>
+            </View>
+            {moderationReports.length === 0 ? (
+              <Text style={s.meta}>No reports need attention.</Text>
+            ) : (
+              moderationReports.map((report) => (
+                <View key={report.id} style={s.reportCard}>
+                  <Text style={s.cardTitle}>{report.target_title}</Text>
+                  <Text style={s.meta} numberOfLines={3}>
+                    {report.target_body}
+                  </Text>
+                  <Text style={s.reportMeta}>
+                    {report.reason} · reported by {report.reporter_alias}
+                  </Text>
+                  {Boolean(report.details) && (
+                    <Text style={s.meta}>“{report.details}”</Text>
+                  )}
+                  <View style={s.safetyActions}>
+                    <Pressable
+                      style={s.removeButton}
+                      disabled={saving}
+                      onPress={() =>
+                        Alert.alert(
+                          "Remove this content?",
+                          "It will immediately disappear for all members.",
+                          [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Remove",
+                              style: "destructive",
+                              onPress: () =>
+                                void run(
+                                  "ecolearn_resolve_report",
+                                  {
+                                    p_report_id: report.id,
+                                    p_action: "remove",
+                                    p_note: "Removed after moderator review",
+                                  },
+                                  "Content removed",
+                                ).then(refreshModeration),
+                            },
+                          ],
+                        )
+                      }
+                    >
+                      <Text style={s.removeButtonText}>Remove content</Text>
+                    </Pressable>
+                    <Pressable
+                      style={s.safetyButton}
+                      disabled={saving}
+                      onPress={() =>
+                        void run(
+                          "ecolearn_resolve_report",
+                          {
+                            p_report_id: report.id,
+                            p_action: "dismiss",
+                            p_note: "Dismissed after moderator review",
+                          },
+                          "Report dismissed",
+                        ).then(refreshModeration)
+                      }
+                    >
+                      <Text style={s.safetyButtonText}>Dismiss</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+      </View>
     </>
   );
 }
@@ -1126,4 +1389,85 @@ const s = StyleSheet.create({
     marginTop: 10,
   },
   statusDone: { color: "#26713c", backgroundColor: "#e3f3de" },
+  safetyActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#e8ece6",
+    marginTop: 12,
+    paddingTop: 10,
+  },
+  safetyButton: {
+    minHeight: 36,
+    borderRadius: 10,
+    backgroundColor: "#f2f5f0",
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  safetyButtonText: { color: "#65736a", fontSize: 11, fontWeight: "800" },
+  safetyCard: {
+    borderWidth: 1,
+    borderColor: "#dce5d9",
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    padding: 16,
+    marginBottom: 10,
+  },
+  blockedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderTopColor: "#e8ece6",
+    marginTop: 13,
+    paddingTop: 10,
+  },
+  moderatorBox: {
+    borderTopWidth: 1,
+    borderTopColor: "#dfe6dc",
+    marginTop: 15,
+    paddingTop: 14,
+  },
+  rowBetween: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  queueCount: {
+    color: "#28723d",
+    fontSize: 10,
+    fontWeight: "900",
+    backgroundColor: "#edf6e9",
+    borderRadius: 99,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  reportCard: {
+    borderWidth: 1,
+    borderColor: "#e1e7de",
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 10,
+  },
+  reportMeta: {
+    color: "#7b684f",
+    fontSize: 10,
+    fontWeight: "800",
+    marginTop: 7,
+    textTransform: "capitalize",
+  },
+  removeButton: {
+    minHeight: 36,
+    borderRadius: 10,
+    backgroundColor: "#173d2a",
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  removeButtonText: { color: "#fff", fontSize: 11, fontWeight: "900" },
 });
