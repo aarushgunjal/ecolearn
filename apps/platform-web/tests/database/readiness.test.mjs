@@ -13,6 +13,7 @@ test('production memberships, RLS, learning, deletion, and notification delivery
     grant usage on schema auth, public to anon, authenticated, service_role;
     grant execute on function auth.uid() to anon, authenticated, service_role;
     alter default privileges in schema public grant select, insert, update, delete on tables to authenticated, service_role;
+    alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
     create schema storage;
     create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
     create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text, name text);
@@ -38,6 +39,19 @@ test('production memberships, RLS, learning, deletion, and notification delivery
   const as = async (id, role = 'authenticated') => { await db.exec(`reset role; set role ${role}`); await db.query(`select set_config('request.jwt.claim.sub',$1,false)`, [id ?? '']); };
   const rpc = async (name, args = []) => (await db.query(`select public.${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) as result`, args)).rows[0].result;
   let school, room, event, assignment, teacherCode;
+  await t.test('guests cannot execute privileged functions; public lessons stay readable', async () => {
+    await as(null, 'anon');
+    const functions = await db.query(`select p.proname from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prosecdef and has_function_privilege('anon',p.oid,'EXECUTE')`);
+    assert.equal(functions.rows.length, 0);
+    await assert.rejects(rpc('ecolearn_get_hub'), /permission denied/);
+    await assert.rejects(rpc('claim_next_training_batch'), /permission denied/);
+    await db.exec('reset role; grant select on public.lessons to anon; set role anon');
+    assert.ok((await db.query('select id from public.lessons where is_published')).rows.length > 0);
+    await as(student);
+    await assert.rejects(rpc('award_eligible_achievements', [teacher]), /permission denied/);
+    await assert.rejects(rpc('claim_next_training_batch'), /permission denied/);
+    await assert.rejects(rpc('ecolearn_claim_deliveries'), /permission denied/);
+  });
   await t.test('teacher signup works; metadata cannot create administrators', async () => {
     await as(teacher); assert.equal(await rpc('ecolearn_effective_role'), 'teacher');
     await as(stranger); assert.equal(await rpc('ecolearn_effective_role'), 'student');
