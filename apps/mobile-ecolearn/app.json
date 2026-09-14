@@ -2,7 +2,7 @@
   "expo": {
     "name": "EcoLearn",
     "slug": "ecolearn-mobile",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Delaware-first environmental learning and verified waste guidance.",
     "orientation": "portrait",
     "scheme": "ecolearn-mobile",
@@ -48,6 +48,14 @@
             "NSPrivacyCollectedDataTypePurposes": [
               "NSPrivacyCollectedDataTypePurposeAppFunctionality",
               "NSPrivacyCollectedDataTypePurposeAnalytics"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeDeviceID",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
             ]
           },
           {

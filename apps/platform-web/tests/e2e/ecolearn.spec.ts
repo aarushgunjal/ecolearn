@@ -218,7 +218,7 @@ test.describe("EcoLearn guest journeys", () => {
 
     await expect(page.getByText("Check your email", { exact: true }).first()).toBeVisible();
     expect(resetRequest).toMatchObject({ email: "reviewer@example.com" });
-    expect(redirectTarget).toBe("http://127.0.0.1:8080/reset-password");
+    expect(redirectTarget).toBe(new URL("/reset-password", page.url()).href);
   });
 
   test("requires the correct lesson answer before completion", async ({ page }) => {
