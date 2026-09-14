@@ -17,6 +17,8 @@ import {
   X,
 } from "lucide-react";
 import { useProgress } from "@/hooks/useProgress";
+import { useAdmin } from "@/hooks/useAdmin";
+import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { ScanUtilities } from "@/components/ScanUtilities";
@@ -115,9 +117,10 @@ export function Organization() {
   return <CommunityWorkspace mode="organization" />;
 }
 
-export function Admin() {
+export function Activity() {
+  const { user } = useAuth();
+  const { isAdmin } = useAdmin();
   const { progress } = useProgress();
-  const { toast } = useToast();
   const [scanCategories, setScanCategories] = useState<Array<[string, number]>>(
     [],
   );
@@ -132,9 +135,11 @@ export function Admin() {
   const [itemAnalyticsReady, setItemAnalyticsReady] = useState(true);
   useEffect(() => {
     const loadScanCategories = async () => {
+      if (!user) return;
       const { data } = await supabase
         .from("scan_history")
-        .select("category, confidence_score");
+        .select("category, confidence_score")
+        .eq("user_id", user.id);
       const counts = new Map<string, number>();
       let confidenceTotal = 0;
       let confidenceCount = 0;
@@ -161,8 +166,9 @@ export function Admin() {
     };
 
     void loadScanCategories();
-  }, [progress?.total_scans]);
+  }, [progress?.total_scans, user]);
   useEffect(() => {
+    if (!isAdmin) return;
     const loadItemAnalytics = async () => {
       const { data, error } = await supabase.rpc("get_item_interaction_analytics", {
         p_days: 30,
@@ -183,7 +189,7 @@ export function Admin() {
       })));
     };
     void loadItemAnalytics();
-  }, []);
+  }, [isAdmin]);
   return (
     <Hub
       title="Personal analytics"
@@ -236,7 +242,7 @@ export function Admin() {
           }}>Download activity report</button>
         </div>
       </section>
-      <section className="mt-5 rounded-2xl border border-[#e0e7dc] bg-white p-6">
+      {isAdmin && <section className="mt-5 rounded-2xl border border-[#e0e7dc] bg-white p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="font-semibold">Item demand and confusion</h2>
@@ -250,7 +256,7 @@ export function Admin() {
         </div>
         {!itemAnalyticsReady ? (
           <p className="mt-5 rounded-xl bg-[#fff7e6] p-4 text-sm text-[#76551f]">
-            Apply the item-interaction analytics migration to begin collecting aggregate results.
+            We couldn't load community-wide item statistics. Please try again later.
           </p>
         ) : itemAnalytics.length === 0 ? (
           <p className="mt-5 text-sm text-[#6b796f]">
@@ -282,7 +288,7 @@ export function Admin() {
             </table>
           </div>
         )}
-      </section>
+      </section>}
     </Hub>
   );
 }

@@ -14,7 +14,8 @@ export type Community = {
     | "club"
     | "organization"
     | "municipality";
-  role: "owner" | "manager" | "member";
+  role: "owner" | "manager" | "member" | "admin";
+  can_delete?: boolean;
   member_count: number;
   classroom_count: number;
   total_xp: number;

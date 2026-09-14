@@ -87,6 +87,33 @@ test('production memberships, RLS, learning, deletion, and notification delivery
     await assert.rejects(rpc('ecolearn_create_assignment', [room.id, lesson, 'Duplicate', null]), /already assigned/);
     await rpc('ecolearn_delete_content', ['assignment', id]);
   });
+  await t.test('administrators discover and delete communities without joining; teachers cannot delete unrelated spaces', async () => {
+    const admin = '00000000-0000-4000-8000-000000000099';
+    await as(teacher);
+    const managed = await rpc('ecolearn_create_community', ['Admin management check', 'organization', '']);
+    await as(coteacher);
+    assert.equal((await rpc('ecolearn_get_hub')).communities.some(c => c.id === managed.id), false);
+    await assert.rejects(rpc('ecolearn_delete_space', ['community', managed.id]), /Only the community owner/);
+    await db.exec('reset role');
+    await db.query('insert into auth.users(id) values($1)', [admin]);
+    await db.query('insert into app_admins(user_id) values($1)', [admin]);
+    await as(admin);
+    const visible = (await rpc('ecolearn_get_hub')).communities.find(c => c.id === managed.id);
+    assert.equal(visible.role, 'admin');
+    assert.equal(visible.can_delete, true);
+    await rpc('ecolearn_delete_space', ['community', managed.id]);
+    assert.equal((await rpc('ecolearn_get_hub')).communities.some(c => c.id === managed.id), false);
+    await as(teacher);
+  });
+  await t.test('direct writes cannot escalate roles or rewrite progress and invitations', async () => {
+    await as(student);
+    await assert.rejects(db.query('insert into app_admins(user_id) values($1)', [student]), /permission denied|row-level security/);
+    await assert.rejects(db.query("insert into ecolearn_community_members(community_id,user_id,member_role) values($1,$2,'owner')", [school.id, student]), /permission denied|row-level security/);
+    await assert.rejects(db.query("insert into ecolearn_join_codes(code,community_id,access_role,created_by) values('COM-FAKE123',$1,'member',$2)", [school.id, student]), /permission denied|row-level security/);
+    const progress = await db.query('update user_progress set xp=999999 where user_id=$1 returning user_id', [student]);
+    assert.equal(progress.rows.length, 0);
+    await as(teacher);
+  });
   await t.test('assignments produce private notifications; email and push require opt-in', async () => {
     await as(student); await rpc('ecolearn_set_notification_preferences', [true, true, true, true, true, 'America/New_York', 18]);
     await rpc('ecolearn_register_push_device', ['ExpoPushToken[test_device]']);

@@ -1,4 +1,4 @@
-# EcoLearn mobile apps — iPhone / Expo Go setup
+# EcoLearn mobile apps  -  iPhone / Expo Go setup
 
 There are two independent Expo apps in this repository:
 

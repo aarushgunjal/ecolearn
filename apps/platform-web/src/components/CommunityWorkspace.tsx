@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type SetStateAction,
@@ -234,13 +235,13 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "o
           </p>
           <h1 className="display-serif mt-2 text-4xl tracking-[-.05em] sm:text-5xl">
             {mode === "school"
-              ? "Learn together. Compete together."
-              : "Local action has a home."}
+              ? "Your classrooms"
+              : "Your communities and classrooms"}
           </h1>
           <p className="mt-3 max-w-3xl leading-7 text-[#68766c]">
             {mode === "school"
               ? "Students can belong to multiple classes and their school community. Teachers assign lessons and see real progress; class standings use aggregate XP."
-              : "Join every place you contribute—your neighborhood, church, club, organization, municipality, or school—without losing your individual progress."}
+              : "Manage your schools, classes, and local groups in one place."}
           </p>
         </div>
         <RolePill role={hub.data.profile.role} />
@@ -261,9 +262,9 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "o
             <div className="flex items-center gap-3">
               <UserRoundCog className="text-[#347d46]" />
               <div>
-                <h2 className="font-semibold">Your access</h2>
+                <h2 className="font-semibold">Account settings</h2>
                 <p className="text-xs text-[#718076]">
-                  Student, teacher, and admin permissions are enforced by the database.
+                  Choose how your name appears to other members.
                 </p>
               </div>
             </div>
@@ -457,8 +458,14 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "o
             )}
           </section>
 
-          {selectedCommunity && <SpaceActions scope="community" space={selectedCommunity} canDelete={selectedCommunity.role === "owner" || hub.data.profile.role === "admin"} canLeave={selectedCommunity.role === "member"} hub={hub} action={action} busy={busy} />}
-          {mode !== "school" ? (
+          {mode !== "school" && hub.data.classrooms.length > 0 && <section aria-label="Your classrooms" className="rounded-2xl border border-[#dde6da] bg-white p-5">
+            <h2 className="font-semibold">Your classrooms</h2>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">{hub.data.classrooms.map((room) => <button key={room.id} className={`${secondary} justify-start text-left`} onClick={() => { setSelectedCommunityId(room.community_id); setSelectedClassroomId(room.id); }}><GraduationCap size={18} /><span>{room.name}<span className="block text-xs font-normal text-[#68766c]">{room.school_name}</span></span></button>)}</div>
+          </section>}
+          {selectedCommunity && <SpaceActions scope="community" space={selectedCommunity} canDelete={selectedCommunity.can_delete ?? (selectedCommunity.role === "owner" || hub.data.profile.role === "admin")} canLeave={selectedCommunity.role === "member"} hub={hub} action={action} busy={busy} />}
+          <details key={selectedCommunity?.id} open={selectedCommunity?.kind !== "school"} className="rounded-2xl border border-[#dde6da] bg-white p-5">
+            <summary className="cursor-pointer font-semibold">Updates and events</summary>
+            <div className="mt-4">
             <CommunityDetail
               community={selectedCommunity}
               canManage={Boolean(canManageCommunity)}
@@ -479,7 +486,9 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "o
               eventLocation={eventLocation}
               setEventLocation={setEventLocation}
             />
-          ) : (
+            </div>
+          </details>
+          {selectedCommunity?.kind === "school" && (
             <SchoolDetail
               school={selectedCommunity}
               classrooms={classrooms}
@@ -1216,7 +1225,7 @@ function SchoolDetail({
           <h2 className="font-semibold">Class standings</h2>
         </div>
         <p className="mt-1 text-sm text-[#718076]">
-          Only class totals are ranked—student identities stay inside their
+          Only class totals are ranked - student identities stay inside their
           classroom.
         </p>
         {standings.length ? (
@@ -1477,9 +1486,7 @@ function CreateCommunityCard({
           value={kind}
           onChange={(e) => setKind(e.target.value as Community["kind"])}
         >
-          {communityKinds
-            .filter(([value]) => value !== "school")
-            .map(([value, label]) => (
+          {communityKinds.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
@@ -1568,13 +1575,24 @@ function SignedOut({ mode }: { mode: string }) {
 }
 
 function SpaceActions({ scope, space, canDelete, canLeave, hub, action, busy }: { scope: "community" | "classroom"; space: { id: string; name: string }; canDelete: boolean; canLeave: boolean; hub: HubController; action: Action; busy: string | null }) {
-  return <div className="flex flex-wrap gap-3">
-    {canDelete && <button disabled={busy !== null} className={secondary} onClick={() => {
-      if (window.confirm(`Delete ${space.name}? This permanently deletes this ${scope}, its memberships, invitations, and content${scope === "community" ? ", including its classrooms" : ""}. Individual learning progress is kept.`)) void action("delete-space", () => hub.deleteSpace(scope, space.id), "Space deleted");
-    }}>Delete {scope}</button>}
-    {canLeave && <button disabled={busy !== null} className={secondary} onClick={() => {
-      if (window.confirm(`Leave ${space.name}?`)) void action("leave-space", () => hub.leaveSpace(scope, space.id), "You left the space");
-    }}>Leave {scope}</button>}
+  const [operation, setOperation] = useState<"delete" | "leave" | null>(null);
+  const [confirmation, setConfirmation] = useState("");
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => { if (operation) dialog.current?.showModal(); else dialog.current?.close(); }, [operation]);
+  useEffect(() => { setOperation(null); setConfirmation(""); }, [space.id]);
+  if (!canDelete && !canLeave) return null;
+  return <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#dce5d9] bg-white p-4">
+    <span className="mr-auto text-sm font-semibold">Manage {space.name}</span>
+    {canDelete && <button disabled={busy !== null} className={`${secondary} text-red-700`} onClick={() => { setConfirmation(""); setOperation("delete"); }}>Delete {scope}</button>}
+    {canLeave && <button disabled={busy !== null} className={secondary} onClick={() => setOperation("leave")}>Leave {scope}</button>}
+    <dialog ref={dialog} aria-labelledby={`space-confirm-${space.id}`} onCancel={() => setOperation(null)} className="m-auto w-[calc(100%_-_2rem)] max-w-md rounded-2xl border border-[#dce5d9] p-6 shadow-2xl backdrop:bg-black/40">
+      <form onSubmit={(event) => { event.preventDefault(); if (!operation || (operation === "delete" && confirmation !== space.name)) return; const remove = operation === "delete"; setOperation(null); void action("space-action", () => remove ? hub.deleteSpace(scope, space.id) : hub.leaveSpace(scope, space.id), remove ? "Space deleted" : "You left the space"); }}>
+        <h2 id={`space-confirm-${space.id}`} className="text-xl font-semibold">{operation === "delete" ? "Delete" : "Leave"} {space.name}?</h2>
+        <p className="my-4 text-sm leading-6">{operation === "delete" ? `This permanently removes this ${scope}, its members and content${scope === "community" ? ", including its classrooms" : ""}. Individual learning progress is kept.` : "You will need an invitation code to rejoin."}</p>
+        {operation === "delete" && <label className="block text-sm">Type the name to confirm<input autoFocus className={`${field} mt-2`} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" /></label>}
+        <div className="mt-5 flex justify-end gap-3"><button type="button" className={secondary} onClick={() => setOperation(null)}>Cancel</button><button className={`${primary} ${operation === "delete" ? "bg-red-700" : ""}`} disabled={operation === "delete" && confirmation !== space.name}>{operation === "delete" ? "Permanently delete" : "Leave space"}</button></div>
+      </form>
+    </dialog>
   </div>;
 }
 

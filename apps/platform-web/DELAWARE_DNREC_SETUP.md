@@ -73,7 +73,7 @@ while signed in to EcoLearn:
 2. Confirm the result names Delaware DNREC Recyclopedia and opens its source.
 3. Choose or take a clear, one-item photo and use **Identify + check DNREC**.
    It must return an official protocol or an observed item with an explicit
-   no-match state—never generic disposal advice.
+   no-match state - never generic disposal advice.
 4. Test a mixed-item photo. It must ask for one item at a time without making
    separate AI calls for detected crops.
 5. Open available locations and confirm the results are filtered for that item.

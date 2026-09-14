@@ -18,18 +18,18 @@ Final App Store screenshots and preview video must show the actual TestFlight iO
 
 Capture these in order and save them under `final/iphone-6.9/` using the exact filenames below.
 
-1. `01-home.png` — Home dashboard with a plausible fictional learner name, XP, level, streak, and the next lesson. Marketing caption: **Small choices. Real impact.**
-2. `02-scan.png` — Scanner ready state with separate **Choose from gallery** and **Take a photo** controls plus predictive name search. Caption: **Know what goes where.**
-3. `03-verified-result.png` — A fictional aluminum-can scan with an official DNREC match, exact disposal guidance, and source attribution. Caption: **Delaware guidance you can trust.**
-4. `04-map.png` — Nearby disposal map with fictional/current public facility results and no home address visible. Caption: **Find the right drop-off nearby.**
-5. `05-learn.png` — Learning path with completed and upcoming lessons. Caption: **Build your eco instinct.**
-6. `06-lesson.png` — A polished quiz step with one answer selected but no incorrect/error state. Caption: **Learn by doing.**
-7. `07-community.png` — Student-safe community view showing multiple memberships and fictional aliases. Caption: **Belong to more than one community.**
-8. `08-classroom.png` — Teacher/classroom view with assignments, completion, and common misconceptions using fictional data. Caption: **A classroom built for action.**
-9. `09-school-standings.png` — School community and class standings with fictional class names. Caption: **Turn progress into friendly competition.**
-10. `10-achievements-profile.png` — Achievements/profile with badges, account controls, privacy, support, and licenses reachable. Caption: **Keep growing. Keep contributing.**
+1. `01-home.png`  -  Home dashboard with a plausible fictional learner name, XP, level, streak, and the next lesson. Marketing caption: **Small choices. Real impact.**
+2. `02-scan.png`  -  Scanner ready state with separate **Choose from gallery** and **Take a photo** controls plus predictive name search. Caption: **Know what goes where.**
+3. `03-verified-result.png`  -  A fictional aluminum-can scan with an official DNREC match, exact disposal guidance, and source attribution. Caption: **Delaware guidance you can trust.**
+4. `04-map.png`  -  Nearby disposal map with fictional/current public facility results and no home address visible. Caption: **Find the right drop-off nearby.**
+5. `05-learn.png`  -  Learning path with completed and upcoming lessons. Caption: **Build your eco instinct.**
+6. `06-lesson.png`  -  A polished quiz step with one answer selected but no incorrect/error state. Caption: **Learn by doing.**
+7. `07-community.png`  -  Student-safe community view showing multiple memberships and fictional aliases. Caption: **Belong to more than one community.**
+8. `08-classroom.png`  -  Teacher/classroom view with assignments, completion, and common misconceptions using fictional data. Caption: **A classroom built for action.**
+9. `09-school-standings.png`  -  School community and class standings with fictional class names. Caption: **Turn progress into friendly competition.**
+10. `10-achievements-profile.png`  -  Achievements/profile with badges, account controls, privacy, support, and licenses reachable. Caption: **Keep growing. Keep contributing.**
 
-## App Preview 1 — learner journey (24 seconds)
+## App Preview 1  -  learner journey (24 seconds)
 
 | Time | Actual in-app action | Optional concise overlay |
 | ---: | --- | --- |
@@ -40,7 +40,7 @@ Capture these in order and save them under `final/iphone-6.9/` using the exact f
 | 16–20 s | Complete one lesson question | Learn by doing |
 | 20–24 s | Show XP/badge/community progress | Make progress together |
 
-## App Preview 2 — classroom/community (24 seconds)
+## App Preview 2  -  classroom/community (24 seconds)
 
 | Time | Actual in-app action | Optional concise overlay |
 | ---: | --- | --- |
@@ -50,7 +50,7 @@ Capture these in order and save them under `final/iphone-6.9/` using the exact f
 | 13–18 s | Show common misconceptions and announcement | See where students need help |
 | 18–24 s | Show school standings and achievement | Build momentum together |
 
-## App Preview 3 — educator overview (optional, 20 seconds)
+## App Preview 3  -  educator overview (optional, 20 seconds)
 
 Use only if the educator workflow is fully functional in the release candidate. Show lesson preview, assignment creation, class completion, a classroom announcement, and school standings. Do not show unfinished buttons or placeholder metrics.
 

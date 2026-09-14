@@ -6,8 +6,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("EcoLearn guest journeys", () => {
-  test("renders primary and extended platform sections", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "chromium", "Extended navigation uses the compact mobile menu.");
+  test("renders primary and extended platform sections", async ({ page }) => {
     const app = new EcoLearnPage(page);
     await app.goto();
     await expect(page.getByRole("heading", { name: /Small choices/ })).toBeVisible();
@@ -36,12 +35,11 @@ test.describe("EcoLearn guest journeys", () => {
     }
   });
 
-  test("restores a shareable scan URL and hides admin navigation from guests", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "chromium", "Desktop menu assertion.");
+  test("restores a shareable scan URL and hides admin navigation from guests", async ({ page }) => {
     await page.goto("/scan");
     await expect(page.getByRole("heading", { name: "Item scanner" })).toBeVisible();
-    await page.getByRole("button", { name: "More EcoLearn tools" }).first().click();
-    await expect(page.getByRole("button", { name: "Admin portal" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "More EcoLearn tools" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Manage communities" })).toHaveCount(0);
   });
 
   test("keeps empty lookup disabled and handles script text without execution", async ({ page }) => {
@@ -423,24 +421,25 @@ test.describe("EcoLearn App Review account", () => {
 
     await app.openPrimarySection("Community");
     await expect(
-      page.getByRole("heading", { name: "Local action has a home." }),
+      page.getByRole("heading", { name: "Your communities and classrooms" }),
     ).toBeVisible();
     await expect(page.getByText("admin access", { exact: true })).toBeVisible();
     await expect(page.getByText("EcoLearn App Review School", { exact: true }).first()).toBeVisible();
+    await page.getByText("Updates and events", { exact: true }).click();
     await expect(page.getByText("Welcome, App Review", { exact: true })).toBeVisible();
     await expect(page.getByText("Community cleanup demonstration", { exact: true })).toBeVisible();
 
     await app.openMoreSection("Schools");
     await expect(
-      page.getByRole("heading", { name: "Learn together. Compete together." }),
+      page.getByRole("heading", { name: "Your classrooms", exact: true }),
     ).toBeVisible();
     await expect(page.getByText("Review Classroom A", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Review Classroom B", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "Class standings" })).toBeVisible();
 
-    await page.getByRole("button", { name: "More EcoLearn tools" }).first().click();
-    await page.getByRole("button", { name: "Admin portal", exact: true }).last().click();
-    await expect(page.getByRole("heading", { name: "Personal analytics" })).toBeVisible();
+    await app.openMoreSection("Profile");
+    await page.getByRole("button", { name: "Manage communities", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Your communities and classrooms" })).toBeVisible();
 
     await app.openMoreSection("Profile");
     await expect(page.getByRole("heading", { name: "Admin review" })).toHaveCount(0);

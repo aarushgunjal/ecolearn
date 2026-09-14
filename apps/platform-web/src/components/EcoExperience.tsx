@@ -1023,8 +1023,8 @@ export function AuthDialog({ close }: { close: () => void }) {
         </p>
         {mode === "signup" && <label className="mb-4 block text-sm font-semibold">Account type
           <select aria-label="Account type" value={accountRole} onChange={(event) => setAccountRole(event.target.value as "student" | "teacher")} className="mt-2 w-full rounded-xl border p-3">
-            <option value="student">Student — join classes and learn</option>
-            <option value="teacher">Teacher — create and manage spaces</option>
+            <option value="student">Student  -  join classes and learn</option>
+            <option value="teacher">Teacher  -  create and manage spaces</option>
           </select>
           <span className="mt-2 block text-xs font-normal">Using Google? Choose your account type in Community after signing in.</span>
         </label>}

@@ -1,6 +1,6 @@
 # EcoLearn Product Roadmap
 
-_Working roadmap — August 2026_
+_Working roadmap  -  August 2026_
 
 ## Product principle
 

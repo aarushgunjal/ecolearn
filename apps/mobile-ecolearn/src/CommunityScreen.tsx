@@ -21,7 +21,8 @@ type Community = {
   name: string;
   description: string;
   kind: string;
-  role: "owner" | "manager" | "member";
+  role: "owner" | "manager" | "member" | "admin";
+  can_delete?: boolean;
   member_count: number;
   classroom_count: number;
   total_xp: number;
@@ -383,11 +384,11 @@ export function CommunityScreen({
           onChangeText={setAlias}
           placeholder="Student-safe display name"
           style={s.input}
-          maxLength={60}
+          maxLength={40}
         />
         <Text style={s.accessNote}>
-          Teacher access requires a private teacher invitation. Admin access is
-          assigned separately and cannot be self-selected.
+          Anyone can choose a teacher account. Access to another teacher’s classroom
+          requires its invitation code.
         </Text>
         <View style={s.row}>{(["student", "teacher"] as const).map((role) => <Pressable key={role} accessibilityRole="radio" accessibilityState={{ checked: roleChoice === role }} onPress={() => setRoleChoice(role)}><Text style={s.link}>{roleChoice === role ? "● " : "○ "}{role === "teacher" ? "Teacher" : "Student"}</Text></Pressable>)}</View>
         <Pressable
@@ -469,6 +470,8 @@ export function CommunityScreen({
               ["school", "School"],
               ["faith", "Faith group"],
               ["club", "Club"],
+              ["organization", "Organization"],
+              ["municipality", "Town / municipality"],
             ].map(([value, label]) => (
               <Pressable
                 key={value}
@@ -534,7 +537,7 @@ export function CommunityScreen({
               <Metric value={item.total_xp} label="XP" />
               <Metric value={item.total_scans} label="checks" />
             </View>
-            {(item.role === "owner" || hub.profile.role === "admin") && <Pressable disabled={saving} onPress={() => confirmSpace("community", item.id, item.name, true)}><Text style={s.link}>Delete community</Text></Pressable>}
+            {(item.can_delete ?? (item.role === "owner" || hub.profile.role === "admin")) && <Pressable disabled={saving} onPress={() => confirmSpace("community", item.id, item.name, true)}><Text style={s.link}>Delete community</Text></Pressable>}
             {item.role === "member" && <Pressable disabled={saving} onPress={() => confirmSpace("community", item.id, item.name, false)}><Text style={s.link}>Leave community</Text></Pressable>}
             {item.join_code && (
               <Pressable onPress={() => copyCode(item.join_code)}>

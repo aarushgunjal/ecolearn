@@ -1,4 +1,4 @@
-# EcoLearn production readiness review — September 14, 2026
+# EcoLearn production readiness review  -  September 14, 2026
 
 Implementation branch: `codex/production-community-readiness`, based on `main` at `2ad4133`. Production has not been changed. This review covers the current web application in `apps/platform-web` and native application in `apps/mobile-ecolearn`.
 

@@ -1,6 +1,6 @@
-# EcoLearn — Current Features
+# EcoLearn  -  Current Features
 
-_Platform snapshot — August 31, 2026_
+_Platform snapshot  -  August 31, 2026_
 
 EcoLearn is a Delaware-first learning and waste-guidance platform for students,
 beginning with primary-school use cases. The platform combines official DNREC

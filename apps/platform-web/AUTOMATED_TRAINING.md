@@ -44,18 +44,18 @@ Add these Edge Function secrets:
 
 In **Settings → Secrets and variables → Actions**, create these secrets:
 
-- `SUPABASE_URL` — your project URL, e.g. `https://PROJECT.supabase.co`
-- `TRAINING_AUTOMATION_TOKEN` — exactly the same value as Supabase
-- `KAGGLE_API_TOKEN` — create it in Kaggle Settings → API
-- `HF_TOKEN` — a Hugging Face write token with access to the Space
+- `SUPABASE_URL`  -  your project URL, e.g. `https://PROJECT.supabase.co`
+- `TRAINING_AUTOMATION_TOKEN`  -  exactly the same value as Supabase
+- `KAGGLE_API_TOKEN`  -  create it in Kaggle Settings → API
+- `HF_TOKEN`  -  a Hugging Face write token with access to the Space
 
 Create these repository variables:
 
-- `KAGGLE_FEEDBACK_DATASET` — e.g. `your-kaggle-name/ecolearn-private-feedback`
-- `KAGGLE_BASE_DATASET` — your original private waste-classifier dataset handle
-- `KAGGLE_KERNEL` — e.g. `your-kaggle-name/ecolearn-auto-trainer`
-- `HF_SPACE_REPO` — the Hugging Face Space repository ID
-- `HF_SPACE_MODEL_PATH` — the exact active model filename in the Space, likely `waste_classifier (1).onnx`
+- `KAGGLE_FEEDBACK_DATASET`  -  e.g. `your-kaggle-name/ecolearn-private-feedback`
+- `KAGGLE_BASE_DATASET`  -  your original private waste-classifier dataset handle
+- `KAGGLE_KERNEL`  -  e.g. `your-kaggle-name/ecolearn-auto-trainer`
+- `HF_SPACE_REPO`  -  the Hugging Face Space repository ID
+- `HF_SPACE_MODEL_PATH`  -  the exact active model filename in the Space, likely `waste_classifier (1).onnx`
 
 The workflow is [`.github/workflows/train-waste-model.yml`](../../../.github/workflows/train-waste-model.yml). GitHub runs scheduled workflows from the repository’s default branch, so merge this branch into whichever branch is your platform’s default before relying on unattended runs.
 

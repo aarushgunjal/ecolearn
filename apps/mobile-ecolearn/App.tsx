@@ -787,7 +787,7 @@ function ToolsScreen({ onBack }: { onBack: () => void }) {
       <Pressable disabled={busyTool !== null} style={[styles.primaryButton, busyTool !== null && styles.disabled]} onPress={() => void lookupBarcode()}>
         <Text style={styles.primaryText}>{busyTool === "barcode" ? "Looking up…" : "Look up barcode"}</Text>
       </Pressable>
-      {barcodeResult && <Text style={styles.body}>{barcodeResult.found ? `${barcodeResult.name ?? "Product found"}${barcodeResult.guidance ? ` — ${barcodeResult.guidance}` : ""}` : "No product match found."}</Text>}
+      {barcodeResult && <Text style={styles.body}>{barcodeResult.found ? `${barcodeResult.name ?? "Product found"}${barcodeResult.guidance ? `  -  ${barcodeResult.guidance}` : ""}` : "No product match found."}</Text>}
     </View>
     <View style={styles.toolCard}>
       <Text style={styles.rowTitle}>Read a package label</Text>

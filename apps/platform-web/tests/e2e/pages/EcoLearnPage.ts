@@ -24,11 +24,14 @@ export class EcoLearnPage {
       | "Scan tools"
       | "Notifications",
   ) {
-    await this.page
-      .getByRole("button", { name: "More EcoLearn tools" })
-      .first()
-      .click();
-    await this.page.getByRole("button", { name, exact: true }).last().click();
+    if (name === "Profile" || name === "Notifications") {
+      await this.page.getByRole("button", { name, exact: true }).first().click();
+      return;
+    }
+    const primary = name === "Challenges" ? "Learn" : ["Schools", "Organizations"].includes(name) ? "Community" : "Scan";
+    await this.openPrimarySection(primary);
+    const label = name === "Schools" ? "Classrooms" : name === "Challenges" ? "Quests" : name;
+    await this.page.getByRole("navigation", { name: "Section navigation" }).getByRole("button", { name: label, exact: true }).click();
   }
 
   async openAuthDialog() {

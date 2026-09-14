@@ -657,7 +657,7 @@ function ResultCard({
             {result.dnrec
               ? "Official DNREC record"
               : multipleItems
-                ? "Multiple items—retake photo"
+                ? "Multiple items - retake photo"
                 : "No official DNREC match"}
           </div>
         </div>

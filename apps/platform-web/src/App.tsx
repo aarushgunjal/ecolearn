@@ -5,7 +5,6 @@ import {
   Flame,
   Leaf,
   MapPinned,
-  MoreHorizontal,
   ScanLine,
   UsersRound,
   UserRound,
@@ -22,7 +21,7 @@ import {
   Profile,
 } from "@/components/EcoExperience";
 import {
-  Admin,
+  Activity,
   Community,
   LocalRules,
   Notifications,
@@ -55,6 +54,7 @@ const paths = {
   Schools: "/schools",
   Organization: "/organizations",
   Admin: "/admin",
+  Activity: "/activity",
   Tools: "/scan-tools",
   Notifications: "/notifications",
 } as const;
@@ -80,7 +80,6 @@ function AppShell() {
   const [active, setActive] = useState<Section>(() => activeForPath(window.location.pathname));
   const [legalPage, setLegalPage] = useState<LegalPage | null>(() => readLegalPage());
   const [authOpen, setAuthOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const { user, recoveringPassword } = useAuth();
   const { isAdmin, loading: adminLoading } = useAdmin();
   const { progress } = useProgress();
@@ -88,7 +87,6 @@ function AppShell() {
   const navigate = useCallback((next: Section, replace = false) => {
     setActive(next);
     setLegalPage(null);
-    setMoreOpen(false);
     const path = paths[next];
     if (window.location.pathname !== path || window.location.hash) {
       window.history[replace ? "replaceState" : "pushState"]({}, "", path);
@@ -104,7 +102,6 @@ function AppShell() {
     const handleHistoryChange = () => {
       setLegalPage(readLegalPage());
       setActive(activeForPath(window.location.pathname));
-      setMoreOpen(false);
     };
     window.addEventListener("ecolearn-open-notifications", handleOpenNotifications);
     window.addEventListener("ecolearn-open-learn", handleOpenLearn);
@@ -134,10 +131,20 @@ function AppShell() {
     document.title = title === "Home" ? "EcoLearn Delaware" : `${title} · EcoLearn Delaware`;
   }, [active, legalPage]);
 
+  const primarySection = ["Schools", "Organization", "Admin"].includes(active) ? "Community" : ["Tools", "Rules"].includes(active) ? "Scan" : active === "Challenges" ? "Learn" : active;
+  const sectionLinks: [Section, string][] = ["Scan", "Tools", "Rules"].includes(active)
+    ? [["Scan", "Identify an item"], ["Tools", "Scan tools"], ["Rules", "Local rules"]]
+    : ["Learn", "Challenges"].includes(active)
+      ? [["Learn", "Lessons"], ["Challenges", "Quests"]]
+      : ["Community", "Schools", "Organization", "Admin"].includes(active)
+        ? [["Community", "All spaces"], ["Schools", "Classrooms"], ["Organization", "Organizations"]]
+        : ["Profile", "Activity"].includes(active)
+          ? [["Profile", "Account"], ["Activity", "My activity"], ...(isAdmin ? [["Admin", "Manage communities"] as [Section, string]] : [])]
+          : [];
+
   const openLegal = (page: LegalPage) => {
     window.history.pushState({}, "", `/${page}`);
     setLegalPage(page);
-    setMoreOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -158,20 +165,12 @@ function AppShell() {
               <button
                 key={label}
                 onClick={() => navigate(label)}
-                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition ${active === label ? "bg-[#e8f3df] text-[#173d2a]" : "text-[#66746a] hover:text-[#173d2a]"}`}
+                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition ${primarySection === label ? "bg-[#e8f3df] text-[#173d2a]" : "text-[#66746a] hover:text-[#173d2a]"}`}
               >
                 <Icon size={15} />
                 {label}
               </button>
             ))}
-            <button
-              onClick={() => setMoreOpen((open) => !open)}
-              className={`grid h-8 w-8 place-items-center rounded-full ${moreOpen ? "bg-[#e8f3df] text-[#173d2a]" : "text-[#66746a]"}`}
-              aria-label="More EcoLearn tools"
-              aria-expanded={moreOpen}
-            >
-              <MoreHorizontal size={18} />
-            </button>
           </nav>
           <div className="flex items-center gap-2 sm:gap-3">
             <button onClick={() => navigate("Challenges")} className="hidden items-center gap-1.5 rounded-full bg-[#fff3d5] px-3 py-2 text-sm font-semibold text-[#976700] sm:flex">
@@ -183,14 +182,6 @@ function AppShell() {
               aria-label="Notifications"
             >
               <Bell size={18} />
-            </button>
-            <button
-              onClick={() => setMoreOpen((open) => !open)}
-              className="grid h-10 w-10 place-items-center rounded-full bg-white text-[#5f6d63] ring-1 ring-[#e5e9e1] lg:hidden"
-              aria-label="More EcoLearn tools"
-              aria-expanded={moreOpen}
-            >
-              <MoreHorizontal size={18} />
             </button>
             {user ? (
               <button onClick={() => navigate("Profile")} className="grid h-10 w-10 place-items-center rounded-full bg-[#d9edcf] text-sm font-bold text-[#245533]" aria-label="Profile">
@@ -205,26 +196,10 @@ function AppShell() {
         </div>
       </header>
 
-      {moreOpen && (
-        <div className="fixed inset-x-4 top-[84px] z-40 mx-auto grid max-w-xl grid-cols-2 gap-2 rounded-2xl border border-[#dfe6dc] bg-white p-3 shadow-2xl sm:grid-cols-3">
-          {([
-            ["Challenges", "Challenges"],
-            ["Rules", "Local rules"],
-            ["Schools", "Schools"],
-            ["Profile", "Profile"],
-            ["Organization", "Organizations"],
-            ...(isAdmin ? [["Admin", "Admin portal"]] : []),
-            ["Tools", "Scan tools"],
-            ["Notifications", "Notifications"],
-          ] as [Section, string][]).map(([key, label]) => (
-            <button key={key} onClick={() => navigate(key)} className="rounded-xl px-3 py-3 text-left text-sm font-semibold text-[#476151] hover:bg-[#f0f7ed]">
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-
       <main className="mx-auto max-w-7xl px-5 pb-28 pt-8 lg:px-8 lg:pt-12">
+        {sectionLinks.length > 0 && <nav aria-label="Section navigation" className="mb-7 flex flex-wrap gap-2 border-b border-[#dfe6dc] pb-4">
+          {sectionLinks.map(([key, label]) => <button key={key} aria-current={active === key ? "page" : undefined} onClick={() => navigate(key)} className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${active === key ? "bg-[#173d2a] text-white" : "bg-white text-[#476151] hover:bg-[#e8f3df]"}`}>{label}</button>)}
+        </nav>}
         {active === "Home" && <Home />}
         {active === "Scan" && <Scanner />}
         {active === "Map" && <MapHub />}
@@ -235,7 +210,8 @@ function AppShell() {
         {active === "Community" && <Community />}
         {active === "Schools" && <Schools />}
         {active === "Organization" && <Organization />}
-        {active === "Admin" && (adminLoading ? <LoadingSection /> : isAdmin ? <Admin /> : <RestrictedSection signedIn={Boolean(user)} onSignIn={() => setAuthOpen(true)} />)}
+        {active === "Admin" && (adminLoading ? <LoadingSection /> : isAdmin ? <Community /> : <RestrictedSection signedIn={Boolean(user)} onSignIn={() => setAuthOpen(true)} />)}
+        {active === "Activity" && (user ? <Activity /> : <SignInPrompt onSignIn={() => setAuthOpen(true)} />)}
         {active === "Tools" && <ScannerTools />}
         {active === "Notifications" && <Notifications key={user?.id ?? "guest"} />}
       </main>
@@ -253,7 +229,7 @@ function AppShell() {
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[#e5e9e1] bg-white/95 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur lg:hidden" aria-label="Mobile navigation">
         {navigation.map(({ label, icon: Icon }) => (
-          <button key={label} onClick={() => navigate(label)} className={`flex min-w-14 flex-col items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold ${active === label ? "text-[#237342]" : "text-[#56645a]"}`}>
+          <button key={label} onClick={() => navigate(label)} className={`flex min-w-14 flex-col items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold ${primarySection === label ? "text-[#237342]" : "text-[#56645a]"}`}>
             <Icon size={19} />
             {label}
           </button>
@@ -290,7 +266,7 @@ function RestrictedSection({ signedIn, onSignIn }: { signedIn: boolean; onSignIn
 }
 
 function LoadingSection() {
-  return <section className="grid min-h-[45vh] place-items-center text-sm font-semibold text-[#69766d]">Checking access…</section>;
+  return <section className="grid min-h-[45vh] place-items-center text-sm font-semibold text-[#69766d]">Checking access...</section>;
 }
 
 export default function App() {

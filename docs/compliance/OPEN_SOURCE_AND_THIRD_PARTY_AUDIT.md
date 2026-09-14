@@ -12,8 +12,8 @@ This is an engineering compliance review, not legal advice. License conclusions 
 
 There is no dependency-license reason, by itself, to withhold the current build from TestFlight or App Store Connect. Public App Store release still has two non-package issues requiring resolution:
 
-- **HIGH — third-party content permission:** repository evidence does not establish permission to reproduce or transform DNREC Recyclopedia text, DSWA facility data, or DSWA educational videos beyond linking/embedding and attribution. Confirm the intended reuse with DNREC/DSWA or narrow the implementation to clearly permitted linking/API use.
-- **BLOCKER — child privacy/release configuration, not open-source licensing:** EcoLearn is child-directed and uses accounts, class membership, progress, optional photos, and optional precise location. A supervised parent/school consent workflow, direct notice, retention/deletion procedure, App Store privacy labels, and a Kids Category/location decision must be finalized before a broad elementary-school launch.
+- **HIGH  -  third-party content permission:** repository evidence does not establish permission to reproduce or transform DNREC Recyclopedia text, DSWA facility data, or DSWA educational videos beyond linking/embedding and attribution. Confirm the intended reuse with DNREC/DSWA or narrow the implementation to clearly permitted linking/API use.
+- **BLOCKER  -  child privacy/release configuration, not open-source licensing:** EcoLearn is child-directed and uses accounts, class membership, progress, optional photos, and optional precise location. A supervised parent/school consent workflow, direct notice, retention/deletion procedure, App Store privacy labels, and a Kids Category/location decision must be finalized before a broad elementary-school launch.
 
 ## 2. Method and inventory scope
 
