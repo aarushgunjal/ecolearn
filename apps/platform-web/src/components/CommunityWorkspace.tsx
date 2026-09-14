@@ -392,14 +392,14 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "o
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-[#4a8b53]">
-                  MEMBERSHIPS
+                  YOUR SPACES
                 </p>
                 <h2 className="mt-1 text-2xl font-semibold">
                   {mode === "school" ? "Your schools" : "Your communities"}
                 </h2>
               </div>
               <span className="rounded-full bg-[#eef6ea] px-3 py-1.5 text-xs font-bold text-[#347744]">
-                {visibleCommunities.length} joined
+                {visibleCommunities.length} accessible
               </span>
             </div>
             {!visibleCommunities.length ? (
@@ -463,7 +463,7 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "o
             <div className="mt-3 grid gap-3 sm:grid-cols-2">{hub.data.classrooms.map((room) => <button key={room.id} className={`${secondary} justify-start text-left`} onClick={() => { setSelectedCommunityId(room.community_id); setSelectedClassroomId(room.id); }}><GraduationCap size={18} /><span>{room.name}<span className="block text-xs font-normal text-[#68766c]">{room.school_name}</span></span></button>)}</div>
           </section>}
           {selectedCommunity && <SpaceActions scope="community" space={selectedCommunity} canDelete={selectedCommunity.can_delete ?? (selectedCommunity.role === "owner" || hub.data.profile.role === "admin")} canLeave={selectedCommunity.role === "member"} hub={hub} action={action} busy={busy} />}
-          <details key={selectedCommunity?.id} open={selectedCommunity?.kind !== "school"} className="rounded-2xl border border-[#dde6da] bg-white p-5">
+          {selectedCommunity && <details key={selectedCommunity.id} open={selectedCommunity.kind !== "school"} className="rounded-2xl border border-[#dde6da] bg-white p-5">
             <summary className="cursor-pointer font-semibold">Updates and events</summary>
             <div className="mt-4">
             <CommunityDetail
@@ -487,7 +487,7 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "o
               setEventLocation={setEventLocation}
             />
             </div>
-          </details>
+          </details>}
           {selectedCommunity?.kind === "school" && (
             <SchoolDetail
               school={selectedCommunity}
