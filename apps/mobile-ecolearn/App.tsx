@@ -29,12 +29,14 @@ import type { Session, User } from "@supabase/supabase-js";
 import { isConfigured, supabase } from "./src/supabase";
 import { challengeDefinitions, dswaVideoForItem, lessonEditorial } from "./src/content";
 import { CommunityScreen } from "./src/CommunityScreen";
+import * as Notifications from "expo-notifications";
+import { NotificationsScreen, unregisterPushDevice, syncPushDevice } from "./src/NotificationsScreen";
 import { MapScreen } from "./src/MapScreen";
 import ecoLearnIcon from "./assets/ecolearn-icon-v2.png";
 
 WebBrowser.maybeCompleteAuthSession();
 
-type Tab = "Home" | "Scan" | "Map" | "Learn" | "Community" | "Challenges" | "Profile";
+type Tab = "Home" | "Scan" | "Map" | "Learn" | "Community" | "Challenges" | "Profile" | "Notifications";
 type Photo = { uri: string; name: string; mimeType: string; base64?: string | null };
 type ScanResult = { item: string; recyclable: boolean; confidence: number; category: string; instructions: string; tips?: string[]; imageStatus?: "single_item" | "multiple_items" | "unclear"; material?: string | null; visibleEvidence?: string | null; dnrec?: DelawareGuidance | null };
 type DelawareGuidance = { title: string; category: string; curbside: boolean; instructions: string; sourceName: string; sourceUrl: string; matchConfidence?: number };
@@ -150,7 +152,7 @@ export default function App() {
   if (loadingSession) return <LoadingScreen message="Opening EcoLearn…" />;
   if (recoveringPassword && session) return <PasswordRecoveryScreen onComplete={() => setRecoveringPassword(false)} />;
   if (!session) return <AuthScreen />;
-  return <EcoLearnApp user={session.user} />;
+  return <EcoLearnApp key={session.user.id} user={session.user} />;
 }
 
 function ConfigurationScreen() {
@@ -163,6 +165,7 @@ function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [accountRole, setAccountRole] = useState<"student" | "teacher">("student");
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     if (!email.trim() || password.length < 6) return Alert.alert("Check your details", "Enter an email and a password with at least six characters.");
@@ -172,7 +175,7 @@ function AuthScreen() {
       : await supabase.auth.signUp({
           email: email.trim(),
           password,
-          options: { emailRedirectTo: ExpoLinking.createURL("auth/callback") },
+          options: { data: { account_role: accountRole }, emailRedirectTo: ExpoLinking.createURL("auth/callback") },
         });
     setBusy(false);
     if (response.error) return Alert.alert("Could not continue", response.error.message);
@@ -258,7 +261,7 @@ function AuthScreen() {
     if (error) return Alert.alert("Could not send reset email", error.message);
     Alert.alert("Check your email", "Open the EcoLearn password-reset link on this device to choose a new password.");
   };
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><Text style={styles.brandLarge}>ecolearn</Text><Text style={styles.pageTitle}>{mode === "signin" ? "Welcome back." : "Start your impact."}</Text><Text style={styles.body}>Save scans, learn sustainable habits, and build a more circular world.</Text>{Platform.OS === "ios" && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={13} style={extras.appleButton} onPress={() => void apple()} />}<Pressable onPress={() => void google()} disabled={busy} style={[styles.googleButton, Platform.OS === "ios" && extras.googleAfterApple, usingExpoGo && styles.disabled]}><Text style={styles.googleText}>{usingExpoGo ? "Google sign-in needs development build" : "Continue with Google"}</Text></Pressable>{usingExpoGo && <Text style={styles.helper}>For Expo Go testing, use email/password. Google works in the later EcoLearn development build.</Text>}<Text style={styles.or}>OR WITH EMAIL</Text><TextInput value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="Email address" style={styles.input} /><TextInput value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === "signin" ? "current-password" : "new-password"} placeholder="Password" style={styles.input} /><Pressable onPress={() => void submit()} disabled={busy} style={styles.primaryButton}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{mode === "signin" ? "Sign in" : "Create account"}</Text>}</Pressable>{mode === "signin" && <Pressable onPress={() => void resetPassword()} disabled={busy}><Text style={styles.link}>Forgot password?</Text></Pressable>}<Pressable onPress={() => setMode(mode === "signin" ? "signup" : "signin")}><Text style={styles.link}>{mode === "signin" ? "New to EcoLearn? Create an account" : "Already a member? Sign in"}</Text></Pressable><Text style={styles.legal}>By continuing, you agree to EcoLearn’s <Text style={styles.legalLink} onPress={() => void openPublicPage("/terms")}>Terms of Service</Text> and <Text style={styles.legalLink} onPress={() => void openPublicPage("/privacy")}>Privacy Policy</Text>.</Text>{mode === "signup" && <Text style={styles.legal}>Learners under 13 need a parent, guardian, or authorized school to create and manage their account.</Text>}</ScrollView></SafeAreaView>;
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><Text style={styles.brandLarge}>ecolearn</Text><Text style={styles.pageTitle}>{mode === "signin" ? "Welcome back." : "Start your impact."}</Text><Text style={styles.body}>Save scans, learn sustainable habits, and build a more circular world.</Text>{Platform.OS === "ios" && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={13} style={extras.appleButton} onPress={() => void apple()} />}<Pressable onPress={() => void google()} disabled={busy} style={[styles.googleButton, Platform.OS === "ios" && extras.googleAfterApple, usingExpoGo && styles.disabled]}><Text style={styles.googleText}>{usingExpoGo ? "Google sign-in needs development build" : "Continue with Google"}</Text></Pressable>{usingExpoGo && <Text style={styles.helper}>For Expo Go testing, use email/password. Google works in the later EcoLearn development build.</Text>}<Text style={styles.or}>OR WITH EMAIL</Text>{mode === "signup" && <View><Text style={styles.body}>Account type</Text><View style={{ flexDirection: "row", gap: 16 }}>{(["student", "teacher"] as const).map((role) => <Pressable key={role} accessibilityRole="radio" accessibilityState={{ checked: role === accountRole }} onPress={() => setAccountRole(role)}><Text style={styles.link}>{role === accountRole ? "● " : "○ "}{role === "teacher" ? "Teacher" : "Student"}</Text></Pressable>)}</View><Text style={styles.helper}>Using Google or Apple? Choose your account type in Community after signing in.</Text></View>}<TextInput value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="Email address" style={styles.input} /><TextInput value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === "signin" ? "current-password" : "new-password"} placeholder="Password" style={styles.input} /><Pressable onPress={() => void submit()} disabled={busy} style={styles.primaryButton}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{mode === "signin" ? "Sign in" : "Create account"}</Text>}</Pressable>{mode === "signin" && <Pressable onPress={() => void resetPassword()} disabled={busy}><Text style={styles.link}>Forgot password?</Text></Pressable>}<Pressable onPress={() => setMode(mode === "signin" ? "signup" : "signin")}><Text style={styles.link}>{mode === "signin" ? "New to EcoLearn? Create an account" : "Already a member? Sign in"}</Text></Pressable><Text style={styles.legal}>By continuing, you agree to EcoLearn’s <Text style={styles.legalLink} onPress={() => void openPublicPage("/terms")}>Terms of Service</Text> and <Text style={styles.legalLink} onPress={() => void openPublicPage("/privacy")}>Privacy Policy</Text>.</Text>{mode === "signup" && <Text style={styles.legal}>Learners under 13 need a parent, guardian, or authorized school to create and manage their account.</Text>}</ScrollView></SafeAreaView>;
 }
 
 function PasswordRecoveryScreen({ onComplete }: { onComplete: () => void }) {
@@ -278,6 +281,7 @@ function PasswordRecoveryScreen({ onComplete }: { onComplete: () => void }) {
 }
 
 function EcoLearnApp({ user }: { user: User }) {
+  const [assignedLesson, setAssignedLesson] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("Home");
   const [showScanTools, setShowScanTools] = useState(false);
   const [mapSearchRequest, setMapSearchRequest] = useState<MapSearchRequest | null>(null);
@@ -321,6 +325,7 @@ function EcoLearnApp({ user }: { user: User }) {
   const refreshAll = async () => { setRefreshing(true); await refresh(); setRefreshing(false); };
   const openTab = (next: Tab, tools = false) => {
     setShowScanTools(tools);
+    if (next !== "Learn") setAssignedLesson(null);
     if (next === "Map") setMapSearchRequest(null);
     setTab(next);
   };
@@ -331,16 +336,25 @@ function EcoLearnApp({ user }: { user: User }) {
     setTab("Map");
   };
   const consumeMapSearchRequest = useCallback(() => setMapSearchRequest(null), []);
-  const screen = tab === "Home"
+  useEffect(() => {
+    void syncPushDevice().catch((error: unknown) => Alert.alert("Could not sync notifications", error instanceof Error ? error.message : "Open Notifications to retry."));
+    const open = (response: Notifications.NotificationResponse) => {
+      if (response.notification.request.content.data?.notificationId) setTab("Notifications");
+    };
+    const listener = Notifications.addNotificationResponseReceivedListener(open);
+    void Notifications.getLastNotificationResponseAsync().then((response) => { if (response) { open(response); void Notifications.clearLastNotificationResponseAsync(); } });
+    return () => listener.remove();
+  }, []);
+  const screen = tab === "Notifications" ? <NotificationsScreen onOpen={(path) => openTab(path === "/learn" ? "Learn" : path === "/notifications" ? "Notifications" : "Community")} /> : tab === "Home"
     ? <Home user={user} displayName={displayName} progress={progress} lessons={lessons} completed={completed} achievements={achievements} earnedAchievementIds={earnedAchievementIds} recentScans={recentScans} onScan={() => openTab("Scan")} onLearn={() => openTab("Learn")} onMap={() => openTab("Map")} onCommunity={() => openTab("Community")} onChallenges={() => openTab("Challenges")} />
     : tab === "Scan"
       ? showScanTools ? <ToolsScreen onBack={() => setShowScanTools(false)} /> : <ScanScreen onRecorded={refresh} onTools={() => setShowScanTools(true)} onNearby={openMapForItem} />
       : tab === "Map"
         ? <MapScreen initialItem={mapSearchRequest?.item} searchRequestId={mapSearchRequest?.requestId} onInitialSearchHandled={consumeMapSearchRequest} />
       : tab === "Learn"
-        ? <LearnScreen lessons={lessons} completed={completed} onCompleted={refresh} />
+        ? <LearnScreen key={assignedLesson ?? "path"} initialLessonId={assignedLesson} lessons={lessons} completed={completed} onCompleted={refresh} />
         : tab === "Community"
-          ? <CommunityScreen onOpenLesson={() => openTab("Learn")} />
+          ? <CommunityScreen onOpenLesson={(id) => { setAssignedLesson(id); openTab("Learn"); }} />
         : tab === "Challenges"
           ? <QuestsScreen progress={progress} claims={rewardClaims} achievements={achievements} earnedAchievementIds={earnedAchievementIds} onRefresh={refresh} />
           : <ProfileScreen user={user} progress={progress} achievements={achievements} earnedAchievementIds={earnedAchievementIds} onNameSaved={setDisplayName} />;
@@ -357,6 +371,7 @@ function EcoLearnApp({ user }: { user: User }) {
       <Image source={ecoLearnIcon} style={styles.logoImage} />
       <View><Text style={styles.brand}>EcoLearn</Text><Text style={styles.headerSubtitle}>Delaware-first guidance</Text></View>
       <View style={extras.headerStreak}><Ionicons name="flame" size={14} color="#9a6800" /><Text style={extras.headerStreakText}>{progress?.streak_days ?? 0} day streak</Text></View>
+      <Pressable accessibilityLabel="Open notifications" onPress={() => openTab("Notifications")} style={extras.headerProfile}><Ionicons name="notifications-outline" size={18} color="#245533" /></Pressable>
       <Pressable accessibilityLabel="Open profile" onPress={() => openTab("Profile")} style={extras.headerProfile}><Ionicons name="person" size={17} color="#245533" /></Pressable>
     </View>
     <ScrollView style={styles.scroll} contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refreshAll()} tintColor="#2f7a43" />} keyboardShouldPersistTaps="handled">
@@ -545,8 +560,8 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
   </>;
 }
 
-function LearnScreen({ lessons, completed, onCompleted }: { lessons: Lesson[]; completed: string[]; onCompleted: () => Promise<void> }) {
-  const [active, setActive] = useState<Lesson | null>(null);
+function LearnScreen({ lessons, completed, onCompleted, initialLessonId }: { lessons: Lesson[]; completed: string[]; onCompleted: () => Promise<void>; initialLessonId?: string | null }) {
+  const [active, setActive] = useState<Lesson | null>(() => lessons.find((lesson) => lesson.id === initialLessonId) ?? null);
   const [step, setStep] = useState(0);
   const [choice, setChoice] = useState<number | null>(null);
   const [checked, setChecked] = useState(false);
@@ -941,7 +956,7 @@ function ProfileScreen({ user, progress, achievements, earnedAchievementIds, onN
     <Pressable style={styles.dangerButton} onPress={confirmDeletion} disabled={saving || deleting}>
       {deleting ? <ActivityIndicator color="#a33c34" /> : <Text style={styles.dangerText}>Delete account</Text>}
     </Pressable>
-    <Pressable style={styles.signOut} onPress={() => void supabase.auth.signOut()} disabled={deleting}>
+    <Pressable style={styles.signOut} onPress={() => { void (async () => { try { await unregisterPushDevice(); const { error } = await supabase.auth.signOut(); if (error) throw error; } catch (error) { Alert.alert("Could not sign out", error instanceof Error ? error.message : "Please retry."); } })(); }} disabled={deleting}>
       <Text style={styles.signOutText}>Sign out</Text>
     </Pressable>
   </>;

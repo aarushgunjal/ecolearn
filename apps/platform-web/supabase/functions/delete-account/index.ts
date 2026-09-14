@@ -44,6 +44,15 @@ serve(async (request) => {
     return json({ error: "Your session expired. Sign in again and retry." }, 401);
   }
 
+  const [communities, classrooms] = await Promise.all([
+    admin.from("ecolearn_communities").select("id").eq("created_by", user.id).limit(1),
+    admin.from("ecolearn_classrooms").select("id").eq("created_by", user.id).limit(1),
+  ]);
+  if (communities.error || classrooms.error) return json({ error: "Could not check managed spaces. Please retry." }, 500);
+  if (communities.data?.length || classrooms.data?.length) {
+    return json({ error: "Delete the communities and classrooms you created from Community or Schools before deleting your account." }, 409);
+  }
+
   // Storage objects do not cascade when an Auth user is deleted. Remove the
   // user's explicitly consented training uploads before deleting Auth data.
   for (let batch = 0; batch < 100; batch += 1) {

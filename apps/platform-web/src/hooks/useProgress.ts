@@ -17,14 +17,18 @@ export type UserProgress = {
 export function useProgress() {
   const { user } = useAuth();
   const [progress, setProgress] = useState<UserProgress | null>(null);
+  const [rewardClaims, setRewardClaims] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchProgress = useCallback(async () => {
     if (!user) {
       setProgress(null);
+      setRewardClaims([]);
       setLoading(false);
       return null;
     }
+    const claims = await supabase.from("reward_claims").select("reward_key").eq("user_id", user.id);
+    setRewardClaims((claims.data ?? []).map((row) => row.reward_key));
     const { data, error } = await supabase
       .from("user_progress")
       .select("user_id, xp, level, total_scans, total_lessons_completed, streak_days, last_activity_date")
@@ -59,5 +63,5 @@ export function useProgress() {
     return { error };
   };
 
-  return { progress, loading, claimReward, refreshProgress: fetchProgress };
+  return { progress, rewardClaims, loading, claimReward, refreshProgress: fetchProgress };
 }

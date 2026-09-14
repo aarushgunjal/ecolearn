@@ -140,7 +140,8 @@
           "resizeMode": "contain"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-notifications"
     ],
     "extra": {
       "eas": {

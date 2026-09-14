@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -25,6 +25,7 @@ export type Classroom = {
   id: string;
   community_id: string;
   school_name: string;
+  can_delete?: boolean;
   name: string;
   grade_label: string;
   role: "teacher" | "student";
@@ -138,8 +139,10 @@ export function useCommunityHub() {
   const [data, setData] = useState<HubData>(emptyHub);
   const [loading, setLoading] = useState(Boolean(user));
   const [error, setError] = useState<string | null>(null);
+  const requestVersion = useRef(0);
 
   const refresh = useCallback(async () => {
+    const version = ++requestVersion.current;
     if (!user) {
       setData(emptyHub);
       setLoading(false);
@@ -149,7 +152,9 @@ export function useCommunityHub() {
     setError(null);
     const { data: response, error: requestError } =
       await supabase.rpc("ecolearn_get_hub");
+    if (version !== requestVersion.current) return;
     if (requestError) {
+      setData(emptyHub);
       setError(
         requestError.code === "42883"
           ? "The secure community database update has not been deployed yet."
@@ -163,6 +168,8 @@ export function useCommunityHub() {
 
   useEffect(() => {
     void refresh();
+    const version = requestVersion;
+    return () => { version.current++; };
   }, [refresh]);
 
   const run = useCallback(
@@ -275,8 +282,12 @@ export function useCommunityHub() {
         p_starts_at: startsAt,
         p_location: location,
       }),
-    rsvpEvent: (eventId: string) =>
-      run("ecolearn_rsvp_event", { p_event_id: eventId, p_status: "going" }),
+    deleteSpace: (scope: "community" | "classroom", id: string) => run("ecolearn_delete_space", { p_scope: scope, p_scope_id: id }),
+    removeMember: (classroomId: string, userId: string) => run("ecolearn_remove_classroom_member", { p_classroom_id: classroomId, p_user_id: userId }),
+    leaveSpace: (scope: "community" | "classroom", id: string) => run("ecolearn_leave_space", { p_scope: scope, p_scope_id: id }),
+    deleteContent: (kind: "announcement" | "assignment" | "event", id: string) => run("ecolearn_delete_content", { p_kind: kind, p_id: id }),
+    rsvpEvent: (eventId: string, cancel = false) =>
+      run("ecolearn_rsvp_event", { p_event_id: eventId, p_status: cancel ? "cancelled" : "going" }),
     reportContent: (
       targetType: "announcement" | "event",
       targetId: string,

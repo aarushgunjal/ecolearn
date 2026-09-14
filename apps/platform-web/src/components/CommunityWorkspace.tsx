@@ -65,16 +65,17 @@ const primary =
 const secondary =
   "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#cfe0ca] bg-white px-3 py-2 text-sm font-bold text-[#2d7340] disabled:opacity-50";
 
-export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
+export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "organization" }) {
   const hub = useCommunityHub();
   const { toast } = useToast();
   const [busy, setBusy] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState("");
+  const [roleChoice, setRoleChoice] = useState<"student" | "teacher">("student");
   const [alias, setAlias] = useState(hub.data.profile.alias);
   const [communityName, setCommunityName] = useState("");
   const [communityDescription, setCommunityDescription] = useState("");
   const [communityKind, setCommunityKind] = useState<Community["kind"]>(
-    mode === "school" ? "school" : "neighborhood",
+    mode === "school" ? "school" : mode === "organization" ? "organization" : "neighborhood",
   );
   const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(
     null,
@@ -85,6 +86,7 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
     null,
   );
   const [dashboard, setDashboard] = useState<ClassroomDashboard | null>(null);
+  const [detailError, setDetailError] = useState("");
   const [standings, setStandings] = useState<SchoolStanding[]>([]);
   const [lessons, setLessons] = useState<LessonOption[]>([]);
   const [assignmentLesson, setAssignmentLesson] = useState("");
@@ -105,7 +107,7 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
     [hub.data.communities],
   );
   const visibleCommunities =
-    mode === "school" ? schoolCommunities : hub.data.communities;
+    mode === "school" ? schoolCommunities : mode === "organization" ? hub.data.communities.filter((item) => item.kind === "organization") : hub.data.communities;
   const selectedCommunity =
     visibleCommunities.find((item) => item.id === selectedCommunityId) ??
     visibleCommunities[0] ??
@@ -135,7 +137,7 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
   const getClassroomDashboard = hub.getClassroomDashboard;
   const getModerationQueue = hub.getModerationQueue;
 
-  useEffect(() => setAlias(hub.data.profile.alias), [hub.data.profile.alias]);
+  useEffect(() => { setAlias(hub.data.profile.alias); setRoleChoice(hub.data.profile.role === "student" ? "student" : "teacher"); }, [hub.data.profile]);
   useEffect(() => {
     if (!hub.user || !canTeach) return;
     void supabase
@@ -159,13 +161,17 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
       .catch(() => setStandings([]));
   }, [getSchoolStandings, selectedCommunity]);
   useEffect(() => {
+    let live = true;
+    setDashboard(null);
+    setDetailError("");
     if (!selectedClassroom || !canManageClassroom) {
       setDashboard(null);
       return;
     }
     void getClassroomDashboard(selectedClassroom.id)
-      .then(setDashboard)
-      .catch(() => setDashboard(null));
+      .then((result) => { if (live) setDashboard(result); })
+      .catch((error: unknown) => { if (live) setDetailError(error instanceof Error ? error.message : "Could not load classroom progress. Please retry."); });
+    return () => { live = false; };
   }, [canManageClassroom, getClassroomDashboard, selectedClassroom]);
   const refreshModeration = useCallback(async () => {
     if (!canModerate) return setModerationReports([]);
@@ -200,8 +206,8 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
   };
   const copyCode = async (code?: string | null) => {
     if (!code) return;
-    await navigator.clipboard.writeText(code);
-    toast({ title: "Join code copied", description: code });
+    try { await navigator.clipboard.writeText(code); toast({ title: "Join code copied", description: code }); }
+    catch { toast({ title: "Your join code", description: code }); }
   };
 
   if (!hub.user) return <SignedOut mode={mode} />;
@@ -243,8 +249,11 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
       {hub.error && (
         <div className="mb-5 rounded-2xl border border-[#e7bd7c] bg-[#fff7e7] p-4 text-sm text-[#76551f]">
           {hub.error}
+          <button className="ml-3 underline" onClick={() => void hub.refresh()}>Retry</button>
         </div>
       )}
+
+      {detailError && <p role="alert" className="my-4 rounded-xl bg-red-50 p-4">{detailError} <button className="underline" onClick={() => void hub.refresh()}>Retry</button></p>}
 
       <div className="grid gap-5 xl:grid-cols-[.72fr_1.28fr]">
         <aside className="space-y-5">
@@ -268,8 +277,11 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
               onChange={(event) => setAlias(event.target.value)}
             />
             <p className="mt-3 rounded-xl bg-[#f3f7f1] p-3 text-xs leading-5 text-[#627168]">
-              Teacher access is activated by a private teacher invitation. Admin access is assigned separately and cannot be self-selected.
+              Teachers can create their own spaces. Joining another teacher’s classroom requires its invitation code.
             </p>
+            <label className="mt-3 block text-sm">Account type
+              <select aria-label="Account type" className={field} value={roleChoice} onChange={(event) => setRoleChoice(event.target.value as "student" | "teacher")}><option value="student">Student</option><option value="teacher">Teacher</option></select>
+            </label>
             <button
               disabled={busy !== null}
               className={`${primary} mt-3 w-full`}
@@ -279,9 +291,7 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
                   () =>
                     hub.setProfile(
                       alias,
-                      hub.data.profile.role === "admin"
-                        ? "teacher"
-                        : hub.data.profile.role,
+                      roleChoice,
                     ),
                   "Profile saved",
                 )
@@ -292,18 +302,20 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
               ) : (
                 <Check size={16} />
               )}
-              Save alias
+              Save profile
             </button>
           </section>
 
           <section className="rounded-2xl border border-[#dde6da] bg-white p-5">
             <h2 className="font-semibold">Join with a code</h2>
+            <p className="mt-2 text-xs">Creators are already members of their spaces.</p>
             <p className="mt-1 text-sm leading-6 text-[#718076]">
               One account can join as many communities and classrooms as you
               need.
             </p>
             <input
               className={`${field} mt-4 uppercase`}
+              aria-label="Join code"
               value={joinCode}
               onChange={(event) =>
                 setJoinCode(event.target.value.toUpperCase())
@@ -312,7 +324,7 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
               autoCapitalize="characters"
             />
             <button
-              disabled={busy !== null || joinCode.trim().length < 8}
+              disabled={busy !== null || joinCode.trim().length < 8 || [...hub.data.communities, ...hub.data.classrooms].some((space) => space.join_code === joinCode.trim().toUpperCase())}
               className={`${primary} mt-3 w-full`}
               onClick={() =>
                 void action(
@@ -445,7 +457,8 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" }) {
             )}
           </section>
 
-          {mode === "community" ? (
+          {selectedCommunity && <SpaceActions scope="community" space={selectedCommunity} canDelete={selectedCommunity.role === "owner" || hub.data.profile.role === "admin"} canLeave={selectedCommunity.role === "member"} hub={hub} action={action} busy={busy} />}
+          {mode !== "school" ? (
             <CommunityDetail
               community={selectedCommunity}
               canManage={Boolean(canManageCommunity)}
@@ -595,6 +608,7 @@ function CommunityDetail({
                   <p className="mt-2 text-xs text-[#879188]">
                     {item.creator_alias} · {new Date(item.created_at).toLocaleDateString()}
                   </p>
+                  {canManage && <DeleteContent kind="announcement" id={item.id} hub={hub} busy={busy} action={action} />}
                   <SafetyActions
                     targetType="announcement"
                     targetId={item.id}
@@ -682,19 +696,20 @@ function CommunityDetail({
                   </p>
                   <button
                     className={`${secondary} mt-3`}
-                    disabled={event.rsvped || busy !== null}
+                    disabled={busy !== null}
                     onClick={() =>
                       void action(
                         `rsvp-${event.id}`,
-                        () => hub.rsvpEvent(event.id),
+                        () => hub.rsvpEvent(event.id, event.rsvped),
                         "RSVP saved",
                       )
                     }
                   >
                     {event.rsvped
-                      ? "Going"
+                      ? "Cancel RSVP"
                       : `RSVP · ${event.rsvp_count} going`}
                   </button>
+                  {canManage && <DeleteContent kind="event" id={event.id} hub={hub} busy={busy} action={action} />}
                   <SafetyActions
                     targetType="event"
                     targetId={event.id}
@@ -1193,6 +1208,8 @@ function SchoolDetail({
           </button>
         )}
       </section>
+      {selectedClassroom && <SpaceActions scope="classroom" space={selectedClassroom} canDelete={Boolean(selectedClassroom.can_delete)} canLeave={!selectedClassroom.can_delete} hub={hub} action={action} busy={busy} />}
+      {selectedClassroom && <ClassroomAnnouncements key={selectedClassroom.id} classroom={selectedClassroom} hub={hub} busy={busy} action={action} canManage={canManageClassroom} />}
       <section className="rounded-2xl border border-[#dde6da] bg-white p-5">
         <div className="flex items-center gap-2">
           <Trophy className="text-[#b17813]" />
@@ -1274,6 +1291,7 @@ function SchoolDetail({
                       <th>Scans</th>
                       <th>Lessons</th>
                       <th>Streak</th>
+                      <th>Membership</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1288,15 +1306,20 @@ function SchoolDetail({
                         <td>{student.scans}</td>
                         <td>{student.lessons}</td>
                         <td>{student.streak}d</td>
+                        <td><button className="text-xs underline" disabled={busy !== null} onClick={() => { if (window.confirm(`Remove ${student.alias} from this classroom? Their learning progress is kept.`)) void action("remove-member", () => hub.removeMember(selectedClassroom.id, student.user_id), "Member removed"); }}>Remove member</button></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <div className="mt-5 border-t border-[#e5ebe2] pt-5">
+                <h3 className="font-semibold">Assigned lessons</h3>
+                {dashboard.assignments.length === 0 && <p className="my-3 text-sm">No assignments yet.</p>}
+                {dashboard.assignments.map((assignment) => <article className="my-3 rounded-xl border p-3" key={assignment.id}><h4 className="font-semibold">{assignment.title}</h4><p className="text-sm">{assignment.completed_count} / {assignment.student_count} students completed{assignment.due_at ? ` · Due ${new Date(assignment.due_at).toLocaleString()}` : ""}</p><DeleteContent kind="assignment" id={assignment.id} hub={hub} busy={busy} action={action} /></article>)}
                 <h3 className="font-semibold">Assign a lesson</h3>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <select
+                    aria-label="Assignment lesson"
                     className={field}
                     value={assignmentLesson}
                     onChange={(e) => {
@@ -1321,6 +1344,7 @@ function SchoolDetail({
                   />
                   <input
                     type="datetime-local"
+                    aria-label="Assignment due date"
                     className={field}
                     value={assignmentDue}
                     onChange={(e) => setAssignmentDue(e.target.value)}
@@ -1388,6 +1412,7 @@ function StudentAssignments({ classroom, assignments }: { classroom: Classroom; 
                   ? ` · Due ${new Date(item.due_at).toLocaleString()}`
                   : ""}
               </p>
+              <a className="mt-3 inline-block font-semibold text-[#287440] underline" href={`/learn?lesson=${encodeURIComponent(item.lesson_id)}`}>{item.completed ? "Review lesson" : "Open assigned lesson"}</a>
             </div>
             {item.completed ? (
               <span className="rounded-full bg-[#dff0d8] px-2 py-1 text-xs font-bold text-[#2e7540]">
@@ -1412,7 +1437,7 @@ function StudentAssignments({ classroom, assignments }: { classroom: Classroom; 
 }
 
 type CreateCommunityCardProps = {
-  mode: "community" | "school"; name: string; setName: Setter; description: string;
+  mode: "community" | "school" | "organization"; name: string; setName: Setter; description: string;
   setDescription: Setter; kind: Community["kind"];
   setKind: Dispatch<SetStateAction<Community["kind"]>>; busy: string | null; create: () => Promise<void>;
 };
@@ -1438,7 +1463,7 @@ function CreateCommunityCard({
       <p className="mt-2 text-sm leading-6 text-[#637269]">
         {mode === "school"
           ? "Create the school first, then add its classrooms."
-          : "Teachers and verified organizers can create managed spaces."}
+          : "Teachers and community leaders can create managed spaces."}
       </p>
       <input
         className={`${field} mt-4`}
@@ -1540,4 +1565,29 @@ function SignedOut({ mode }: { mode: string }) {
       </div>
     </section>
   );
+}
+
+function SpaceActions({ scope, space, canDelete, canLeave, hub, action, busy }: { scope: "community" | "classroom"; space: { id: string; name: string }; canDelete: boolean; canLeave: boolean; hub: HubController; action: Action; busy: string | null }) {
+  return <div className="flex flex-wrap gap-3">
+    {canDelete && <button disabled={busy !== null} className={secondary} onClick={() => {
+      if (window.confirm(`Delete ${space.name}? This permanently deletes this ${scope}, its memberships, invitations, and content${scope === "community" ? ", including its classrooms" : ""}. Individual learning progress is kept.`)) void action("delete-space", () => hub.deleteSpace(scope, space.id), "Space deleted");
+    }}>Delete {scope}</button>}
+    {canLeave && <button disabled={busy !== null} className={secondary} onClick={() => {
+      if (window.confirm(`Leave ${space.name}?`)) void action("leave-space", () => hub.leaveSpace(scope, space.id), "You left the space");
+    }}>Leave {scope}</button>}
+  </div>;
+}
+
+function DeleteContent({ kind, id, hub, busy, action }: { kind: "announcement" | "assignment" | "event"; id: string; hub: HubController; busy: string | null; action: Action }) {
+  return <button className={`${secondary} mt-3`} disabled={busy !== null} onClick={() => { if (window.confirm(`Delete this ${kind}? This cannot be undone.`)) void action(`delete-${id}`, () => hub.deleteContent(kind, id), `${kind} deleted`); }}>Delete {kind}</button>;
+}
+
+function ClassroomAnnouncements({ classroom, hub, busy, action, canManage }: { classroom: Classroom; hub: HubController; busy: string | null; action: Action; canManage: boolean }) {
+  const [title, setTitle] = useState(""); const [body, setBody] = useState("");
+  const announcements = hub.data.announcements.filter((item) => item.scope === "classroom" && item.scope_id === classroom.id);
+  return <section className="rounded-2xl border bg-white p-5"><h2 className="font-semibold">Classroom announcements</h2>
+    {!announcements.length && <p className="my-3 text-sm">No classroom announcements yet.</p>}
+    {announcements.map((item) => <article className="my-3 rounded-xl border p-3" key={item.id}><h3 className="font-semibold">{item.title}</h3><p className="my-2 text-sm">{item.body}</p><SafetyActions targetType="announcement" targetId={item.id} createdBy={item.created_by} creatorAlias={item.creator_alias} hub={hub} busy={busy} action={action} />{canManage && <DeleteContent kind="announcement" id={item.id} hub={hub} busy={busy} action={action} />}</article>)}
+    {canManage && <div className="mt-4 space-y-3"><input className={field} aria-label="Classroom announcement title" placeholder="Classroom announcement title" maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} /><textarea className={field} aria-label="Classroom announcement message" placeholder="Classroom announcement message" maxLength={1200} value={body} onChange={(e) => setBody(e.target.value)} /><button className={primary} disabled={busy !== null || title.trim().length < 2 || body.trim().length < 2} onClick={() => void action("classroom-announcement", async () => { await hub.createAnnouncement("classroom", classroom.id, title, body); setTitle(""); setBody(""); }, "Classroom announcement published")}>Publish classroom announcement</button></div>}
+  </section>;
 }

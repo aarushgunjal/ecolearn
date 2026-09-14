@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -28,6 +32,7 @@ type Classroom = {
   id: string;
   community_id: string;
   school_name: string;
+  can_delete?: boolean;
   name: string;
   grade_label: string;
   role: "teacher" | "student";
@@ -40,6 +45,7 @@ type Assignment = {
   id: string;
   classroom_id: string;
   classroom_name: string;
+  lesson_id: string;
   lesson_title: string;
   title: string;
   due_at?: string | null;
@@ -122,12 +128,13 @@ const emptyHub: Hub = {
 export function CommunityScreen({
   onOpenLesson,
 }: {
-  onOpenLesson: () => void;
+  onOpenLesson: (lessonId: string) => void;
 }) {
   const [hub, setHub] = useState<Hub>(emptyHub);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [roleChoice, setRoleChoice] = useState<"student" | "teacher">("student");
   const [alias, setAlias] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [communityName, setCommunityName] = useState("");
@@ -141,6 +148,9 @@ export function CommunityScreen({
   const [selectedClassroom, setSelectedClassroom] = useState<string | null>(
     null,
   );
+  const [reportDraft, setReportDraft] = useState<{ type: "announcement" | "event"; id: string; reason: ModerationReport["reason"]; details: string } | null>(null);
+  const [classTitle, setClassTitle] = useState("");
+  const [classBody, setClassBody] = useState("");
   const [students, setStudents] = useState<StudentMetric[]>([]);
   const [standings, setStandings] = useState<Standing[]>([]);
   const [lessons, setLessons] = useState<LessonOption[]>([]);
@@ -175,6 +185,7 @@ export function CommunityScreen({
       const next = data as unknown as Hub;
       setHub(next);
       setAlias(next.profile.alias ?? "");
+      setRoleChoice(next.profile.role === "student" ? "student" : "teacher");
     }
     setLoading(false);
   }, []);
@@ -202,14 +213,14 @@ export function CommunityScreen({
     [hub.communities],
   );
   useEffect(() => {
-    if (!selectedSchool && schools[0]) setSelectedSchool(schools[0].id);
+    if (!schools.some((item) => item.id === selectedSchool)) setSelectedSchool(schools[0]?.id ?? null);
   }, [schools, selectedSchool]);
   useEffect(() => {
-    if (!selectedCommunity && hub.communities[0])
-      setSelectedCommunity(hub.communities[0].id);
-    if (!selectedClassroom) {
+    if (!hub.communities.some((item) => item.id === selectedCommunity))
+      setSelectedCommunity(hub.communities[0]?.id ?? null);
+    if (!hub.classrooms.some((item) => item.id === selectedClassroom)) {
       const managed = hub.classrooms.find((item) => item.role === "teacher");
-      if (managed) setSelectedClassroom(managed.id);
+      setSelectedClassroom(managed?.id ?? null);
     }
   }, [hub.classrooms, hub.communities, selectedClassroom, selectedCommunity]);
   useEffect(() => {
@@ -238,6 +249,14 @@ export function CommunityScreen({
       );
   }, [hub.classrooms, selectedClassroom]);
 
+  const deleteContent = (kind: "announcement" | "assignment" | "event", id: string) => Alert.alert(`Delete ${kind}?`, "This cannot be undone.", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => void run("ecolearn_delete_content", { p_kind: kind, p_id: id }, `${kind} deleted`) }]);
+  const managesClass = (id: string) => hub.classrooms.some((room) => room.id === id && room.role === "teacher");
+  const managesCommunity = (id: string) => hub.communities.some((community) => community.id === id && community.role !== "member");
+  const confirmSpace = (scope: "community" | "classroom", id: string, name: string, remove: boolean) => {
+    Alert.alert(`${remove ? "Delete" : "Leave"} ${name}?`, remove ? `Permanently delete this ${scope}, its invitations, memberships, and content${scope === "community" ? ", including classrooms" : ""}? Individual learning progress is kept.` : "You will lose access to this space.", [
+      { text: "Cancel", style: "cancel" }, { text: remove ? "Delete" : "Leave", style: "destructive", onPress: () => void run(remove ? "ecolearn_delete_space" : "ecolearn_leave_space", { p_scope: scope, p_scope_id: id }, remove ? "Space deleted" : "You left the space") },
+    ]);
+  };
   const managedCommunity = hub.communities.find(
     (item) =>
       item.id === selectedCommunity &&
@@ -265,28 +284,19 @@ export function CommunityScreen({
     void refreshModeration();
   }, [refreshModeration, hub.announcements, hub.events]);
 
-  const run = async (
-    name: string,
-    params: Record<string, unknown>,
-    success: string,
-  ) => {
+  const run = async (name: string, params: Record<string, unknown>, success: string): Promise<boolean> => {
     setSaving(true);
-    const { data, error: requestError } = await supabase.rpc(name, params);
-    setSaving(false);
-    if (requestError)
-      return Alert.alert("Could not save", requestError.message);
-    await refresh();
-    setExpanded(null);
-    const code =
-      data && typeof data === "object" && "join_code" in data
-        ? String((data as { join_code: unknown }).join_code)
-        : null;
-    Alert.alert(
-      success,
-      code
-        ? `Share join code ${code} with the people you invite.`
-        : "Your changes are live.",
-    );
+    try {
+      const { data, error: requestError } = await supabase.rpc(name, params);
+      if (requestError) throw new Error(requestError.message);
+      await refresh(); setExpanded(null);
+      if (name === "ecolearn_create_announcement") { setClassTitle(""); setClassBody(""); setAnnouncementTitle(""); setAnnouncementBody(""); }
+      if (name === "ecolearn_join_space") setJoinCode("");
+      const code = data && typeof data === "object" && "join_code" in data ? String((data as { join_code: unknown }).join_code) : null;
+      Alert.alert(success, code ? `Share join code ${code} with the people you invite.` : "Your changes are saved.");
+      return true;
+    } catch (error) { Alert.alert("Could not save", error instanceof Error ? error.message : "Check your connection and retry."); return false; }
+    finally { setSaving(false); }
   };
   const copyCode = (code?: string | null) =>
     code && Alert.alert("Join code", code);
@@ -308,57 +318,7 @@ export function CommunityScreen({
       `Share ${String(data)} only with an authorized educator.`,
     );
   };
-  const submitReport = (
-    targetType: "announcement" | "event",
-    targetId: string,
-    reason: ModerationReport["reason"],
-  ) =>
-    Alert.prompt(
-      "Add report details",
-      "Optional: briefly tell the moderator what is wrong with this content.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Send report",
-          onPress: (details?: string) =>
-            void run(
-              "ecolearn_report_content",
-              {
-                p_target_type: targetType,
-                p_target_id: targetId,
-                p_reason: reason,
-                p_details: (details ?? "").slice(0, 500),
-              },
-              "Report sent to the community moderator",
-            ),
-        },
-      ],
-      "plain-text",
-      "",
-    );
-  const reportContent = (
-    targetType: "announcement" | "event",
-    targetId: string,
-  ) =>
-    Alert.alert("Report content", "What is the main concern?", [
-      {
-        text: "Inappropriate",
-        onPress: () => submitReport(targetType, targetId, "inappropriate"),
-      },
-      {
-        text: "Bullying",
-        onPress: () => submitReport(targetType, targetId, "bullying"),
-      },
-      {
-        text: "Spam",
-        onPress: () => submitReport(targetType, targetId, "spam"),
-      },
-      {
-        text: "Privacy",
-        onPress: () => submitReport(targetType, targetId, "privacy"),
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
+  const reportContent = (type: "announcement" | "event", id: string) => setReportDraft({ type, id, reason: "inappropriate", details: "" });
   const blockUser = (userId: string, name: string) =>
     Alert.alert(
       `Block ${name}?`,
@@ -429,6 +389,7 @@ export function CommunityScreen({
           Teacher access requires a private teacher invitation. Admin access is
           assigned separately and cannot be self-selected.
         </Text>
+        <View style={s.row}>{(["student", "teacher"] as const).map((role) => <Pressable key={role} accessibilityRole="radio" accessibilityState={{ checked: roleChoice === role }} onPress={() => setRoleChoice(role)}><Text style={s.link}>{roleChoice === role ? "● " : "○ "}{role === "teacher" ? "Teacher" : "Student"}</Text></Pressable>)}</View>
         <Pressable
           disabled={saving}
           onPress={() =>
@@ -436,14 +397,13 @@ export function CommunityScreen({
               "ecolearn_set_profile",
               {
                 p_alias: alias || "Eco learner",
-                p_role:
-                  hub.profile.role === "admin" ? "teacher" : hub.profile.role,
+                p_role: roleChoice,
               },
               "Profile saved",
             )
           }
         >
-          <Text style={s.link}>Save display name</Text>
+          <Text style={s.link}>Save profile</Text>
         </Pressable>
       </View>
 
@@ -480,7 +440,7 @@ export function CommunityScreen({
             maxLength={12}
           />
           <Pressable
-            disabled={saving || joinCode.length < 6}
+            disabled={saving || joinCode.length < 6 || [...hub.communities, ...hub.classrooms].some((space) => space.join_code && space.join_code === joinCode.trim())}
             style={s.primary}
             onPress={() =>
               void run(
@@ -490,7 +450,7 @@ export function CommunityScreen({
               )
             }
           >
-            <Text style={s.primaryText}>Join community or class</Text>
+            <Text style={s.primaryText}>{[...hub.communities, ...hub.classrooms].some((space) => space.join_code && space.join_code === joinCode.trim()) ? "You already belong to this space" : "Join community or class"}</Text>
           </Pressable>
         </View>
       )}
@@ -574,6 +534,8 @@ export function CommunityScreen({
               <Metric value={item.total_xp} label="XP" />
               <Metric value={item.total_scans} label="checks" />
             </View>
+            {(item.role === "owner" || hub.profile.role === "admin") && <Pressable disabled={saving} onPress={() => confirmSpace("community", item.id, item.name, true)}><Text style={s.link}>Delete community</Text></Pressable>}
+            {item.role === "member" && <Pressable disabled={saving} onPress={() => confirmSpace("community", item.id, item.name, false)}><Text style={s.link}>Leave community</Text></Pressable>}
             {item.join_code && (
               <Pressable onPress={() => copyCode(item.join_code)}>
                 <Text style={s.link}>Show community join code</Text>
@@ -612,6 +574,8 @@ export function CommunityScreen({
               <Metric value={item.total_xp} label="class XP" />
               <Metric value={item.lesson_completions} label="lessons" />
             </View>
+            {item.can_delete && <Pressable disabled={saving} onPress={() => confirmSpace("classroom", item.id, item.name, true)}><Text style={s.link}>Delete classroom</Text></Pressable>}
+            {!item.can_delete && <Pressable disabled={saving} onPress={() => confirmSpace("classroom", item.id, item.name, false)}><Text style={s.link}>Leave classroom</Text></Pressable>}
             {item.join_code && (
               <>
                 <Pressable onPress={() => copyCode(item.join_code)}>
@@ -801,6 +765,7 @@ export function CommunityScreen({
         </>
       )}
 
+      {managedClassroom && <View style={s.form}><Text style={s.cardTitle}>Post to {managedClassroom.name}</Text><TextInput style={s.input} accessibilityLabel="Classroom announcement title" placeholder="Classroom announcement title" maxLength={120} value={classTitle} onChangeText={setClassTitle} /><TextInput style={s.input} accessibilityLabel="Classroom announcement message" placeholder="Classroom announcement message" multiline maxLength={1200} value={classBody} onChangeText={setClassBody} /><Pressable style={s.primary} disabled={saving || classTitle.trim().length < 2 || classBody.trim().length < 2} onPress={() => void run("ecolearn_create_announcement", { p_scope: "classroom", p_scope_id: managedClassroom.id, p_title: classTitle, p_body: classBody }, "Classroom announcement published")}><Text style={s.primaryText}>Publish classroom announcement</Text></Pressable></View>}
       {managedCommunity && (
         <>
           <Text style={s.section}>Community manager tools</Text>
@@ -958,6 +923,7 @@ export function CommunityScreen({
                 </Text>
               </View>
               <Text style={s.xp}>{student.xp} XP</Text>
+              {managedClassroom && <Pressable disabled={saving} onPress={() => Alert.alert(`Remove ${student.alias}?`, "Remove classroom access? Learning progress is kept.", [{ text: "Cancel", style: "cancel" }, { text: "Remove", style: "destructive", onPress: () => void run("ecolearn_remove_classroom_member", { p_classroom_id: managedClassroom.id, p_user_id: student.user_id }, "Member removed") }])}><Text style={s.link}>Remove member</Text></Pressable>}
             </View>
           ))}
         </>
@@ -967,7 +933,8 @@ export function CommunityScreen({
         <>
           <Text style={s.section}>Assignments</Text>
           {hub.assignments.map((item) => (
-            <Pressable key={item.id} style={s.card} onPress={onOpenLesson}>
+            <View key={item.id} style={s.card}>
+              <Pressable onPress={() => onOpenLesson(item.lesson_id)}>
               <Text style={s.cardTitle}>{item.title}</Text>
               <Text style={s.meta}>
                 {item.classroom_name} · {item.lesson_title}
@@ -979,20 +946,23 @@ export function CommunityScreen({
                     ? `Due ${new Date(item.due_at).toLocaleDateString()}`
                     : "Ready to begin"}
               </Text>
-            </Pressable>
+              </Pressable>
+              {managesClass(item.classroom_id) && <Pressable disabled={saving} onPress={() => deleteContent("assignment", item.id)}><Text style={s.link}>Delete assignment</Text></Pressable>}
+            </View>
           ))}
         </>
       )}
       {hub.announcements.length > 0 && (
         <>
           <Text style={s.section}>Updates</Text>
-          {hub.announcements.slice(0, 6).map((item) => (
+          {hub.announcements.map((item) => (
             <View key={item.id} style={s.card}>
               <Text style={s.cardTitle}>{item.title}</Text>
               <Text style={s.body}>{item.body}</Text>
               <Text style={s.meta}>
                 {item.creator_alias} · {new Date(item.created_at).toLocaleDateString()}
               </Text>
+              {(item.scope === "classroom" ? managesClass(item.scope_id) : managesCommunity(item.scope_id)) && <Pressable disabled={saving} onPress={() => deleteContent("announcement", item.id)}><Text style={s.link}>Delete announcement</Text></Pressable>}
               {Boolean(currentUserId) && item.created_by !== currentUserId && (
                 <View style={s.safetyActions}>
                   <Pressable
@@ -1029,21 +999,22 @@ export function CommunityScreen({
               </Text>
               <Text style={s.meta}>Posted by {item.creator_alias}</Text>
               <Pressable
-                disabled={item.rsvped}
+                disabled={saving}
                 onPress={() =>
                   void run(
                     "ecolearn_rsvp_event",
-                    { p_event_id: item.id, p_status: "going" },
+                    { p_event_id: item.id, p_status: item.rsvped ? "cancelled" : "going" },
                     "RSVP saved",
                   )
                 }
               >
                 <Text style={s.link}>
                   {item.rsvped
-                    ? "You’re going"
+                    ? "Cancel RSVP"
                     : `RSVP · ${item.rsvp_count} going`}
                 </Text>
               </Pressable>
+              {managesCommunity(item.community_id) && <Pressable disabled={saving} onPress={() => deleteContent("event", item.id)}><Text style={s.link}>Delete event</Text></Pressable>}
               {Boolean(currentUserId) && item.created_by !== currentUserId && (
                 <View style={s.safetyActions}>
                   <Pressable
@@ -1176,6 +1147,17 @@ export function CommunityScreen({
           </View>
         )}
       </View>
+      <Modal visible={reportDraft !== null} transparent animationType="slide" onRequestClose={() => { if (!saving) setReportDraft(null); }}>
+        <KeyboardAvoidingView style={{ flex: 1, justifyContent: "center", backgroundColor: "#0008", padding: 20 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <ScrollView style={{ maxHeight: "85%", backgroundColor: "white", borderRadius: 18 }} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+            <Text style={s.cardTitle}>Report content</Text><Text style={s.body}>Choose the main concern and add optional details.</Text>
+            {(["inappropriate", "bullying", "spam", "privacy", "other"] as const).map((reason) => <Pressable key={reason} accessibilityRole="radio" accessibilityState={{ checked: reportDraft?.reason === reason }} onPress={() => setReportDraft((draft) => draft ? { ...draft, reason } : draft)}><Text style={s.link}>{reportDraft?.reason === reason ? "● " : "○ "}{reason}</Text></Pressable>)}
+            <TextInput style={s.input} multiline maxLength={500} accessibilityLabel="Report details" placeholder="Optional report details" value={reportDraft?.details ?? ""} onChangeText={(details) => setReportDraft((draft) => draft ? { ...draft, details } : draft)} />
+            <Pressable disabled={saving || !reportDraft} style={s.primary} onPress={() => { if (reportDraft) void run("ecolearn_report_content", { p_target_type: reportDraft.type, p_target_id: reportDraft.id, p_reason: reportDraft.reason, p_details: reportDraft.details }, "Report sent to the community moderator").then((saved) => { if (saved) setReportDraft(null); }); }}><Text style={s.primaryText}>Send report</Text></Pressable>
+            <Pressable disabled={saving} onPress={() => setReportDraft(null)}><Text style={s.link}>Cancel</Text></Pressable>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
     </>
   );
 }

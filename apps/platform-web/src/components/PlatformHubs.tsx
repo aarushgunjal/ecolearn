@@ -38,7 +38,7 @@ export function LocalRules() {
     localStorage.setItem("ecolearn-city", city);
     toast({
       title: "Local rules updated",
-      description: `Scanner guidance now uses ${city}.`,
+      description: `Saved ${city}. Official Delaware guidance applies statewide.`,
     });
   };
   return (
@@ -66,20 +66,7 @@ export function LocalRules() {
           >
             Save location
           </button>
-          <button
-            onClick={() =>
-              navigator.geolocation?.getCurrentPosition(() => {
-                setCity("Delaware");
-                toast({
-                  title: "Location detected",
-                  description: "EcoLearn uses Delaware DNREC guidance statewide.",
-                });
-              })
-            }
-            className="ml-3 text-sm font-bold text-[#348145]"
-          >
-            Use my location
-          </button>
+
         </section>
         <section className="rounded-2xl bg-[#edf7e8] p-6">
           <p className="text-sm font-bold text-[#347b43]">
@@ -125,71 +112,7 @@ export function Schools() {
 }
 
 export function Organization() {
-  const { progress } = useProgress();
-  const [campaignManaged, setCampaignManaged] = useState(
-    () => localStorage.getItem("ecolearn-campaign-managed") === "true",
-  );
-  const [volunteersInvited, setVolunteersInvited] = useState(
-    () => localStorage.getItem("ecolearn-volunteers-invited") === "true",
-  );
-  const { toast } = useToast();
-  const campaignActions = 1284 + (progress?.total_scans ?? 0) * 4;
-  const volunteerCount = 68 + (progress?.total_lessons_completed ?? 0) * 2;
-  const avoidedTons = (4.2 + (progress?.total_scans ?? 0) * 0.01).toFixed(1);
-  return (
-    <Hub
-      title="Organization hub"
-      eyebrow="Campaigns that add up"
-      icon={<ShieldCheck />}
-    >
-      <div className="grid gap-5 md:grid-cols-3">
-        <MiniMetric
-          value={`${campaignActions.toLocaleString()}`}
-          label="Campaign actions"
-        />
-        <MiniMetric value={`${volunteerCount}`} label="Volunteers" />
-        <MiniMetric value={`${avoidedTons} t`} label="CO₂ avoided" />
-      </div>
-      <section className="mt-6 rounded-2xl border border-[#e0e7dc] bg-white p-6">
-        <p className="text-xs font-bold uppercase tracking-wider text-[#478950]">
-          ACTIVE CAMPAIGN
-        </p>
-        <h2 className="mt-2 text-xl font-semibold">Zero-waste September</h2>
-        <p className="mt-2 text-sm text-[#718076]">
-          Invite volunteers, launch a city challenge, and publish your impact
-          report.
-        </p>
-        <div className="mt-5 flex flex-wrap gap-3">
-          <button
-            onClick={() => {
-              setCampaignManaged(true);
-              localStorage.setItem("ecolearn-campaign-managed", "true");
-              toast({
-                title: "Campaign opened",
-                description: "Zero-waste September is now in your workspace.",
-              });
-            }}
-            className="rounded-xl bg-[#173d2a] px-5 py-3 text-sm font-bold text-white"
-          >
-            {campaignManaged ? "Campaign open" : "Manage campaign"}
-          </button>
-          <button
-            onClick={() => {
-              setVolunteersInvited(true);
-              localStorage.setItem("ecolearn-volunteers-invited", "true");
-              toast({
-                title: "Invitations sent",
-                description: "Volunteers can now join your campaign.",
-              });
-            }}
-            className="rounded-xl border border-[#dce4d8] px-5 py-3 text-sm font-bold text-[#317a43]"
-          >
-            {volunteersInvited ? "Volunteers invited" : "Invite volunteers"}
-          </button>
-        </div>
-      </section>
-    </Hub>
-  );
+  return <CommunityWorkspace mode="organization" />;
 }
 
 export function Admin() {
@@ -207,16 +130,6 @@ export function Admin() {
     confusion_rate: number;
   }>>([]);
   const [itemAnalyticsReady, setItemAnalyticsReady] = useState(true);
-  const [reviewQueued, setReviewQueued] = useState(
-    () => localStorage.getItem("ecolearn-review-queued") === "true",
-  );
-  const [reportQueued, setReportQueued] = useState(
-    () => localStorage.getItem("ecolearn-report-queued") === "true",
-  );
-  const lessonCompletion = Math.min(
-    100,
-    74 + (progress?.total_lessons_completed ?? 0) * 4,
-  );
   useEffect(() => {
     const loadScanCategories = async () => {
       const { data } = await supabase
@@ -284,7 +197,7 @@ export function Admin() {
           label="Avg confidence"
         />
         <MiniMetric value={`${progress?.xp ?? 0}`} label="Lifetime XP" />
-        <MiniMetric value={`${lessonCompletion}%`} label="Lesson completion" />
+        <MiniMetric value={`${progress?.total_lessons_completed ?? 0}`} label="Lessons completed" />
       </div>
       <section className="mt-6 grid gap-5 lg:grid-cols-2">
         <div className="rounded-2xl border border-[#e0e7dc] bg-white p-6">
@@ -315,39 +228,12 @@ export function Admin() {
           </div>}
         </div>
         <div className="rounded-2xl border border-[#e0e7dc] bg-white p-6">
-          <h2 className="font-semibold">Operations</h2>
-          <button
-            onClick={() => {
-              setReviewQueued(true);
-              localStorage.setItem("ecolearn-review-queued", "true");
-              toast({
-                title: "Review queued",
-                description: "Low-confidence scans are ready for review.",
-              });
-            }}
-            className="mt-5 flex w-full items-center gap-3 rounded-xl bg-[#f3f7f0] p-4 text-left text-sm font-semibold"
-          >
-            <FileText className="text-[#4a9656]" />
-            {reviewQueued
-              ? "Review queued"
-              : "Review low-confidence scans"}{" "}
-            <ChevronRight className="ml-auto" size={17} />
-          </button>
-          <button
-            onClick={() => {
-              setReportQueued(true);
-              localStorage.setItem("ecolearn-report-queued", "true");
-              toast({
-                title: "Report queued",
-                description: "Your impact report is ready to export.",
-              });
-            }}
-            className="mt-5 flex w-full items-center gap-3 rounded-xl bg-[#f3f7f0] p-4 text-left text-sm font-semibold"
-          >
-            <Download className="text-[#4a9656]" />
-            {reportQueued ? "Report queued" : "Export impact report"}
-            <ChevronRight className="ml-auto" size={17} />
-          </button>
+          <h2 className="font-semibold">Export your activity</h2>
+          <button className="mt-5 rounded-xl border p-4" onClick={() => {
+            const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), progress, scanStats, scanCategories }, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a"); link.href = url; link.download = "ecolearn-activity.json"; link.click(); URL.revokeObjectURL(url);
+          }}>Download activity report</button>
         </div>
       </section>
       <section className="mt-5 rounded-2xl border border-[#e0e7dc] bg-white p-6">
@@ -418,44 +304,7 @@ export function ScannerTools() {
   );
 }
 
-export function Notifications() {
-  const { progress } = useProgress();
-  const [read, setRead] = useState(
-    () => localStorage.getItem("ecolearn-notifications-read") === "true",
-  );
-  const rankText = `You’re now in the top ${Math.max(8, 28 - (progress?.total_scans ?? 0) * 2)}% of your city.`;
-  return (
-    <Hub title="Notifications" eyebrow="Stay in the loop" icon={<BellRing />}>
-      <div className="overflow-hidden rounded-2xl border border-[#e0e7dc] bg-white">
-        {[
-          [
-            "Your daily quest is ready",
-            "Scan three items correctly to earn 30 XP.",
-          ],
-          ["You moved up the leaderboard", rankText],
-          ["Earth Week is coming", "A new community challenge begins Monday."],
-        ].map(([title, detail], i) => (
-          <button
-            key={title}
-            onClick={() => {
-              setRead(true);
-              localStorage.setItem("ecolearn-notifications-read", "true");
-            }}
-            className={`flex w-full gap-4 border-b border-[#edf0eb] p-5 text-left last:border-0 ${!read && i === 0 ? "bg-[#f3f9ef]" : ""}`}
-          >
-            <span className="mt-1 h-2.5 w-2.5 rounded-full bg-[#52a057]" />
-            <span>
-              <span className="block font-semibold">{title}</span>
-              <span className="mt-1 block text-sm text-[#718076]">
-                {detail}
-              </span>
-            </span>
-          </button>
-        ))}
-      </div>
-    </Hub>
-  );
-}
+export { NotificationCenter as Notifications } from "./NotificationCenter";
 
 function Hub({
   title,

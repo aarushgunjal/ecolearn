@@ -99,6 +99,7 @@ function AppShell() {
   useEffect(() => {
     const handleOpenNotifications = () => navigate("Notifications");
     const handleOpenLearn = () => navigate("Learn");
+    const handleOpenScan = () => navigate("Scan");
     const handleOpenAuth = () => setAuthOpen(true);
     const handleHistoryChange = () => {
       setLegalPage(readLegalPage());
@@ -107,12 +108,14 @@ function AppShell() {
     };
     window.addEventListener("ecolearn-open-notifications", handleOpenNotifications);
     window.addEventListener("ecolearn-open-learn", handleOpenLearn);
+    window.addEventListener("ecolearn-open-scan", handleOpenScan);
     window.addEventListener("ecolearn-open-auth", handleOpenAuth);
     window.addEventListener("hashchange", handleHistoryChange);
     window.addEventListener("popstate", handleHistoryChange);
     return () => {
       window.removeEventListener("ecolearn-open-notifications", handleOpenNotifications);
       window.removeEventListener("ecolearn-open-learn", handleOpenLearn);
+      window.removeEventListener("ecolearn-open-scan", handleOpenScan);
       window.removeEventListener("ecolearn-open-auth", handleOpenAuth);
       window.removeEventListener("hashchange", handleHistoryChange);
       window.removeEventListener("popstate", handleHistoryChange);
@@ -171,7 +174,7 @@ function AppShell() {
             </button>
           </nav>
           <div className="flex items-center gap-2 sm:gap-3">
-            <button className="hidden items-center gap-1.5 rounded-full bg-[#fff3d5] px-3 py-2 text-sm font-semibold text-[#976700] sm:flex">
+            <button onClick={() => navigate("Challenges")} className="hidden items-center gap-1.5 rounded-full bg-[#fff3d5] px-3 py-2 text-sm font-semibold text-[#976700] sm:flex">
               <Flame size={16} fill="currentColor" /> {progress?.streak_days ?? 0} day streak
             </button>
             <button
@@ -234,12 +237,12 @@ function AppShell() {
         {active === "Organization" && <Organization />}
         {active === "Admin" && (adminLoading ? <LoadingSection /> : isAdmin ? <Admin /> : <RestrictedSection signedIn={Boolean(user)} onSignIn={() => setAuthOpen(true)} />)}
         {active === "Tools" && <ScannerTools />}
-        {active === "Notifications" && <Notifications />}
+        {active === "Notifications" && <Notifications key={user?.id ?? "guest"} />}
       </main>
 
       <footer className="mx-auto flex max-w-7xl flex-col gap-3 border-t border-[#e2e8de] px-5 py-7 text-sm text-[#58675d] sm:flex-row sm:items-center sm:justify-between lg:px-8">
         <p>© {new Date().getFullYear()} EcoLearn. Small choices, real impact.</p>
-        <div className="flex gap-5 font-semibold">
+        <div className="flex flex-wrap gap-x-5 gap-y-3 font-semibold">
           <a href="/privacy" onClick={(event) => { event.preventDefault(); openLegal("privacy"); }} className="hover:text-[#286b3a]">Privacy Policy</a>
           <a href="/terms" onClick={(event) => { event.preventDefault(); openLegal("terms"); }} className="hover:text-[#286b3a]">Terms of Service</a>
           <a href="/delete-account" onClick={(event) => { event.preventDefault(); openLegal("delete-account"); }} className="hover:text-[#286b3a]">Delete account</a>

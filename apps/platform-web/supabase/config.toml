@@ -43,3 +43,7 @@ verify_jwt = false
 
 [functions.complete-training-batch]
 verify_jwt = false
+
+# Authenticated with NOTIFICATION_CRON_SECRET inside the worker.
+[functions.deliver-notifications]
+verify_jwt = false

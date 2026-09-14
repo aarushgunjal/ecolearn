@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { EcoLearnPage } from "./pages/EcoLearnPage";
 
+test.beforeEach(async ({ page }) => {
+  await page.route("https://ecolearn-test.supabase.co/**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: route.request().url().includes("/functions/") ? JSON.stringify({ verified: false, suggestions: [] }) : "[]" }));
+});
+
 test.describe("EcoLearn guest journeys", () => {
   test("renders primary and extended platform sections", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "chromium", "Extended navigation uses the compact mobile menu.");
@@ -22,7 +26,7 @@ test.describe("EcoLearn guest journeys", () => {
     const sections = [
       ["Local rules", /Delaware recycling rules/],
       ["Schools", /Sign in to join your people/],
-      ["Organizations", /Organization hub/],
+      ["Organizations", /Sign in to join your people/],
       ["Scan tools", /Smart scan tools/],
       ["Notifications", /Notifications/],
     ] as const;
@@ -328,14 +332,12 @@ test.describe("EcoLearn guest journeys", () => {
     await page.getByRole("button", { name: "Close sign-in dialog" }).click();
 
     await app.openMoreSection("Organizations");
-    await page.getByRole("button", { name: "Manage campaign" }).click();
-    await page.getByRole("button", { name: "Invite volunteers" }).click();
-    await expect(page.getByRole("button", { name: "Campaign open" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Volunteers invited" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Sign in to join your people/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Manage campaign" })).toHaveCount(0);
 
     await app.openMoreSection("Notifications");
-    await page.getByRole("button", { name: /Your daily quest is ready/ }).click();
-    await expect.poll(() => page.evaluate(() => localStorage.getItem("ecolearn-notifications-read"))).toBe("true");
+    await expect(page.getByText("Sign in to see your classroom and community updates.")).toBeVisible();
+    await expect(page.getByText("You moved up the leaderboard")).toHaveCount(0);
   });
 
   test("saves local-rule selection and keeps official source reachable", async ({ page }) => {
@@ -353,9 +355,10 @@ test.describe("EcoLearn guest journeys", () => {
     const app = new EcoLearnPage(page);
     await app.goto();
     await app.openMoreSection("Challenges");
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page.getByRole("button", { name: "Completed!" }).first()).toBeVisible();
-    await page.getByRole("button", { name: "Claim 40 XP" }).click();
+    await page.getByRole("button", { name: "Scan an item" }).click();
+    await expect(page.getByRole("heading", { name: "Item scanner" })).toBeVisible();
+    await app.openMoreSection("Challenges");
+    await page.getByRole("button", { name: "Claim 15 XP" }).click();
     await expect(page.getByText("Sign in to claim XP", { exact: true }).first()).toBeVisible();
   });
 });
@@ -440,6 +443,6 @@ test.describe("EcoLearn App Review account", () => {
     await expect(page.getByRole("heading", { name: "Personal analytics" })).toBeVisible();
 
     await app.openMoreSection("Profile");
-    await expect(page.getByRole("heading", { name: "Admin review" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Admin review" })).toHaveCount(0);
   });
 });

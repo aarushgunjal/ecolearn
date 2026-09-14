@@ -15,7 +15,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   signIn: (email: string, password: string, remember?: boolean) => Promise<{ error: AuthError | null }>;
-  signUp: (email: string, password: string, remember?: boolean) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string, remember?: boolean, role?: "student" | "teacher") => Promise<{ error: AuthError | null }>;
   signInWithGoogle: (remember?: boolean) => Promise<void>;
   signInWithGithub: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const signUp = async (email: string, password: string, remember = true) => {
+  const signUp = async (email: string, password: string, remember = true, role: "student" | "teacher" = "student") => {
     setRememberMe(remember);
     const redirectUrl = `${getRedirectUrl()}/`;
 
@@ -90,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         emailRedirectTo: redirectUrl,
+        data: { account_role: role },
       },
     });
 

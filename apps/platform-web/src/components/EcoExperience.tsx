@@ -28,7 +28,7 @@ import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { useProgress } from "@/hooks/useProgress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { AdminReview } from "@/components/AdminReview";
+import { CommunityWorkspace } from "@/components/CommunityWorkspace";
 import { DSWAVideoCard } from "@/components/DSWAVideoCard";
 import { dswaVideos, videosForLesson } from "@/data/dswaVideos";
 
@@ -254,29 +254,16 @@ const lessonContent: Record<
       "Right. Dry leaves are a classic compost ingredient and help balance food scraps.",
   },
 };
-const leaderboard = [
-  { name: "Maya Chen", xp: 0, initials: "MC", color: "bg-[#f4d2a4]" },
-  { name: "Jordan Kim", xp: 0, initials: "JK", color: "bg-[#cde3f5]" },
-  { name: "You", xp: 0, initials: "AG", color: "bg-[#d9edcf]" },
-  { name: "Noah Williams", xp: 0, initials: "NW", color: "bg-[#ded2f2]" },
-];
+
 
 export function Home() {
-  const { progress, claimReward } = useProgress();
+  const { progress, claimReward, rewardClaims } = useProgress();
   const { completedLessonIds } = useLessonProgress();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [questClaimed, setQuestClaimed] = useState(
-    () => localStorage.getItem("ecolearn-home-quest-claimed") === "true",
-  );
+  const questClaimed = rewardClaims.includes("daily_three_scans");
   const displayName =
     user?.user_metadata?.full_name?.split(" ")[0] || "Eco learner";
-  const weeklyScans = progress?.total_scans ?? 0;
-  const avoidedKg = (
-    weeklyScans * 0.4 +
-    (progress?.total_lessons_completed ?? 0) * 0.25
-  ).toFixed(1);
-  const weekLift = Math.min(18 + weeklyScans * 2, 99);
   const questProgress = Math.min(progress?.total_scans ?? 0, 3);
   const questComplete = questProgress >= 3;
   const claimQuest = async () => {
@@ -297,11 +284,10 @@ export function Home() {
       });
       return;
     }
-    setQuestClaimed(true);
-    localStorage.setItem("ecolearn-home-quest-claimed", "true");
+
     toast({
       title: "+15 XP earned",
-      description: "Today’s quest is complete.",
+      description: "Your three-scan milestone is complete.",
     });
   };
   return (
@@ -341,7 +327,7 @@ export function Home() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[.14em] text-[#3f7540]">
-                Today’s quest
+                Scan milestone
               </p>
               <h2 className="mt-2 text-xl font-semibold tracking-[-.035em]">
                 Sort three items correctly
@@ -366,8 +352,8 @@ export function Home() {
             </span>
           </div>
           <button
-            onClick={() => void claimQuest()}
-            disabled={!questComplete || questClaimed}
+            onClick={() => { if (questComplete) void claimQuest(); else window.dispatchEvent(new Event("ecolearn-open-scan")); }}
+            disabled={questClaimed}
             className="mt-5 flex items-center gap-1 text-sm font-bold text-[#26753f] disabled:cursor-not-allowed disabled:text-[#59675e]"
           >
             {questClaimed
@@ -379,28 +365,10 @@ export function Home() {
           </button>
         </section>
         <section className="rounded-[1.5rem] border border-[#e0e7dc] bg-white p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Weekly impact</h2>
-            <span className="text-xs font-bold text-[#39804d]">
-              +{weekLift}%
-            </span>
-          </div>
-          <div className="mt-6 flex items-end gap-2">
-            <span className="text-4xl font-semibold tracking-[-.06em]">
-              {avoidedKg}
-            </span>
-            <span className="mb-1 text-sm text-[#58675d]">kg CO₂ avoided</span>
-          </div>
-          <div className="mt-5 flex h-16 items-end gap-2">
-            {[35, 52, 40, 78, 60, 94, 72].map((h, i) => (
-              <span
-                key={i}
-                className={`flex-1 rounded-t-md ${i === 5 ? "bg-[#3d914d]" : "bg-[#dcebd7]"}`}
-                style={{ height: `${h}%` }}
-              />
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-[#5d6a61]">Your actions this week</p>
+          <h2 className="font-semibold">Your learning activity</h2>
+          <p className="mt-6 text-4xl font-semibold">{progress?.total_scans ?? 0}</p><p>Verified item scans</p>
+          <p className="mt-5 text-2xl font-semibold">{progress?.total_lessons_completed ?? 0}</p><p>Lessons completed</p>
+          <p className="mt-3 text-xs text-[#5d6a61]">Lifetime activity saved to your account</p>
         </section>
       </div>
       <section>
@@ -437,7 +405,7 @@ export function Home() {
 export function Learn() {
   const [activeLesson, setActiveLesson] = useState<
     (typeof lessons)[number] | null
-  >(null);
+  >(() => lessons.find((lesson) => lesson.id === new URLSearchParams(window.location.search).get("lesson")) ?? null);
   const { user } = useAuth();
   const { toast } = useToast();
   const { refreshProgress } = useProgress();
@@ -729,141 +697,30 @@ function LessonPlayer({
 }
 
 export function Challenges() {
-  const [claimed, setClaimed] = useState(
-    () => localStorage.getItem("ecolearn-weekend-bonus-claimed") === "true",
-  );
-  const { claimReward } = useProgress();
-  const { user } = useAuth();
+  const { progress, claimReward, rewardClaims } = useProgress();
   const { toast } = useToast();
-  const claimBonus = async () => {
-    if (claimed) return;
-    if (!user) {
-      toast({
-        title: "Sign in to claim XP",
-        description: "Create an account to save verified rewards.",
-      });
-      return;
-    }
-    const { error } = await claimReward("weekend_reusable_cup");
-    if (error) {
-      toast({
-        title: "Couldn’t claim this reward",
-        description: error.message,
-        variant: "destructive",
-      });
-      return;
-    }
-    setClaimed(true);
-    localStorage.setItem("ecolearn-weekend-bonus-claimed", "true");
-    toast({
-      title: "+40 XP earned",
-      description: "Weekend bonus marked complete.",
-    });
+  const { user } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const scans = Math.min(progress?.total_scans ?? 0, 3);
+  const claim = async () => {
+    if (!user) { toast({ title: "Sign in to claim XP" }); return; }
+    setBusy(true);
+    const { error } = await claimReward("daily_three_scans");
+    setBusy(false);
+    toast({ title: error ? "Could not claim reward" : "+15 XP earned", description: error?.message, variant: error ? "destructive" : "default" });
   };
-  return (
-    <div className="animate-in fade-in duration-500">
-      <p className="text-sm font-bold uppercase tracking-[.15em] text-[#438b52]">
-        Make it a game
-      </p>
-      <h1 className="display-serif mt-2 text-4xl tracking-[-.05em] sm:text-5xl">
-        Quests with <em className="text-[#4d9b58]">purpose.</em>
-      </h1>
-      <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        <Quest
-          title="The clean bin"
-          description="Scan 3 items and sort them right."
-          progress="1 / 3"
-          xp="30 XP"
-          action="Continue"
-        />
-        <Quest
-          title="Lesson learner"
-          description="Finish a materials lesson today."
-          progress="0 / 1"
-          xp="25 XP"
-          action="Start lesson"
-        />
-        <Quest
-          title="Seven-day glow"
-          description="Take one eco action for 7 days."
-          progress="4 / 7"
-          xp="100 XP"
-          action="Keep going"
-        />
-      </div>
-      <section className="mt-7 flex flex-col gap-5 rounded-[1.5rem] border border-[#efe1b9] bg-[#fffaf0] p-6 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-bold text-[#a27012]">WEEKEND BONUS</p>
-          <h2 className="mt-1 text-xl font-semibold">Bring a reusable cup</h2>
-          <p className="mt-1 text-sm text-[#847657]">
-            Mark it complete and earn a limited Earth keeper badge.
-          </p>
-        </div>
-        <button
-          onClick={() => void claimBonus()}
-          className="rounded-xl bg-[#9a6b11] px-5 py-3 text-sm font-bold text-white"
-        >
-          {claimed ? "Badge claimed!" : "Claim 40 XP"}
-        </button>
-      </section>
+  return <div><h1 className="display-serif text-4xl">Quests with purpose.</h1>
+    <div className="mt-8 grid gap-5 md:grid-cols-3">
+      <Quest title="The clean bin" description="Complete your first three verified item scans." progress={`${scans} / 3`} xp="15 XP milestone" action="Scan an item" />
+      <Quest title="Lesson learner" description="Complete a lesson to earn its listed XP." progress={`${progress?.total_lessons_completed ?? 0} lessons`} xp="Lesson XP" action="Start lesson" />
+      <Quest title="Seven-day glow" description="Scan or complete a lesson on seven consecutive days." progress={`${progress?.streak_days ?? 0} / 7 days`} xp="Streak achievement" action="Keep going" />
     </div>
-  );
+    <button className="mt-6 rounded-xl bg-[#173d2a] p-4 text-white disabled:opacity-50" disabled={busy || rewardClaims.includes("daily_three_scans") || (!!user && scans < 3)} onClick={() => void claim()}>{rewardClaims.includes("daily_three_scans") ? "Reward claimed" : "Claim 15 XP"}</button>
+  </div>;
 }
 
 export function Leaderboard() {
-  const { progress } = useProgress();
-  const yourXp = progress?.xp ?? 0;
-  const rankedLeaderboard = [
-    { ...leaderboard[0], xp: Math.max(yourXp + 1640, yourXp + 400) },
-    { ...leaderboard[1], xp: Math.max(yourXp + 1215, yourXp + 250) },
-    { ...leaderboard[2], xp: yourXp },
-    { ...leaderboard[3], xp: Math.max(yourXp - 135, 0) },
-  ].sort((a, b) => b.xp - a.xp);
-  return (
-    <div className="animate-in fade-in duration-500">
-      <p className="text-sm font-bold uppercase tracking-[.15em] text-[#438b52]">
-        Community impact
-      </p>
-      <h1 className="display-serif mt-2 text-4xl tracking-[-.05em] sm:text-5xl">
-        Better together.
-      </h1>
-      <div className="mt-8 max-w-2xl overflow-hidden rounded-[1.5rem] border border-[#e0e7dc] bg-white">
-        <div className="flex items-center justify-between border-b border-[#e8ede6] p-5">
-          <div>
-            <h2 className="font-semibold">Delaware</h2>
-            <p className="mt-1 text-sm text-[#78857b]">
-              This week’s eco champions
-            </p>
-          </div>
-          <Users className="text-[#468d53]" />
-        </div>
-        {rankedLeaderboard.map((member, index) => (
-          <div
-            key={member.name}
-            className={`flex items-center gap-4 px-5 py-4 ${member.name === "You" ? "bg-[#f1f8ed]" : ""}`}
-          >
-            <span
-              className={`w-5 text-center font-bold ${index < 3 ? "text-[#af7a12]" : "text-[#9aa49d]"}`}
-            >
-              {index + 1}
-            </span>
-            <span
-              className={`grid h-10 w-10 place-items-center rounded-full text-xs font-bold text-[#24412e] ${member.color}`}
-            >
-              {member.initials}
-            </span>
-            <span className="flex-1 font-semibold">{member.name}</span>
-            {index === 0 && (
-              <Crown size={17} className="text-[#c28b14]" fill="currentColor" />
-            )}
-            <span className="text-sm font-bold text-[#477e50]">
-              {member.xp.toLocaleString()} XP
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return <CommunityWorkspace mode="school" />;
 }
 
 export function Profile() {
@@ -874,8 +731,8 @@ export function Profile() {
   const [displayName, setDisplayName] = useState(
     user?.user_metadata?.full_name || user?.user_metadata?.name || "",
   );
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+
+
   const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
@@ -884,11 +741,11 @@ export function Profile() {
     void Promise.all([
       supabase
         .from("user_settings")
-        .select("display_name, notifications_enabled")
+        .select("display_name")
         .eq("user_id", user.id)
         .maybeSingle(),
-      supabase.rpc("is_app_admin"),
-    ]).then(([settingsResult, adminResult]) => {
+
+    ]).then(([settingsResult]) => {
       if (!live) return;
       if (settingsResult.data) {
         setDisplayName(
@@ -896,11 +753,9 @@ export function Profile() {
             user.user_metadata?.full_name ||
             "",
         );
-        setNotificationsEnabled(
-          settingsResult.data.notifications_enabled ?? true,
-        );
+
       }
-      setIsAdmin(adminResult.data === true);
+
     });
     return () => {
       live = false;
@@ -917,7 +772,7 @@ export function Profile() {
           supabase.from("user_settings").upsert({
             user_id: user.id,
             display_name: cleanName || null,
-            notifications_enabled: notificationsEnabled,
+
             updated_at: new Date().toISOString(),
           }),
           supabase.auth.updateUser({ data: { full_name: cleanName } }),
@@ -970,13 +825,13 @@ export function Profile() {
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <Metric value={`${progress?.total_scans ?? 0}`} label="Items scanned" />
         <Metric value={`${progress?.xp ?? 0}`} label="Lifetime XP" />
-        <Metric value={`${progress?.streak_days ?? 0}`} label="Best streak" />
+        <Metric value={`${progress?.streak_days ?? 0}`} label="Current streak" />
       </div>
       <section className="mt-7 rounded-[1.5rem] border border-[#e0e7dc] bg-white p-6">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">Achievements</h2>
           <span className="text-sm text-[#58675d]">
-            {earnedCount} / {totalAchievements || 12} unlocked
+            {earnedCount} / {totalAchievements} unlocked
           </span>
         </div>
         <div className="mt-5 flex flex-wrap gap-4">
@@ -1031,20 +886,10 @@ export function Profile() {
               className="mt-2 w-full rounded-xl border border-[#dce5d9] bg-[#fbfcfa] px-4 py-3 font-normal outline-none focus:border-[#4b9656]"
             />
           </label>
-          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#e0e7dc] px-4 py-3 text-sm text-[#526257]">
-            <input
-              type="checkbox"
-              checked={notificationsEnabled}
-              onChange={(event) =>
-                setNotificationsEnabled(event.target.checked)
-              }
-              className="h-4 w-4 accent-[#347e45]"
-            />
-            Product updates
-          </label>
+          <a href="/notifications" className="text-sm font-semibold underline">Manage notification preferences</a>
         </div>
         <p className="mt-3 text-xs leading-5 text-[#7c897f]">
-          Your sign-in stays private. Product updates are off until EcoLearn
+          Your sign-in stays private. Account notifications are off until EcoLearn
           sends real account notifications.
         </p>
         <button
@@ -1055,15 +900,7 @@ export function Profile() {
           <Save size={16} /> {savingSettings ? "Saving…" : "Save settings"}
         </button>
       </section>
-      {isAdmin && (
-        <section className="mt-7">
-          <div className="mb-4 flex items-center gap-2 text-[#2d7040]">
-            <ShieldCheck size={19} />
-            <h2 className="font-semibold">Admin review</h2>
-          </div>
-          <AdminReview />
-        </section>
-      )}
+
     </div>
   );
 }
@@ -1086,6 +923,7 @@ export function AuthDialog({ close }: { close: () => void }) {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [remember, setRemember] = useState(true);
+  const [accountRole, setAccountRole] = useState<"student" | "teacher">("student");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (recoveringPassword) setMode("recovery");
@@ -1136,10 +974,12 @@ export function AuthDialog({ close }: { close: () => void }) {
       }
       return;
     }
+    setBusy(true);
     const { error } =
       mode === "signin"
         ? await signIn(email, password, remember)
-        : await signUp(email, password, remember);
+        : await signUp(email.trim(), password, remember, accountRole);
+    setBusy(false);
     if (!error) {
       toast({
         title: mode === "signin" ? "Welcome back" : "Check your inbox",
@@ -1160,7 +1000,7 @@ export function AuthDialog({ close }: { close: () => void }) {
         : "Choose a new password";
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[#102b1d]/45 p-4 backdrop-blur-sm">
-      <div className="relative w-full max-w-md rounded-[1.75rem] bg-white p-7 shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-label={heading} className="relative max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-md overflow-y-auto rounded-[1.75rem] bg-white p-5 shadow-2xl sm:p-7">
         <button
           onClick={closeDialog}
           className="absolute right-5 top-5 text-[#7a877d]"
@@ -1181,6 +1021,13 @@ export function AuthDialog({ close }: { close: () => void }) {
               ? "Use at least eight characters and keep your new password private."
               : "Track actions, build habits, and make a measurable difference."}
         </p>
+        {mode === "signup" && <label className="mb-4 block text-sm font-semibold">Account type
+          <select aria-label="Account type" value={accountRole} onChange={(event) => setAccountRole(event.target.value as "student" | "teacher")} className="mt-2 w-full rounded-xl border p-3">
+            <option value="student">Student — join classes and learn</option>
+            <option value="teacher">Teacher — create and manage spaces</option>
+          </select>
+          <span className="mt-2 block text-xs font-normal">Using Google? Choose your account type in Community after signing in.</span>
+        </label>}
         {(mode === "signup" || mode === "signin") && (
           <>
             <button
@@ -1344,10 +1191,7 @@ function Quest({
   xp: string;
   action: string;
 }) {
-  const storageKey = `ecolearn-quest-${title}`;
-  const [done, setDone] = useState(
-    () => localStorage.getItem(storageKey) === "true",
-  );
+
   return (
     <section className="rounded-[1.5rem] border border-[#e0e7dc] bg-white p-6">
       <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#e6f3df] text-[#3a8a4b]">
@@ -1356,19 +1200,18 @@ function Quest({
       <h2 className="mt-5 text-lg font-semibold">{title}</h2>
       <p className="mt-2 text-sm leading-6 text-[#748176]">{description}</p>
       <div className="mt-5 flex items-center justify-between text-xs font-bold">
-        <span className="text-[#4a8e55]">{done ? "Complete" : progress}</span>
+        <span className="text-[#4a8e55]">{progress}</span>
         <span className="rounded-full bg-[#fff3d7] px-2 py-1 text-[#996b08]">
           {xp}
         </span>
       </div>
       <button
         onClick={() => {
-          setDone(true);
-          localStorage.setItem(storageKey, "true");
+          window.dispatchEvent(new Event(action === "Scan an item" ? "ecolearn-open-scan" : "ecolearn-open-learn"));
         }}
         className="mt-5 w-full rounded-xl bg-[#173d2a] py-3 text-sm font-bold text-white"
       >
-        {done ? "Completed!" : action}
+        {action}
       </button>
     </section>
   );

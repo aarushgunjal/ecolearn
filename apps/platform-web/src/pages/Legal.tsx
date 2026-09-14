@@ -158,6 +158,12 @@ function PrivacyContent() {
             optional details the reporter provides.
           </li>
           <li>
+            <b>Notifications:</b> inbox messages, read status, notification
+            preferences, reminder time and timezone, and delivery status. If
+            you enable mobile push, we also store your device notification
+            token so we can send messages to that device.
+          </li>
+          <li>
             <b>Photos:</b> a photo you select is processed to provide the scan
             or package-label result you request. The current scanner does not
             store those photos or use them for model training.
@@ -183,7 +189,11 @@ function PrivacyContent() {
         Apple and Google for optional sign-in; and OpenRouter and the selected
         model provider when you request an AI photo or label analysis. Barcode
         lookups may query Open Food Facts, maps may use OpenStreetMap data, and
-        embedded educational videos may connect to YouTube. We share only the
+        embedded educational videos may connect to YouTube. Optional email
+        notifications use Resend, and optional mobile push notifications use
+        Expo and Apple or Google notification services. Notification previews
+        use general wording; sign in to view classroom or community details.
+        We share only the
         information needed to provide the feature you requested.
       </Section>
       <Section title="5. Your choices">
@@ -192,7 +202,10 @@ function PrivacyContent() {
         account-deletion page or contact us to request access to or correction
         of your personal information, subject to legal and operational limits.
         You can report community content, block its publisher, and later unblock
-        that account from the Safety &amp; moderation section.
+        that account from the Safety &amp; moderation section. In Notifications,
+        you can choose message categories and reminder time, turn optional email
+        or mobile push on or off, and mark inbox messages as read. You can also
+        disable push permission in your device settings.
       </Section>
       <Section title="6. Security and retention">
         We use reasonable administrative and technical safeguards. No internet

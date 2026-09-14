@@ -22,8 +22,12 @@ export default defineConfig({
     ? undefined
     : {
         command: "npm run dev -- --host 127.0.0.1",
+        env: {
+          VITE_SUPABASE_URL: "https://ecolearn-test.supabase.co",
+          VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_local_test_fixture",
+        },
         url: "http://127.0.0.1:8080",
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: false,
         timeout: 30_000,
       },
 });
