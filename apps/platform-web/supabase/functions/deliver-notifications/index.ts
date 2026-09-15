@@ -6,6 +6,8 @@ Deno.serve(async (request) => {
   const secret = Deno.env.get("NOTIFICATION_CRON_SECRET");
   if (!secret || request.headers.get("Authorization") !== `Bearer ${secret}`) return new Response("Unauthorized", { status: 401 });
   const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const cleanup = await db.rpc("ecolearn_purge_deleted_spaces");
+  if (cleanup.error) return Response.json({ error: "Unable to clean up expired spaces" }, { status: 500 });
   const reminder = await db.rpc("ecolearn_enqueue_reminders");
   if (reminder.error) return Response.json({ error: "Unable to enqueue reminders" }, { status: 500 });
   const { data: jobs, error } = await db.rpc("ecolearn_claim_deliveries");

@@ -1,3 +1,4 @@
+import { AdminSecurity } from "./AdminSecurity";
 import { useEffect, useState } from "react";
 import {
   Award,
@@ -863,6 +864,7 @@ export function Profile() {
           ) : null}
         </div>
       </section>
+      <AdminSecurity />
       <section className="mt-7 rounded-[1.5rem] border border-[#e0e7dc] bg-white p-6">
         <div className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#edf7e8] text-[#347e45]">

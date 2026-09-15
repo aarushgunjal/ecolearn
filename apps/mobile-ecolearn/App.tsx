@@ -1,3 +1,4 @@
+import { AdminSecurity } from "./src/AdminSecurity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -909,7 +910,7 @@ function ProfileScreen({ user, progress, achievements, earnedAchievementIds, onN
   const confirmDeletion = () => {
     Alert.alert(
       "Delete EcoLearn account?",
-      "This permanently deletes your account, saved progress, settings, and associated app activity. This cannot be undone.",
+      "This permanently deletes your account, saved progress, settings, associated app activity, and spaces in Recently deleted that you own. This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -944,6 +945,7 @@ function ProfileScreen({ user, progress, achievements, earnedAchievementIds, onN
     <Pressable style={styles.primaryButton} onPress={() => void save()} disabled={saving || deleting}>
       {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Save profile</Text>}
     </Pressable>
+    <AdminSecurity />
     <Text style={styles.sectionTitle}>Help, privacy, and account</Text>
     <View style={styles.settingsCard}>
       <SettingLink icon="help-circle-outline" label="Support" onPress={() => void openPublicPage("/support")} />

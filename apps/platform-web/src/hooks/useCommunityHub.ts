@@ -141,15 +141,17 @@ export function useCommunityHub() {
   const [loading, setLoading] = useState(Boolean(user));
   const [error, setError] = useState<string | null>(null);
   const requestVersion = useRef(0);
+  const loadedUserId = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     const version = ++requestVersion.current;
     if (!user) {
+      loadedUserId.current = null;
       setData(emptyHub);
       setLoading(false);
       return;
     }
-    setLoading(true);
+    setLoading(loadedUserId.current !== user.id);
     setError(null);
     const { data: response, error: requestError } =
       await supabase.rpc("ecolearn_get_hub");
@@ -162,6 +164,7 @@ export function useCommunityHub() {
           : requestError.message,
       );
     } else if (response) {
+      loadedUserId.current = user.id;
       setData(response as unknown as HubData);
     }
     setLoading(false);

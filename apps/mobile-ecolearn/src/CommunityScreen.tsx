@@ -1,3 +1,5 @@
+import { AdminSecurity } from "./AdminSecurity";
+import { DeletedSpaces } from "./DeletedSpaces";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -254,7 +256,7 @@ export function CommunityScreen({
   const managesClass = (id: string) => hub.classrooms.some((room) => room.id === id && room.role === "teacher");
   const managesCommunity = (id: string) => hub.communities.some((community) => community.id === id && community.role !== "member");
   const confirmSpace = (scope: "community" | "classroom", id: string, name: string, remove: boolean) => {
-    Alert.alert(`${remove ? "Delete" : "Leave"} ${name}?`, remove ? `Permanently delete this ${scope}, its invitations, memberships, and content${scope === "community" ? ", including classrooms" : ""}? Individual learning progress is kept.` : "You will lose access to this space.", [
+    Alert.alert(`${remove ? "Delete" : "Leave"} ${name}?`, remove ? `Hide this ${scope}${scope === "community" ? " and its classrooms" : ""}? You can restore it from Recently deleted for seven days. After that it is permanently removed. Individual learning progress is kept.` : "You will lose access to this space.", [
       { text: "Cancel", style: "cancel" }, { text: remove ? "Delete" : "Leave", style: "destructive", onPress: () => void run(remove ? "ecolearn_delete_space" : "ecolearn_leave_space", { p_scope: scope, p_scope_id: id }, remove ? "Space deleted" : "You left the space") },
     ]);
   };
@@ -348,6 +350,7 @@ export function CommunityScreen({
     );
   return (
     <>
+      <AdminSecurity promptOnly onVerified={() => void refresh()} />
       <Text style={s.kicker}>LEARN TOGETHER</Text>
       <Text style={s.title}>Your communities.</Text>
       <Text style={s.body}>
@@ -361,6 +364,7 @@ export function CommunityScreen({
         </View>
       )}
 
+      <DeletedSpaces revision={hub} onRestored={refresh} />
       <View style={s.profileCard}>
         <View style={s.row}>
           <View style={s.avatar}>

@@ -30,6 +30,8 @@ import {
   Users,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { AdminSecurity } from "./AdminSecurity";
+import { DeletedSpaces } from "./DeletedSpaces";
 import { useToast } from "@/hooks/use-toast";
 import {
   type Announcement,
@@ -246,6 +248,9 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "o
         </div>
         <RolePill role={hub.data.profile.role} />
       </header>
+
+      <AdminSecurity promptOnly />
+      <DeletedSpaces revision={hub.data} onRestored={hub.refresh} />
 
       {hub.error && (
         <div className="mb-5 rounded-2xl border border-[#e7bd7c] bg-[#fff7e7] p-4 text-sm text-[#76551f]">
@@ -1588,9 +1593,9 @@ function SpaceActions({ scope, space, canDelete, canLeave, hub, action, busy }: 
     <dialog ref={dialog} aria-labelledby={`space-confirm-${space.id}`} onCancel={() => setOperation(null)} className="m-auto w-[calc(100%_-_2rem)] max-w-md rounded-2xl border border-[#dce5d9] p-6 shadow-2xl backdrop:bg-black/40">
       <form onSubmit={(event) => { event.preventDefault(); if (!operation || (operation === "delete" && confirmation !== space.name)) return; const remove = operation === "delete"; setOperation(null); void action("space-action", () => remove ? hub.deleteSpace(scope, space.id) : hub.leaveSpace(scope, space.id), remove ? "Space deleted" : "You left the space"); }}>
         <h2 id={`space-confirm-${space.id}`} className="text-xl font-semibold">{operation === "delete" ? "Delete" : "Leave"} {space.name}?</h2>
-        <p className="my-4 text-sm leading-6">{operation === "delete" ? `This permanently removes this ${scope}, its members and content${scope === "community" ? ", including its classrooms" : ""}. Individual learning progress is kept.` : "You will need an invitation code to rejoin."}</p>
+        <p className="my-4 text-sm leading-6">{operation === "delete" ? `This hides this ${scope}${scope === "community" ? " and its classrooms" : ""} immediately. You can restore it from Recently deleted for seven days. After that it is permanently removed. Individual learning progress is kept.` : "You will need an invitation code to rejoin."}</p>
         {operation === "delete" && <label className="block text-sm">Type the name to confirm<input autoFocus className={`${field} mt-2`} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" /></label>}
-        <div className="mt-5 flex justify-end gap-3"><button type="button" className={secondary} onClick={() => setOperation(null)}>Cancel</button><button className={`${primary} ${operation === "delete" ? "bg-red-700" : ""}`} disabled={operation === "delete" && confirmation !== space.name}>{operation === "delete" ? "Permanently delete" : "Leave space"}</button></div>
+        <div className="mt-5 flex justify-end gap-3"><button type="button" className={secondary} onClick={() => setOperation(null)}>Cancel</button><button className={`${primary} ${operation === "delete" ? "bg-red-700" : ""}`} disabled={operation === "delete" && confirmation !== space.name}>{operation === "delete" ? "Move to recently deleted" : "Leave space"}</button></div>
       </form>
     </dialog>
   </div>;

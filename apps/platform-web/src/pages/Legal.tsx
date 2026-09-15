@@ -212,6 +212,10 @@ function PrivacyContent() {
         service can guarantee absolute security. We retain account and activity
         information while needed to operate EcoLearn. The current scanner does
         not retain submitted scan or package-label photos.
+        Deleted communities and classrooms can be restored by an authorized
+        owner within seven days. After that period they are permanently removed
+        by scheduled cleanup. Deleting an account also permanently removes its
+        recoverable spaces.
       </Section>
       <Section title="7. Elementary students and children under 13">
         EcoLearn is designed for educators, families, communities, and students,
@@ -251,7 +255,7 @@ function AccountDeletionContent() {
       <Section title="Delete in the mobile app">
         Sign in to EcoLearn, open <b>Profile</b>, select <b>Delete account</b>,
         and confirm the two deletion prompts. The request permanently deletes
-        your account, saved progress, settings, activity tied to your account,
+        your account, saved progress, settings, recoverable spaces you own, activity tied to your account,
         and any previously shared training-feedback photos stored under your
         user ID.
       </Section>
