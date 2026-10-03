@@ -30,7 +30,7 @@ import MapView, { Marker } from "react-native-maps";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Session, User } from "@supabase/supabase-js";
 import { isConfigured, supabase } from "./src/supabase";
-import { challengeDefinitions, dswaVideoForItem, lessonEditorial } from "./src/content";
+import { challengeDefinitions, dswaVideoForItem, lessonEditorial, lessonSources } from "./src/content";
 import { CommunityScreen } from "./src/CommunityScreen";
 import * as Notifications from "expo-notifications";
 import { NotificationsScreen, unregisterPushDevice, syncPushDevice } from "./src/NotificationsScreen";
@@ -604,6 +604,9 @@ function LearnScreen({ lessons, completed, onCompleted, initialLessonId }: { les
         <View style={styles.lessonHeroIcon}>{easy ? <Text accessible={false} style={{ fontSize: 36 }}>{simple?.symbol}</Text> : <Ionicons name={step === 0 ? "bulb-outline" : "leaf-outline"} size={30} color="#2f7b44" />}</View>
         <Text style={styles.lessonSectionTitle}>{step === 0 ? "Why this matters" : content.facts[step - 1].title}</Text>
         <Text style={[styles.lessonBody, easy && { fontSize: 20, lineHeight: 30 }]}>{step === 0 ? content.intro : content.facts[step - 1].body}</Text>
+        {!easy && step === 0 && lessonSources[active.id] && <Pressable accessibilityRole="link" style={{ minHeight: 48, justifyContent: "center", marginTop: 12 }} onPress={() => void Linking.openURL(lessonSources[active.id].url).catch(() => Alert.alert("Could not open the source", "Please try again when you have an internet connection."))}>
+          <Text style={[styles.backText, { textDecorationLine: "underline" }]}>{lessonSources[active.id].title}</Text>
+        </Pressable>}
       </View>}
       {isQuiz && <>
         <View style={styles.quizHeader}><Ionicons name="checkmark-done-circle-outline" size={25} color="#2f7b44" /><View style={styles.flexOne}><Text style={styles.smallLabel}>QUICK CHECK</Text><Text style={styles.rowTitle}>{easy ? "Your turn" : "Practice what you learned"}</Text></View></View>

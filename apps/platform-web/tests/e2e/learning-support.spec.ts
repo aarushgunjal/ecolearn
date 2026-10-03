@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
 import easyLessons from "../../../../packages/learning/easy-reading.json" with { type: "json" };
+import additionalLessons from "../../../../packages/learning/additional-lessons.json" with { type: "json" };
 import { readFileSync } from "node:fs";
 
 test("easy-reading answers match the database grading keys", () => {
-  const schema = readFileSync(new URL("../../supabase/migrations/202608020001_secure_delaware_platform.sql", import.meta.url), "utf8");
+  const schema = ["202608020001_secure_delaware_platform.sql", "202610030001_expand_lessons.sql"].map((name) => readFileSync(new URL(`../../supabase/migrations/${name}`, import.meta.url), "utf8")).join("\n");
   for (const [id, content] of Object.entries(easyLessons)) {
     expect(schema).toContain(`('${id}', ${content.answer})`);
     expect(content.choiceSymbols).toHaveLength(content.choices.length);
@@ -12,6 +13,35 @@ test("easy-reading answers match the database grading keys", () => {
 
 test.beforeEach(async ({ page }) => {
   await page.route("https://ecolearn-test.supabase.co/**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+});
+
+for (const lesson of additionalLessons) {
+  test(`standard lesson: ${lesson.title} teaches and grades its new topic`, async ({ page }) => {
+    await page.goto(`/learn?lesson=${lesson.id}`);
+    await expect(page.getByRole("heading", { name: lesson.title, exact: true })).toBeVisible();
+    await expect(page.getByText(lesson.content.intro, { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: lesson.source.title })).toHaveAttribute("href", lesson.source.url);
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    for (const fact of lesson.content.facts) {
+      await expect(page.getByRole("heading", { name: fact.title, exact: true })).toBeVisible();
+      await expect(page.getByText(fact.body, { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Continue", exact: true }).click();
+    }
+    await page.getByRole("button", { name: lesson.content.choices[lesson.content.answer], exact: true }).click();
+    await page.getByRole("button", { name: "Check answer" }).click();
+    await expect(page.getByRole("button", { name: "Finish practice" })).toBeVisible();
+    expect(easyLessons[lesson.id].answer).toBe(lesson.content.answer);
+  });
+}
+
+test("the learning path includes all twelve lessons in order", async ({ page }) => {
+  await page.goto("/learn");
+  await expect(page.getByRole("button", { name: /Quiz included/ })).toHaveCount(12);
+  for (const [index, lesson] of additionalLessons.entries()) {
+    await expect(page.getByRole("button", { name: new RegExp(lesson.title) })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Quiz included/ }).nth(index + 6)).toContainText(lesson.title);
+  }
+  await expect(page.getByText("0 of 12 lessons complete", { exact: true })).toBeVisible();
 });
 
 test("easy reading persists, can be reversed, and works when preference storage fails", async ({ page }) => {

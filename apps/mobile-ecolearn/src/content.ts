@@ -1,3 +1,7 @@
+import additionalLessons from "../../../packages/learning/additional-lessons.json";
+
+export const lessonSources = Object.fromEntries(additionalLessons.map((lesson) => [lesson.id, lesson.source]));
+
 export type LessonEditorial = {
   intro: string;
   facts: Array<{ title: string; body: string }>;
@@ -8,6 +12,7 @@ export type LessonEditorial = {
 };
 
 export const lessonEditorial: Record<string, LessonEditorial> = {
+  ...Object.fromEntries(additionalLessons.map((lesson) => [lesson.id, lesson.content])),
   "10000000-0000-4000-8000-000000000001": {
     intro: "Recycling is a system, not a wish. Careful sorting helps useful materials become new products instead of waste.",
     facts: [

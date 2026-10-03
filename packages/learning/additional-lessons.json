@@ -1,0 +1,140 @@
+[
+  {
+    "id": "10000000-0000-4000-8000-000000000007",
+    "slug": "use-less-reuse-more",
+    "title": "Use less, reuse more",
+    "topic": "Reuse",
+    "description": "Prevent waste before it reaches the bin.",
+    "duration_minutes": 4,
+    "xp_reward": 25,
+    "sort_order": 7,
+    "source": { "title": "EPA: Reduce plastic waste", "url": "https://www.epa.gov/plastics/what-you-can-do-reduce-plastic-waste" },
+    "content": {
+      "intro": "Recycling helps after we use something. Reusing an item can prevent waste before it starts.",
+      "facts": [
+        { "title": "Use what you have", "body": "A durable bottle or lunch container can be used many times. Start with something you already own." },
+        { "title": "Make reuse a habit", "body": "Bring your container home, wash it as directed, and pack it again." },
+        { "title": "Care keeps things useful", "body": "Store items carefully. Ask for help repairing damaged things instead of automatically replacing them." }
+      ],
+      "question": "Which habit can prevent a throwaway bottle each day?",
+      "choices": ["Refill a clean reusable bottle", "Use a new disposable bottle daily", "Throw away a reusable bottle after one use"],
+      "answer": 0,
+      "explanation": "Refilling a clean reusable bottle lets you use the same item again instead of creating more waste."
+    }
+  },
+  {
+    "id": "10000000-0000-4000-8000-000000000008",
+    "slug": "water-wise-habits",
+    "title": "Water-wise habits",
+    "topic": "Water",
+    "description": "Use the water you need without leaving it running.",
+    "duration_minutes": 4,
+    "xp_reward": 25,
+    "sort_order": 8,
+    "source": { "title": "EPA: WaterSense for Kids", "url": "https://www.epa.gov/watersense/watersense-kids" },
+    "content": {
+      "intro": "We need clean water for drinking and washing. Everyday habits can help us avoid wasting it.",
+      "facts": [
+        { "title": "Pause the tap", "body": "Turn off the tap while brushing your teeth. Turn it on when you need to rinse." },
+        { "title": "Report a drip", "body": "A dripping faucet can waste water over time. Tell an adult instead of trying to repair it yourself." },
+        { "title": "Stay healthy", "body": "Saving water does not mean skipping drinking or washing. Use what you need, then turn the tap off." }
+      ],
+      "question": "Which action saves water while brushing your teeth?",
+      "choices": ["Leave the tap running", "Skip brushing your teeth", "Turn the tap off while brushing"],
+      "answer": 2,
+      "explanation": "Turning off the tap while brushing avoids running water you are not using."
+    }
+  },
+  {
+    "id": "10000000-0000-4000-8000-000000000009",
+    "slug": "everyday-energy",
+    "title": "Everyday energy",
+    "topic": "Energy",
+    "description": "Spot simple ways to avoid wasting electricity.",
+    "duration_minutes": 4,
+    "xp_reward": 25,
+    "sort_order": 9,
+    "source": { "title": "Department of Energy: Energy-saving tips", "url": "https://www.energy.gov/articles/5-tips-energy-saving-renters" },
+    "content": {
+      "intro": "Lights and devices use energy. We can notice when they are useful and when they are not needed.",
+      "facts": [
+        { "title": "Light the space you use", "body": "When the last person leaves a room, turn off lights that are no longer needed." },
+        { "title": "Choose efficient lighting", "body": "LED bulbs use less electricity than traditional incandescent bulbs. An adult can choose and replace bulbs." },
+        { "title": "Ask before switching", "body": "Some equipment must stay on. Ask an adult before changing settings, and leave plugs and wires alone." }
+      ],
+      "question": "Everyone has left a room and its light is not needed. What helps?",
+      "choices": ["Turn on more lights", "Turn off the room's light", "Leave the light on all day"],
+      "answer": 1,
+      "explanation": "Turning off an unneeded light avoids using electricity to light an empty room."
+    }
+  },
+  {
+    "id": "10000000-0000-4000-8000-000000000010",
+    "slug": "food-worth-saving",
+    "title": "Food worth saving",
+    "topic": "Food waste",
+    "description": "Plan portions and ask for help saving leftovers.",
+    "duration_minutes": 4,
+    "xp_reward": 25,
+    "sort_order": 10,
+    "source": { "title": "EPA: Preventing wasted food at home", "url": "https://www.epa.gov/recycle/preventing-wasted-food-home" },
+    "content": {
+      "intro": "Growing and preparing food takes resources. Planning what we use helps keep good food from becoming waste.",
+      "facts": [
+        { "title": "Start with a portion", "body": "Choose a serving you expect to eat. You can ask for more if you are still hungry." },
+        { "title": "Save safely", "body": "Ask an adult which leftovers can be saved and how to store them. Do not taste food to check its safety." },
+        { "title": "Plan before buying", "body": "Check which ingredients you already have before making a shopping list. This helps avoid buying too much." }
+      ],
+      "question": "Which choice helps avoid wasting food at lunch?",
+      "choices": ["Take extra food you do not want", "Skip lunch to avoid scraps", "Start with a serving and ask for more if hungry"],
+      "answer": 2,
+      "explanation": "Starting with a suitable serving helps avoid waste while leaving room to ask for more food."
+    }
+  },
+  {
+    "id": "10000000-0000-4000-8000-000000000011",
+    "slug": "paper-with-a-purpose",
+    "title": "Paper with a purpose",
+    "topic": "Resources",
+    "description": "Make the most of paper before recycling it.",
+    "duration_minutes": 4,
+    "xp_reward": 25,
+    "sort_order": 11,
+    "source": { "title": "EPA: Reducing waste at schools", "url": "https://www.epa.gov/recycle/what-you-can-do" },
+    "content": {
+      "intro": "Paper can be useful more than once. Using it carefully reduces the amount of new paper we need.",
+      "facts": [
+        { "title": "Try the other side", "body": "Use the blank back of a clean sheet for a draft or drawing. Ask before using someone else's paper." },
+        { "title": "Share useful materials", "body": "Keep books in good condition so other readers can use them. A classroom scrap-paper tray can collect reusable sheets." },
+        { "title": "Recycle when finished", "body": "When paper cannot be reused, check your local recycling rules. Keep it clean and separate from food." }
+      ],
+      "question": "A clean sheet has one blank side. How can you reuse it?",
+      "choices": ["Draw on the blank side", "Throw it away immediately", "Cover the blank side with food"],
+      "answer": 0,
+      "explanation": "Using the blank side gets another use from the same sheet before you need new paper."
+    }
+  },
+  {
+    "id": "10000000-0000-4000-8000-000000000012",
+    "slug": "good-neighbors-to-nature",
+    "title": "Good neighbors to nature",
+    "topic": "Nature",
+    "description": "Explore outdoors while respecting plants and wildlife.",
+    "duration_minutes": 4,
+    "xp_reward": 25,
+    "sort_order": 12,
+    "source": { "title": "National Park Service: Leave No Trace", "url": "https://www.nps.gov/blri/planyourvisit/leave-no-trace.htm" },
+    "content": {
+      "intro": "A park is a home for living things. We can enjoy exploring while leaving that home undisturbed.",
+      "facts": [
+        { "title": "Watch from a distance", "body": "Observe wildlife without chasing, touching, or feeding it. Take a photo or draw what you notice." },
+        { "title": "Leave nature in place", "body": "Leave flowers, rocks, and nests where they are. Other living things and visitors share this space." },
+        { "title": "Follow the path", "body": "Stay on marked paths with your group. Carry your own wrappers home if there is no bin." }
+      ],
+      "question": "You see flowers and insects beside a park path. What should you do?",
+      "choices": ["Pick the flowers and catch the insects", "Watch quietly and leave them in place", "Feed the insects your snack"],
+      "answer": 1,
+      "explanation": "Watching without disturbing plants or animals lets you learn while respecting their home."
+    }
+  }
+]

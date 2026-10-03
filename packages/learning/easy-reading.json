@@ -88,5 +88,95 @@
     "choiceSymbols": ["🍂", "🔋", "🍴"],
     "answer": 0,
     "explanation": "Yes! Dry leaves belong in compost. Batteries and plastic do not."
+  },
+  "10000000-0000-4000-8000-000000000007": {
+    "title": "Use it again",
+    "symbol": "🎒",
+    "intro": "Some things can be used again and again. Let's make less trash!",
+    "facts": [
+      { "title": "Bring your bottle", "body": "Have a bottle you can use again? Ask a grown-up to help fill it with drinking water." },
+      { "title": "Keep it clean", "body": "Bring it home. Ask a grown-up to help wash it." },
+      { "title": "Take care", "body": "Put your things away safely. You can use them again tomorrow." }
+    ],
+    "question": "Which bottle can you use again?",
+    "choices": ["My clean refillable bottle", "A new throwaway bottle each day", "My bottle thrown in the trash"],
+    "choiceSymbols": ["💧", "🛒", "🗑️"],
+    "answer": 0,
+    "explanation": "Yes! Fill your clean bottle again. You do not need a new one each day."
+  },
+  "10000000-0000-4000-8000-000000000008": {
+    "title": "Save water",
+    "symbol": "💧",
+    "intro": "We need water to drink and wash. Let's use it with care.",
+    "facts": [
+      { "title": "Brush, then rinse", "body": "Turn off the tap while you brush your teeth. Turn it on to rinse." },
+      { "title": "Spot a drip", "body": "Is a tap dripping? Tell a grown-up. They can help fix it." },
+      { "title": "Keep clean", "body": "Still drink water and wash your hands! Turn off the tap when you are done." }
+    ],
+    "question": "What saves water while you brush?",
+    "choices": ["Keep the tap running", "Do not brush", "Turn the tap off"],
+    "choiceSymbols": ["🚰", "🪥", "💧"],
+    "answer": 2,
+    "explanation": "Yes! Turn the tap off while you brush. Turn it on when you need water."
+  },
+  "10000000-0000-4000-8000-000000000009": {
+    "title": "Lights out when we leave",
+    "symbol": "💡",
+    "intro": "Lights help us see. We can turn them off when no one needs them.",
+    "facts": [
+      { "title": "Look around", "body": "Is everyone leaving the room? Ask if the light can go off." },
+      { "title": "Ask a grown-up", "body": "Grown-ups choose light bulbs. They can pick ones that use less energy." },
+      { "title": "Stay safe", "body": "Leave plugs and wires alone. Ask before you turn anything off." }
+    ],
+    "question": "No one needs the light now. What helps?",
+    "choices": ["Turn on more lights", "Turn the light off", "Leave it on all day"],
+    "choiceSymbols": ["💡", "🌙", "☀️"],
+    "answer": 1,
+    "explanation": "Yes! Turn off a light when it is not needed. Ask a grown-up if you are unsure."
+  },
+  "10000000-0000-4000-8000-000000000010": {
+    "title": "Make food count",
+    "symbol": "🍎",
+    "intro": "Food helps us grow. Let's try to waste less of it.",
+    "facts": [
+      { "title": "Start small", "body": "Start with some food. Still hungry? Ask for more." },
+      { "title": "Save with help", "body": "Ask a grown-up if food can be saved for later. They will keep it safe." },
+      { "title": "Look before shopping", "body": "Help a grown-up check what food you have. Make a list together." }
+    ],
+    "question": "What helps you waste less food?",
+    "choices": ["Take lots of food I do not want", "Skip my lunch", "Start with some and ask for more if hungry"],
+    "choiceSymbols": ["🍽️", "❌", "🥣"],
+    "answer": 2,
+    "explanation": "Yes! Start with some food. Ask for more when you need it. You do not have to go hungry."
+  },
+  "10000000-0000-4000-8000-000000000011": {
+    "title": "Draw on both sides",
+    "symbol": "📝",
+    "intro": "One sheet of paper has two sides. Let's make the most of it!",
+    "facts": [
+      { "title": "Turn it over", "body": "Is the back of your paper blank? You can draw there too." },
+      { "title": "Ask first", "body": "Ask your teacher which paper you can use. Save clean scraps for another drawing." },
+      { "title": "Find the right bin", "body": "All done? Ask a grown-up which paper can go in recycling. Keep food off it." }
+    ],
+    "question": "What can you do with a blank side of paper?",
+    "choices": ["Draw on it", "Throw it away now", "Put food on it"],
+    "choiceSymbols": ["🖍️", "🗑️", "🍕"],
+    "answer": 0,
+    "explanation": "Yes! Use the blank side for a drawing. One sheet can do more."
+  },
+  "10000000-0000-4000-8000-000000000012": {
+    "title": "Be kind to nature",
+    "symbol": "🦋",
+    "intro": "Outside is home to plants and animals. Let's be good visitors.",
+    "facts": [
+      { "title": "Look, do not touch", "body": "Watch animals from far away. Do not chase or feed them." },
+      { "title": "Leave flowers growing", "body": "Leave flowers and nests where they are. Draw a picture to remember them." },
+      { "title": "Stay together", "body": "Walk on the path with your grown-up. Take your wrappers home if there is no bin." }
+    ],
+    "question": "How can you enjoy flowers and insects?",
+    "choices": ["Pick flowers and catch insects", "Watch and leave them where they are", "Give insects my snack"],
+    "choiceSymbols": ["✋", "👀", "🍪"],
+    "answer": 1,
+    "explanation": "Yes! Watch quietly. Leave plants and animals in their home."
   }
 }

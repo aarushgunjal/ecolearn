@@ -2,6 +2,8 @@ import { PGlite } from '@electric-sql/pglite';
 import { readFile, readdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import additionalLessons from '../../../../packages/learning/additional-lessons.json' with { type: 'json' };
+import easyLessons from '../../../../packages/learning/easy-reading.json' with { type: 'json' };
 
 test('production memberships, RLS, learning, deletion, and notification delivery', async (t) => {
   const db = new PGlite();
@@ -282,6 +284,36 @@ test('production memberships, RLS, learning, deletion, and notification delivery
     assert.equal((await db.query('select * from ecolearn_classrooms where id=$1', [child.id])).rows.length, 0);
     assert.equal((await db.query('select * from ecolearn_communities where id=$1', [parent.id])).rows.length, 0);
     await db.exec('reset role'); await db.query('delete from auth.users where id=$1', [id]);
+  });
+  await t.test('expanded lessons match both clients and support graded classroom assignments exactly once', async () => {
+    await db.exec('reset role');
+    const migration = await readFile(new URL('../../supabase/migrations/202610030001_expand_lessons.sql', import.meta.url), 'utf8');
+    await db.exec(migration);
+    assert.equal((await db.query('select id from lessons where is_published')).rows.length, 12);
+    for (const lesson of additionalLessons) {
+      await db.exec('reset role');
+      const row = (await db.query('select * from lessons where id = $1', [lesson.id])).rows[0];
+      for (const key of ['slug', 'title', 'topic', 'description', 'duration_minutes', 'xp_reward', 'sort_order']) {
+        assert.equal(row[key], lesson[key], `${lesson.title}: ${key}`);
+      }
+      assert.equal((await db.query('select correct_answer from lesson_answer_keys where lesson_id = $1', [lesson.id])).rows[0].correct_answer, lesson.content.answer);
+      assert.equal(easyLessons[lesson.id].answer, lesson.content.answer);
+      await as(teacher);
+      const assignmentId = await rpc('ecolearn_create_assignment', [room.id, lesson.id, lesson.title, null]);
+      await as(student);
+      const before = (await db.query('select xp, total_lessons_completed from user_progress')).rows[0];
+      await assert.rejects(rpc('complete_ecolearn_lesson', [lesson.id, (lesson.content.answer + 1) % 3]), /Correct answer/);
+      assert.equal((await db.query('select xp from user_progress')).rows[0].xp, before.xp);
+      await rpc('complete_ecolearn_lesson', [lesson.id, lesson.content.answer]);
+      await rpc('complete_ecolearn_lesson', [lesson.id, lesson.content.answer]);
+      const after = (await db.query('select xp, total_lessons_completed from user_progress')).rows[0];
+      assert.equal(after.xp, before.xp + lesson.xp_reward);
+      assert.equal(after.total_lessons_completed, before.total_lessons_completed + 1);
+      await assert.rejects(db.query('select * from lesson_answer_keys'), /permission denied/);
+      await as(teacher);
+      const dashboard = await rpc('ecolearn_get_classroom_dashboard', [room.id]);
+      assert.equal(dashboard.assignments.find((item) => item.id === assignmentId).completed_count, 1);
+    }
   });
   await t.test('deleting spaces hides content without erasing earned progress', async () => {
     await as(student); await assert.rejects(rpc('ecolearn_delete_space', ['community', school.id]), /Only the community owner/);

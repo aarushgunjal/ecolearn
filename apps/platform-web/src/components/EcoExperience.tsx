@@ -1,6 +1,7 @@
 import { AdminSecurity } from "./AdminSecurity";
 import { useEffect, useRef, useState } from "react";
 import easyLessons from "../../../../packages/learning/easy-reading.json";
+import additionalLessons from "../../../../packages/learning/additional-lessons.json";
 import { ListenButton, ReadingMode } from "./LearningSupport";
 import { useEasyReading } from "@/hooks/useEasyReading";
 import {
@@ -91,6 +92,11 @@ const lessons = [
     color: "bg-[#e8f0d8]",
     icon: Leaf,
   },
+  ...additionalLessons.map((lesson) => ({
+    id: lesson.id, title: lesson.title, topic: lesson.topic,
+    duration: `${lesson.duration_minutes} min`, xp: lesson.xp_reward,
+    color: "bg-[#dff2d5]", icon: BookOpen,
+  })),
 ];
 const lessonContent: Record<
   string,
@@ -103,6 +109,7 @@ const lessonContent: Record<
     explanation: string;
   }
 > = {
+  ...Object.fromEntries(additionalLessons.map((lesson) => [lesson.id, lesson.content])),
   "10000000-0000-4000-8000-000000000001": {
     intro:
       "Recycling is a system, not a wish. When we sort items carefully, materials can become useful things again instead of waste.",
@@ -507,7 +514,7 @@ export function Learn() {
                   ) : !isUnlocked ? (
                     <Lock size={20} />
                   ) : (
-                    <Icon />
+                    easy ? <span aria-hidden="true" className="text-3xl">{easyLessons[lesson.id]?.symbol}</span> : <Icon />
                   )}
                 </span>
                 <span className="min-w-0 flex-1">
@@ -592,6 +599,7 @@ function LessonPlayer({
   const totalSteps = lastContentStep + 2;
   const heading = useRef<HTMLHeadingElement>(null);
   const title = easy && simple ? simple.title : lesson.title;
+  const source = additionalLessons.find((item) => item.id === lesson.id)?.source;
   const feedback = correct ? content.explanation : "Let's try again. " + content.explanation.replace(/^(Yes!|Correct\.|Right\.|Exactly\.) /, "");
   const spoken = isQuiz
     ? `${content.question} ${content.choices.map((choice, index) => `${index + 1}. ${choice}.`).join(" ")} ${checked ? feedback : "Choose one answer, then press Check answer."}`
@@ -628,6 +636,9 @@ function LessonPlayer({
             <p className="mt-6 text-lg leading-8 text-[#52665a]">
               {content.intro}
             </p>
+            {!easy && source && <p className="mt-5 text-sm leading-6 text-[#52665a]">
+              Learn more: <a className="underline underline-offset-4" href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>
+            </p>}
             {!easy && videosForLesson(lesson.id).slice(0, 1).map((video) => (
               <div key={video.id} className="mt-7">
                 <DSWAVideoCard video={video} compact />
