@@ -231,7 +231,7 @@ test.describe("EcoLearn guest journeys", () => {
     await expect(check).toBeDisabled();
     await page.getByRole("button", { name: "Keep empty items loose in the bin" }).click();
     await check.click();
-    await expect(page.getByRole("button", { name: /Complete lesson \+20 XP/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Finish practice" })).toBeVisible();
   });
 
   test("opens the learning path from the home lesson card", async ({ page }) => {

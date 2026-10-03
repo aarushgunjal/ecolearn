@@ -1,5 +1,8 @@
 import { AdminSecurity } from "./AdminSecurity";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import easyLessons from "../../../../packages/learning/easy-reading.json";
+import { ListenButton, ReadingMode } from "./LearningSupport";
+import { useEasyReading } from "@/hooks/useEasyReading";
 import {
   Award,
   BookOpen,
@@ -404,6 +407,7 @@ export function Home() {
 }
 
 export function Learn() {
+  const [easy, setEasy] = useEasyReading();
   const [activeLesson, setActiveLesson] = useState<
     (typeof lessons)[number] | null
   >(() => lessons.find((lesson) => lesson.id === new URLSearchParams(window.location.search).get("lesson")) ?? null);
@@ -426,9 +430,10 @@ export function Learn() {
     }
     if (!user) {
       toast({
-        title: "Create an account to save progress",
-        description: "Your lesson path and XP will sync across devices.",
+        title: "Practice complete!",
+        description: easy ? "Ask a grown-up to help you sign in and save your progress." : "Sign in to save your lesson progress and XP.",
       });
+      setActiveLesson(null);
       return;
     }
     const { error } = await supabase.rpc("complete_ecolearn_lesson", {
@@ -455,6 +460,8 @@ export function Learn() {
   if (activeLesson)
     return (
       <LessonPlayer
+        easy={easy}
+        onModeChange={setEasy}
         lesson={activeLesson}
         onClose={() => setActiveLesson(null)}
         onComplete={(selectedAnswer) =>
@@ -473,12 +480,12 @@ export function Learn() {
         Learn by doing
       </p>
       <h1 className="display-serif mt-2 text-4xl tracking-[-.05em] sm:text-5xl">
-        Build your <em className="text-[#4d9b58]">eco instinct.</em>
+        {easy ? "Let's help the Earth!" : <>Build your <em className="text-[#4d9b58]">eco instinct.</em></>}
       </h1>
       <p className="mt-4 max-w-xl leading-7 text-[#58675d]">
-        Short lessons, meaningful choices, and a quiz that proves you
-        understand.
+        {easy ? "Pick a lesson. Look, listen, and try a question. A grown-up can help you." : "Short lessons, meaningful choices, and a quiz to help you practice."}
       </p>
+      <ReadingMode easy={easy} onChange={setEasy} />
       <div className="mt-8 grid gap-5 lg:grid-cols-[1fr_.42fr]">
         <div className="space-y-4">
           {lessons.map((lesson, index) => {
@@ -505,13 +512,13 @@ export function Learn() {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="text-xs font-bold uppercase tracking-wide text-[#78867b]">
-                    {lesson.topic}
+                    {easy ? `Lesson ${index + 1}` : lesson.topic}
                   </span>
                   <span className="mt-1 block font-semibold">
-                    {lesson.title}
+                    {easy ? easyLessons[lesson.id]?.title ?? lesson.title : lesson.title}
                   </span>
                   <span className="mt-1 block text-xs text-[#849087]">
-                    {lesson.duration} · {lesson.xp} XP · Quiz included
+                    {easy ? done ? "You did it! Try it again." : isUnlocked ? "Look, listen, and learn" : "Finish the lesson above first" : `${lesson.duration} · ${lesson.xp} XP · Quiz included`}
                   </span>
                 </span>
                 {done ? (
@@ -529,7 +536,7 @@ export function Learn() {
           <Award className="text-[#4a9956]" />
           <h2 className="mt-4 text-lg font-semibold">Your learning path</h2>
           <p className="mt-2 text-sm leading-6 text-[#58675d]">
-            Finish each quiz to unlock the next practical skill.
+            {easy ? "Take your time. Try as many times as you like." : "Finish each quiz to unlock the next practical skill."}
           </p>
           <div className="mt-5 h-2 overflow-hidden rounded-full bg-[#dce8d8]">
             <div
@@ -542,7 +549,7 @@ export function Learn() {
           </p>
         </div>
       </div>
-      <section className="mt-12">
+      {!easy && <section className="mt-12">
         <p className="text-xs font-bold uppercase tracking-[.14em] text-[#438b52]">
           Learn from Delaware's experts
         </p>
@@ -555,7 +562,7 @@ export function Learn() {
         <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {dswaVideos.map((video) => <DSWAVideoCard key={video.id} video={video} />)}
         </div>
-      </section>
+      </section>}
     </div>
   );
 }
@@ -564,47 +571,64 @@ function LessonPlayer({
   lesson,
   onClose,
   onComplete,
+  easy,
+  onModeChange,
 }: {
   lesson: (typeof lessons)[number];
   onClose: () => void;
   onComplete: (selectedAnswer: number) => void;
+  easy: boolean;
+  onModeChange: (value: boolean) => void;
 }) {
-  const content = lessonContent[lesson.id];
+  const { user } = useAuth();
+  const simple = easyLessons[lesson.id];
+  const content = easy && simple ? simple : lessonContent[lesson.id];
   const [step, setStep] = useState(0);
   const [answer, setAnswer] = useState<number | null>(null);
   const [checked, setChecked] = useState(false);
   const lastContentStep = content.facts.length;
   const isQuiz = step > lastContentStep;
   const correct = answer === content.answer;
+  const totalSteps = lastContentStep + 2;
+  const heading = useRef<HTMLHeadingElement>(null);
+  const title = easy && simple ? simple.title : lesson.title;
+  const feedback = correct ? content.explanation : "Let's try again. " + content.explanation.replace(/^(Yes!|Correct\.|Right\.|Exactly\.) /, "");
+  const spoken = isQuiz
+    ? `${content.question} ${content.choices.map((choice, index) => `${index + 1}. ${choice}.`).join(" ")} ${checked ? feedback : "Choose one answer, then press Check answer."}`
+    : step === 0 ? `${title}. ${content.intro}` : `${content.facts[step - 1].title}. ${content.facts[step - 1].body}`;
+  useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [step]);
   return (
-    <div className="mx-auto max-w-2xl animate-in fade-in slide-in-from-bottom-3 duration-500">
+    <div className="mx-auto max-w-2xl">
       <div className="mb-7 flex items-center justify-between">
-        <button onClick={onClose} className="text-sm font-bold text-[#4b7855]">
-          ← Back to path
+        <button onClick={onClose} className="min-h-12 px-3 text-base font-bold text-[#286c3d]">
+          ← All lessons
         </button>
         <span className="text-sm font-bold text-[#4b8754]">
-          {Math.min(step + 1, lastContentStep + 1)} / {lastContentStep + 1}
+          {step + 1} / {totalSteps}
         </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-[#dce8d8]">
+      <div role="progressbar" aria-label="Lesson progress" aria-valuemin={1} aria-valuemax={totalSteps} aria-valuenow={step + 1} className="h-2 overflow-hidden rounded-full bg-[#dce8d8]">
         <div
           className="h-full bg-[#55a457] transition-all"
-          style={{ width: `${((step + 1) / (lastContentStep + 1)) * 100}%` }}
+          style={{ width: `${((step + 1) / totalSteps) * 100}%` }}
         />
       </div>
-      <section className="mt-8 rounded-[1.75rem] border border-[#e0e7dc] bg-white p-7 shadow-[0_20px_50px_-40px_rgba(20,70,40,.5)] sm:p-10">
+      <ReadingMode easy={easy} onChange={(value) => { setAnswer(null); setChecked(false); onModeChange(value); }} />
+      <ListenButton text={spoken} />
+      <section className="mt-4 rounded-[1.75rem] border border-[#e0e7dc] bg-white p-6 shadow-[0_20px_50px_-40px_rgba(20,70,40,.5)] sm:p-10">
+        {easy && <div aria-hidden="true" className="mb-5 text-6xl">{simple?.symbol}</div>}
         {step === 0 && (
           <>
             <p className="text-xs font-bold uppercase tracking-[.14em] text-[#4a9255]">
-              {lesson.topic}
+              {easy ? "Let's learn" : lesson.topic}
             </p>
-            <h1 className="display-serif mt-3 text-4xl tracking-[-.05em]">
-              {lesson.title}
+            <h1 ref={heading} tabIndex={-1} className="mt-3 text-3xl font-semibold">
+              {title}
             </h1>
             <p className="mt-6 text-lg leading-8 text-[#52665a]">
               {content.intro}
             </p>
-            {videosForLesson(lesson.id).slice(0, 1).map((video) => (
+            {!easy && videosForLesson(lesson.id).slice(0, 1).map((video) => (
               <div key={video.id} className="mt-7">
                 <DSWAVideoCard video={video} compact />
               </div>
@@ -616,7 +640,7 @@ function LessonPlayer({
             <p className="text-xs font-bold uppercase tracking-[.14em] text-[#4a9255]">
               Key idea {step}
             </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-[-.05em]">
+            <h1 ref={heading} tabIndex={-1} className="mt-3 text-3xl font-semibold">
               {content.facts[step - 1].title}
             </h1>
             <p className="mt-6 text-lg leading-8 text-[#52665a]">
@@ -627,9 +651,9 @@ function LessonPlayer({
         {isQuiz && (
           <>
             <p className="text-xs font-bold uppercase tracking-[.14em] text-[#4a9255]">
-              Knowledge check
+              {easy ? "Your turn" : "Knowledge check"}
             </p>
-            <h1 className="mt-3 text-2xl font-semibold tracking-[-.04em]">
+            <h1 ref={heading} tabIndex={-1} className="mt-3 text-2xl font-semibold">
               {content.question}
             </h1>
             <div className="mt-6 space-y-3">
@@ -637,20 +661,22 @@ function LessonPlayer({
                 <button
                   key={choice}
                   disabled={checked}
+                  aria-pressed={answer === index}
                   onClick={() => setAnswer(index)}
-                  className={`w-full rounded-xl border p-4 text-left text-sm font-semibold transition ${answer === index ? "border-[#4d9b58] bg-[#edf7e8]" : "border-[#dfe6dc] hover:border-[#9bc99b]"} ${checked && index === content.answer ? "border-[#4d9b58] bg-[#e5f4df]" : ""}`}
+                  className={`flex min-h-16 w-full items-center gap-4 rounded-xl border-2 p-4 text-left text-lg font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 ${answer === index ? "border-[#286c3d] bg-[#edf7e8]" : "border-[#dfe6dc] hover:border-[#9bc99b]"} ${checked && index === content.answer ? "border-[#286c3d] bg-[#e5f4df]" : ""}`}
                 >
+                  <span aria-hidden="true" className="shrink-0 text-2xl">{easy ? simple?.choiceSymbols[index] : `${index + 1}.`}</span>
                   {choice}
+                  {answer === index && <Check aria-hidden="true" className="ml-auto shrink-0" />}
                 </button>
               ))}
             </div>
             {checked && (
               <p
-                className={`mt-5 rounded-xl p-4 text-sm leading-6 ${correct ? "bg-[#e6f4e0] text-[#347343]" : "bg-[#fff0ed] text-[#a94f43]"}`}
+                role="status"
+                className={`mt-5 rounded-xl p-4 text-lg leading-7 ${correct ? "bg-[#e6f4e0] text-[#265a33]" : "bg-[#fff0ed] text-[#873b31]"}`}
               >
-                {correct
-                  ? content.explanation
-                  : "Not quite. " + content.explanation}
+                {feedback}
               </p>
             )}
           </>
@@ -662,16 +688,16 @@ function LessonPlayer({
             <button
               disabled={answer === null}
               onClick={() => setChecked(true)}
-              className="rounded-xl bg-[#173d2a] px-6 py-3 text-sm font-bold text-white disabled:opacity-40"
+              className="min-h-12 rounded-xl bg-[#173d2a] px-6 py-3 text-lg font-bold text-white disabled:opacity-40"
             >
               Check answer
             </button>
           ) : correct ? (
             <button
               onClick={() => answer !== null && onComplete(answer)}
-              className="rounded-xl bg-[#173d2a] px-6 py-3 text-sm font-bold text-white"
+              className="min-h-12 rounded-xl bg-[#173d2a] px-6 py-3 text-lg font-bold text-white"
             >
-              Complete lesson +{lesson.xp} XP
+              {user ? `Complete lesson +${lesson.xp} XP` : "Finish practice"}
             </button>
           ) : (
             <button
@@ -679,7 +705,7 @@ function LessonPlayer({
                 setChecked(false);
                 setAnswer(null);
               }}
-              className="rounded-xl bg-[#173d2a] px-6 py-3 text-sm font-bold text-white"
+              className="min-h-12 rounded-xl bg-[#173d2a] px-6 py-3 text-lg font-bold text-white"
             >
               Try again
             </button>
@@ -687,7 +713,7 @@ function LessonPlayer({
         ) : (
           <button
             onClick={() => setStep(step + 1)}
-            className="rounded-xl bg-[#173d2a] px-6 py-3 text-sm font-bold text-white"
+            className="min-h-12 rounded-xl bg-[#173d2a] px-6 py-3 text-lg font-bold text-white"
           >
             Continue
           </button>

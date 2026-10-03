@@ -1,0 +1,92 @@
+{
+  "10000000-0000-4000-8000-000000000001": {
+    "title": "Help things become new",
+    "symbol": "♻️",
+    "intro": "An old bottle can become something new. Let's learn how to help!",
+    "facts": [
+      { "title": "Empty and rinse", "body": "Ask a grown-up to help empty and rinse the bottle." },
+      { "title": "No bag", "body": "Put items in the recycling bin one at a time. Do not put them in a plastic bag." },
+      { "title": "Ask first", "body": "Different places have different bin rules. Ask your teacher or a grown-up which items can go in." }
+    ],
+    "question": "How should we put empty bottles in the recycling bin?",
+    "choices": ["In a plastic bag", "One at a time, with no bag", "With food still inside"],
+    "choiceSymbols": ["🛍️", "🧴", "🍕"],
+    "answer": 1,
+    "explanation": "Yes! Put empty bottles in one at a time, with no bag. This helps the machines sort them."
+  },
+  "10000000-0000-4000-8000-000000000002": {
+    "title": "Where do bags go?",
+    "symbol": "🛍️",
+    "intro": "A plastic bag is soft and thin. It needs a different place from a bottle.",
+    "facts": [
+      { "title": "Bags can get stuck", "body": "Plastic bags can wrap around the machines that sort recycling." },
+      { "title": "A special place", "body": "Some stores have a bin just for clean plastic bags. A grown-up can check for you." },
+      { "title": "Ask for help", "body": "Keep bags out of your home recycling bin. Ask a grown-up what to do with them." }
+    ],
+    "question": "Where could a clean plastic bag go?",
+    "choices": ["In the home recycling bin", "In a store's special bag bin", "In the bin with paper"],
+    "choiceSymbols": ["🏠", "🏪", "📄"],
+    "answer": 1,
+    "explanation": "Yes! Ask a grown-up to find a store that takes clean plastic bags."
+  },
+  "10000000-0000-4000-8000-000000000003": {
+    "title": "Keep paper clean",
+    "symbol": "📦",
+    "intro": "Clean paper can become new paper. Food and grease can make that harder.",
+    "facts": [
+      { "title": "Look at the box", "body": "A pizza box may have oily spots. That oil is called grease." },
+      { "title": "Keep grease out", "body": "Grease makes the paper dirty. Keep greasy parts out of paper recycling." },
+      { "title": "A grown-up can help", "body": "Ask a grown-up to check the rules for your box. Do not pick through a trash bin." }
+    ],
+    "question": "Why do we keep greasy paper out of paper recycling?",
+    "choices": ["It is too heavy", "Grease makes the paper dirty", "No paper can be recycled"],
+    "choiceSymbols": ["🏋️", "🍕", "📄"],
+    "answer": 1,
+    "explanation": "Yes! Grease makes paper dirty. Clean paper is easier to turn into new paper."
+  },
+  "10000000-0000-4000-8000-000000000004": {
+    "title": "Food helps plants grow",
+    "symbol": "🌱",
+    "intro": "Some food scraps can become compost. Compost helps plants grow!",
+    "facts": [
+      { "title": "Save some scraps", "body": "Fruit peels and bits of vegetables can go in a compost bin. Ask a grown-up which bin to use." },
+      { "title": "Add dry leaves", "body": "A compost pile needs dry things too. Dry leaves help balance wet food scraps." },
+      { "title": "Leave plastic out", "body": "Take stickers and wrappers off food with a grown-up's help. Plastic does not belong in the pile." }
+    ],
+    "question": "Which dry thing can help a compost pile?",
+    "choices": ["Dry leaves", "A plastic wrapper", "A battery"],
+    "choiceSymbols": ["🍂", "🍬", "🔋"],
+    "answer": 0,
+    "explanation": "Yes! Dry leaves help the pile turn food scraps into compost."
+  },
+  "10000000-0000-4000-8000-000000000005": {
+    "title": "Get jars and cans ready",
+    "symbol": "🥫",
+    "intro": "A jar or a can can become something new. A grown-up can help get it ready.",
+    "facts": [
+      { "title": "Empty first", "body": "Ask a grown-up to empty any food or drink left inside." },
+      { "title": "Give it a rinse", "body": "A quick rinse helps wash away bits of food. Then check which bin to use." },
+      { "title": "Stay safe", "body": "Do not touch broken glass or sharp cans. Step back and tell a grown-up." }
+    ],
+    "question": "What should a grown-up help do before recycling a jar?",
+    "choices": ["Leave food inside", "Empty and rinse it", "Put it in a plastic bag"],
+    "choiceSymbols": ["🍝", "💧", "🛍️"],
+    "answer": 1,
+    "explanation": "Yes! Ask a grown-up to help empty and rinse it, then check the bin rules."
+  },
+  "10000000-0000-4000-8000-000000000006": {
+    "title": "Choose food for the soil",
+    "symbol": "🍂",
+    "intro": "Let's choose what belongs in compost. We can help the soil and keep other things out.",
+    "facts": [
+      { "title": "Leaves belong", "body": "Dry leaves can go in a compost pile. So can some fruit and vegetable scraps." },
+      { "title": "Plastic stays out", "body": "Plastic forks and wrappers do not belong in the pile. Ask a grown-up where they go." },
+      { "title": "Ask before you sort", "body": "Never pick up a battery or an unknown item to sort it. Tell a grown-up and let them help." }
+    ],
+    "question": "Which thing belongs in a compost pile?",
+    "choices": ["Dry leaves", "A battery", "A plastic fork"],
+    "choiceSymbols": ["🍂", "🔋", "🍴"],
+    "answer": 0,
+    "explanation": "Yes! Dry leaves belong in compost. Batteries and plastic do not."
+  }
+}

@@ -9,6 +9,7 @@ export default defineConfig(({ command, mode }) => {
   }
   return {
   server: {
+    fs: { allow: [import.meta.dirname, path.resolve(import.meta.dirname, "../../packages")] },
     host: "::",
     port: 8080,
   },

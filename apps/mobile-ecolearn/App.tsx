@@ -1,4 +1,6 @@
 import { AdminSecurity } from "./src/AdminSecurity";
+import easyLessonData from "../../packages/learning/easy-reading.json";
+import { ListenButton, ReadingMode, useEasyReading } from "./src/LearningSupport";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -562,6 +564,8 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
 }
 
 function LearnScreen({ lessons, completed, onCompleted, initialLessonId }: { lessons: Lesson[]; completed: string[]; onCompleted: () => Promise<void>; initialLessonId?: string | null }) {
+  const [easy, setEasy] = useEasyReading();
+  const easyLessons: Record<string, (typeof easyLessonData)[keyof typeof easyLessonData]> = easyLessonData;
   const [active, setActive] = useState<Lesson | null>(() => lessons.find((lesson) => lesson.id === initialLessonId) ?? null);
   const [step, setStep] = useState(0);
   const [choice, setChoice] = useState<number | null>(null);
@@ -570,12 +574,17 @@ function LearnScreen({ lessons, completed, onCompleted, initialLessonId }: { les
   const closeLesson = () => { setActive(null); setStep(0); setChoice(null); setChecked(false); };
   const openLesson = (lesson: Lesson) => { setActive(lesson); setStep(0); setChoice(null); setChecked(false); };
   if (active) {
-    const content = lessonEditorial[active.id];
+    const simple = easyLessons[active.id];
+    const content = easy && simple ? simple : lessonEditorial[active.id];
     if (!content) return <View style={styles.emptyState}><Ionicons name="alert-circle-outline" size={28} color="#8a5b17" /><Text style={styles.emptyTitle}>Lesson content unavailable</Text><Text style={styles.rowMeta}>This lesson was unpublished from the app because its reviewed content is missing.</Text><Pressable onPress={closeLesson} style={styles.secondaryButton}><Text style={styles.secondaryText}>Back to lessons</Text></Pressable></View>;
     const quizStep = content.facts.length + 1;
     const isQuiz = step === quizStep;
     const totalSteps = quizStep + 1;
     const alreadyDone = completed.includes(active.id);
+    const title = easy && simple ? simple.title : active.title;
+    const spoken = isQuiz
+      ? `${content.question} ${content.choices.map((item, index) => `${index + 1}. ${item}.`).join(" ")} ${checked ? choice === content.answer ? content.explanation : `Let's try again. ${content.explanation.replace(/^(Yes!|Correct\.|Right\.|Exactly\.) /, "")}` : "Choose one answer, then press Check answer."}`
+      : step === 0 ? `${title}. ${content.intro}` : `${content.facts[step - 1].title}. ${content.facts[step - 1].body}`;
     const complete = async () => {
       if (choice !== content.answer || saving) return;
       setSaving(true);
@@ -588,37 +597,57 @@ function LearnScreen({ lessons, completed, onCompleted, initialLessonId }: { les
       <Pressable onPress={closeLesson} style={styles.backButton}><Ionicons name="arrow-back" size={19} color="#286d3b" /><Text style={styles.backText}>All lessons</Text></Pressable>
       <View style={styles.lessonProgressRow}>{Array.from({ length: totalSteps }).map((_, index) => <View key={index} style={[styles.lessonProgressSegment, index <= step && styles.lessonProgressSegmentActive]} />)}</View>
       <Text style={styles.kicker}>{active.topic.toUpperCase()} · {step + 1} OF {totalSteps}</Text>
-      <Text style={styles.pageTitle}>{active.title}</Text>
+      <Text accessibilityRole="header" style={styles.pageTitle}>{title}</Text>
+      <ReadingMode easy={easy} onChange={(value) => { setChoice(null); setChecked(false); setEasy(value); }} />
+      <ListenButton text={spoken} />
       {!isQuiz && <View style={styles.lessonBodyCard}>
-        <View style={styles.lessonHeroIcon}><Ionicons name={step === 0 ? "bulb-outline" : "leaf-outline"} size={30} color="#2f7b44" /></View>
+        <View style={styles.lessonHeroIcon}>{easy ? <Text accessible={false} style={{ fontSize: 36 }}>{simple?.symbol}</Text> : <Ionicons name={step === 0 ? "bulb-outline" : "leaf-outline"} size={30} color="#2f7b44" />}</View>
         <Text style={styles.lessonSectionTitle}>{step === 0 ? "Why this matters" : content.facts[step - 1].title}</Text>
-        <Text style={styles.lessonBody}>{step === 0 ? content.intro : content.facts[step - 1].body}</Text>
+        <Text style={[styles.lessonBody, easy && { fontSize: 20, lineHeight: 30 }]}>{step === 0 ? content.intro : content.facts[step - 1].body}</Text>
       </View>}
       {isQuiz && <>
-        <View style={styles.quizHeader}><Ionicons name="checkmark-done-circle-outline" size={25} color="#2f7b44" /><View style={styles.flexOne}><Text style={styles.smallLabel}>QUICK CHECK</Text><Text style={styles.rowTitle}>Prove what you learned</Text></View></View>
+        <View style={styles.quizHeader}><Ionicons name="checkmark-done-circle-outline" size={25} color="#2f7b44" /><View style={styles.flexOne}><Text style={styles.smallLabel}>QUICK CHECK</Text><Text style={styles.rowTitle}>{easy ? "Your turn" : "Practice what you learned"}</Text></View></View>
         <Text style={styles.question}>{content.question}</Text>
         {content.choices.map((item, index) => {
           const selected = choice === index;
           const correct = checked && index === content.answer;
           const wrong = checked && selected && index !== content.answer;
-          return <Pressable key={item} disabled={checked} onPress={() => setChoice(index)} style={[styles.answer, selected && styles.answerActive, correct && styles.answerCorrect, wrong && styles.answerWrong]}><View style={[styles.answerIndex, selected && styles.answerIndexActive]}><Text style={[styles.answerIndexText, selected && styles.answerIndexTextActive]}>{String.fromCharCode(65 + index)}</Text></View><Text style={styles.answerText}>{item}</Text>{correct && <Ionicons name="checkmark-circle" size={21} color="#2d7a42" />}{wrong && <Ionicons name="close-circle" size={21} color="#b04c42" />}</Pressable>;
+          return <Pressable key={item} accessibilityRole="button" accessibilityLabel={`${index + 1}. ${item}`} accessibilityState={{ selected, disabled: checked }} disabled={checked} onPress={() => setChoice(index)} style={[styles.answer, { minHeight: 64 }, selected && styles.answerActive, correct && styles.answerCorrect, wrong && styles.answerWrong]}><View accessible={false} style={[styles.answerIndex, selected && styles.answerIndexActive]}><Text style={[styles.answerIndexText, selected && styles.answerIndexTextActive, easy && { fontSize: 26 }]}>{easy ? simple?.choiceSymbols[index] : index + 1}</Text></View><Text style={[styles.answerText, easy && { fontSize: 20, lineHeight: 28 }]}>{item}</Text>{(correct || selected && !checked) && <Ionicons name="checkmark-circle" size={21} color="#2d7a42" />}{wrong && <Ionicons name="close-circle" size={21} color="#b04c42" />}</Pressable>;
         })}
-        {checked && <View style={[styles.feedbackCard, choice === content.answer ? styles.feedbackGood : styles.feedbackBad]}><Text style={styles.feedbackTitle}>{choice === content.answer ? "Exactly right" : "Not quite yet"}</Text><Text style={styles.feedbackText}>{choice === content.answer ? content.explanation : "Review the choices and try once more. Your progress is only saved after the correct answer."}</Text></View>}
+        {checked && <View accessible accessibilityLiveRegion="polite" style={[styles.feedbackCard, choice === content.answer ? styles.feedbackGood : styles.feedbackBad]}><Text style={styles.feedbackTitle}>{choice === content.answer ? "Well done!" : "Let's try again"}</Text><Text style={[styles.feedbackText, easy && { fontSize: 18, lineHeight: 28 }]}>{choice === content.answer ? content.explanation : content.explanation.replace(/^(Yes!|Correct\.|Right\.|Exactly\.) /, "")}</Text></View>}
       </>}
-      {!isQuiz ? <Pressable style={styles.primaryButton} onPress={() => setStep((value) => value + 1)}><Text style={styles.primaryText}>{step === content.facts.length ? "Take the quiz" : "Continue"}</Text><Ionicons name="arrow-forward" size={18} color="#fff" /></Pressable> : !checked ? <Pressable disabled={choice === null} style={[styles.primaryButton, choice === null && styles.disabled]} onPress={() => setChecked(true)}><Text style={styles.primaryText}>Check answer</Text></Pressable> : choice === content.answer ? <Pressable disabled={saving} style={[styles.primaryButton, saving && styles.disabled]} onPress={() => void complete()}>{saving ? <ActivityIndicator color="#fff" /> : <><Text style={styles.primaryText}>{alreadyDone ? "Finish review" : `Complete · +${active.xp_reward} XP`}</Text><Ionicons name="checkmark" size={19} color="#fff" /></>}</Pressable> : <Pressable style={styles.secondaryButton} onPress={() => { setChoice(null); setChecked(false); }}><Text style={styles.secondaryText}>Try again</Text></Pressable>}
+      {!isQuiz ? (
+        <Pressable accessibilityRole="button" style={[styles.primaryButton, { minHeight: 52 }]} onPress={() => setStep((value) => value + 1)}>
+          <Text style={[styles.primaryText, { fontSize: 18 }]}>{step === content.facts.length ? "Your turn" : "Continue"}</Text>
+          <Ionicons name="arrow-forward" size={18} color="#fff" />
+        </Pressable>
+      ) : !checked ? (
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled: choice === null }} disabled={choice === null} style={[styles.primaryButton, { minHeight: 52 }, choice === null && styles.disabled]} onPress={() => setChecked(true)}>
+          <Text style={[styles.primaryText, { fontSize: 18 }]}>Check answer</Text>
+        </Pressable>
+      ) : choice === content.answer ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={saving ? "Saving lesson" : "Complete lesson"} accessibilityState={{ disabled: saving, busy: saving }} disabled={saving} style={[styles.primaryButton, { minHeight: 52 }, saving && styles.disabled]} onPress={() => void complete()}>
+          {saving ? <ActivityIndicator color="#fff" /> : <><Text style={[styles.primaryText, { fontSize: 18 }]}>{alreadyDone ? "Finish review" : `Complete · +${active.xp_reward} XP`}</Text><Ionicons name="checkmark" size={19} color="#fff" /></>}
+        </Pressable>
+      ) : (
+        <Pressable accessibilityRole="button" style={[styles.secondaryButton, { minHeight: 52 }]} onPress={() => { setChoice(null); setChecked(false); }}>
+          <Text style={[styles.secondaryText, { fontSize: 18 }]}>Try again</Text>
+        </Pressable>
+      )}
     </>;
   }
   const percentComplete = lessons.length ? Math.round((completed.length / lessons.length) * 100) : 0;
   return <>
     <Text style={styles.kicker}>LEARN BY DOING</Text>
-    <Text style={styles.pageTitle}>Build skills that stick.</Text>
-    <Text style={styles.body}>Short, reviewed lessons turn Delaware recycling guidance into choices you can use.</Text>
+    <Text style={styles.pageTitle}>{easy ? "Let's help the Earth!" : "Build skills that stick."}</Text>
+    <Text style={styles.body}>{easy ? "Pick a lesson. Look, listen, and try a question. A grown-up can help you." : "Short, reviewed lessons turn Delaware recycling guidance into choices you can use."}</Text>
+    <ReadingMode easy={easy} onChange={setEasy} />
     <View style={styles.courseSummary}><View><Text style={styles.courseValue}>{completed.length}/{lessons.length}</Text><Text style={styles.rowMeta}>lessons complete</Text></View><View style={styles.courseProgressWrap}><Text style={styles.coursePercent}>{percentComplete}%</Text><View style={questStyles.track}><View style={[questStyles.fill, { width: `${percentComplete}%` }]} /></View></View></View>
     {!lessons.length && <View style={styles.emptyState}><ActivityIndicator color="#2e7a43" /><Text style={styles.rowMeta}>Loading published lessons…</Text></View>}
     {lessons.map((lesson, index) => {
       const done = completed.includes(lesson.id);
       const unlocked = index === 0 || completed.includes(lessons[index - 1].id);
-      return <Pressable key={lesson.id} disabled={!unlocked} onPress={() => openLesson(lesson)} style={[styles.lessonCard, !unlocked && styles.lockedCard]}><View style={[styles.number, done && styles.numberDone]}>{done ? <Ionicons name="checkmark" size={19} color="#fff" /> : <Text style={styles.numberText}>{index + 1}</Text>}</View><View style={styles.flexOne}><Text style={styles.smallLabel}>{lesson.topic.toUpperCase()} · {lesson.duration_minutes} MIN</Text><Text style={styles.rowTitle}>{lesson.title}</Text><Text style={styles.rowMeta}>{done ? "Completed · tap to review" : unlocked ? `${lesson.xp_reward} XP · includes quiz` : "Complete the previous lesson to unlock"}</Text></View><Ionicons name={unlocked ? "chevron-forward" : "lock-closed"} size={19} color={unlocked ? "#3f864c" : "#9aa49c"} /></Pressable>;
+      return <Pressable key={lesson.id} accessibilityRole="button" accessibilityState={{ disabled: !unlocked }} disabled={!unlocked} onPress={() => openLesson(lesson)} style={[styles.lessonCard, !unlocked && styles.lockedCard]}><View style={[styles.number, done && styles.numberDone]}>{done ? <Ionicons name="checkmark" size={19} color="#fff" /> : <Text style={styles.numberText}>{index + 1}</Text>}</View><View style={styles.flexOne}><Text style={styles.smallLabel}>{easy ? `LESSON ${index + 1}` : `${lesson.topic.toUpperCase()} · ${lesson.duration_minutes} MIN`}</Text><Text style={styles.rowTitle}>{easy ? easyLessons[lesson.id]?.title ?? lesson.title : lesson.title}</Text><Text style={styles.rowMeta}>{done ? "Completed · tap to review" : unlocked ? easy ? "Look, listen, and learn" : `${lesson.xp_reward} XP · includes quiz` : "Finish the lesson above first"}</Text></View><Ionicons name={unlocked ? "chevron-forward" : "lock-closed"} size={19} color={unlocked ? "#3f864c" : "#9aa49c"} /></Pressable>;
     })}
   </>;
 }
