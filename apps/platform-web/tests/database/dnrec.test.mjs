@@ -115,3 +115,8 @@ test('an exact item title wins over a merely similar longer title',()=>{
  const result=dnrec.lookupDnrecRows([row('Paper Cups'),row('Paper Coffee Cups',2)],'Paper Cups');
  assert.equal(result.match.row.title,'Paper Cups');assert.equal(dnrec.hasUniqueDnrecMatch(result),true);
 });
+
+test('a specific official title takes precedence over an alias in a broader record',()=>{
+ const result=dnrec.lookupDnrecRows([{...row('Household Batteries'),synonyms:[{synonym:'Rechargeable Batteries'}]},row('Rechargeable Batteries',2)],'Rechargeable Batteries');
+ assert.equal(result.match.row.title,'Rechargeable Batteries');assert.equal(dnrec.hasUniqueDnrecMatch(result),true);
+});

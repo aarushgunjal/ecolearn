@@ -126,11 +126,13 @@ export const buildDnrecIdentificationQueries = ({ observedItem, catalogQuery, ma
   ...boundedNames(variants).map(normalizeDnrecText),
 ])).filter(Boolean);
 
-export const hasUniqueDnrecMatch = (lookup: { match: { row: DelawareGuidanceRow; score: number } | null; candidates: { row: DelawareGuidanceRow; score: number }[] }) => {
+export const hasUniqueDnrecMatch = (lookup: { match: { row: DelawareGuidanceRow; score: number; exactTitle?: boolean } | null; candidates: { row: DelawareGuidanceRow; score: number; exactTitle?: boolean }[] }) => {
   const best = lookup.match;
   const next = lookup.candidates.find(entry => entry.row.source_topic_id !== best?.row.source_topic_id);
   // Two exact aliases pointing at different records are still ambiguous.
-  return Boolean(best && best.score >= 0.84 && (!next || (best.score >= 0.96 ? next.score < 0.96 : best.score - next.score >= 0.12)));
+  return Boolean(best && best.score >= 0.84 && (!next ||
+    (best.exactTitle && !next.exactTitle && best.score === 1) ||
+    (best.score >= 0.96 ? next.score < 0.96 : best.score - next.score >= 0.12)));
 };
 
 // A candidate must retain visible safety distinctions, including on an exact
@@ -244,13 +246,14 @@ export const rankGuidance = (rows: DelawareGuidanceRow[], item: string | string[
   return rows
     .map((row) => ({
       row,
+      exactTitle: queries.includes(normalizeDnrecText(row.title)),
       score: Math.max(
         ...queries.flatMap((query) => termsFor(row).map((term) => scoreTerm(query, term))),
         0,
       ),
     }))
     .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score || left.row.title.localeCompare(right.row.title));
+    .sort((left, right) => right.score - left.score || Number(right.exactTitle) - Number(left.exactTitle) || left.row.title.localeCompare(right.row.title));
 };
 
 export const guidanceCategory = (tags: DnrecTag[]) => {
@@ -364,7 +367,7 @@ export async function findLiveDelawareGuidance(item: string | string[], includeD
   }
   const detail = await cached.value;
   return {
-    match: { row: liveTopicToRow(detail), score: best.score },
+    match: { ...best, row: liveTopicToRow(detail) },
     candidates: ranked.slice(0, 5),
   };
 }
