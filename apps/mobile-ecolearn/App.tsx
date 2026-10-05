@@ -1,3 +1,5 @@
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
+import { AppDialog, DialogRoot } from "./src/AppDialog";
 import { LearningSpace, learningSpace } from "./src/LearningSpace";
 import { AccountSettings } from "./src/AccountSettings";
 import easyLessonData from "../../packages/learning/easy-reading.json";
@@ -5,7 +7,6 @@ import { ListenButton, ReadingMode, useEasyReading } from "./src/LearningSupport
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Linking,
   Platform,
@@ -42,9 +43,9 @@ WebBrowser.maybeCompleteAuthSession();
 
 type Tab = "Home" | "Scan" | "Map" | "Learn" | "Community" | "Challenges" | "Profile" | "Notifications";
 type Photo = { uri: string; name: string; mimeType: string; base64?: string | null };
-type ScanResult = { item: string; recyclable: boolean; confidence: number; category: string; instructions: string; tips?: string[]; imageStatus?: "single_item" | "multiple_items" | "unclear"; material?: string | null; visibleEvidence?: string | null; dnrec?: DelawareGuidance | null; categoryGuidance?: Array<DelawareGuidance & { basis: string }> };
+type ScanResult = { objectClass?: string; clarification?: string | null; needsAdultHelp?: boolean; candidates?: Array<{ title: string }>; item: string; recyclable: boolean; confidence: number; category: string; instructions: string; tips?: string[]; imageStatus?: "single_item" | "multiple_items" | "unclear"; material?: string | null; visibleEvidence?: string | null; dnrec?: DelawareGuidance | null; categoryGuidance?: Array<DelawareGuidance & { basis: string }> };
 type DelawareGuidance = { title: string; category: string; curbside: boolean; instructions: string; sourceName: string; sourceUrl: string; matchConfidence?: number };
-type VisionScanResponse = { categoryGuidance?: Array<DelawareGuidance & { basis: string }>; verified: boolean; guidance: DelawareGuidance | null; observedItem: string | null; material: string | null; confidence: number; imageStatus: "single_item" | "multiple_items" | "unclear"; visibleEvidence: string | null; nextSteps: string[]; message: string };
+type VisionScanResponse = { objectClass?: string; clarification?: string | null; needsAdultHelp?: boolean; candidates?: Array<{ title: string }>; categoryGuidance?: Array<DelawareGuidance & { basis: string }>; verified: boolean; guidance: DelawareGuidance | null; observedItem: string | null; material: string | null; confidence: number; imageStatus: "single_item" | "multiple_items" | "unclear"; visibleEvidence: string | null; nextSteps: string[]; message: string };
 type Progress = { xp: number; level: number; total_scans: number; total_lessons_completed: number; streak_days: number; last_activity_date?: string | null };
 type Site = { id: string; name: string; type: string; latitude: number; longitude: number; distanceKm: number; address?: string; services?: string[]; sourceUrl?: string; provider?: string };
 const milesFromKm = (kilometers: number) => kilometers * 0.621371;
@@ -102,7 +103,9 @@ const extras = StyleSheet.create({
   siteActions: { flexDirection: "row", flexWrap: "wrap", gap: 18 },
 });
 
-export default function App() {
+export default function App() { return <DialogRoot><AppContent /></DialogRoot>; }
+
+function AppContent() {
   const [session, setSession] = useState<Session | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [recoveringPassword, setRecoveringPassword] = useState(false);
@@ -116,7 +119,7 @@ export default function App() {
       const callback = new URL(url.replace("#", "?"));
       const authError = callback.searchParams.get("error_description") ?? callback.searchParams.get("error");
       if (authError) {
-        Alert.alert("Could not confirm email", authError);
+        AppDialog.alert("Could not confirm email", authError);
         return;
       }
       const accessToken = callback.searchParams.get("access_token");
@@ -124,14 +127,14 @@ export default function App() {
       if (!accessToken || !refreshToken) return;
       const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
       if (error) {
-        Alert.alert("Could not open sign-in link", error.message);
+        AppDialog.alert("Could not open sign-in link", error.message);
         return;
       }
       const linkType = callback.searchParams.get("type");
       if (linkType === "recovery") {
         setRecoveringPassword(true);
       } else if (linkType === "signup" || linkType === "email" || linkType === "invite") {
-        Alert.alert(
+        AppDialog.alert(
           "Your email is confirmed",
           "Welcome to EcoLearn. You’re signed in and ready to get started.",
         );
@@ -170,7 +173,7 @@ function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     if (busy) return;
-    if (!email.trim() || !password || (mode === "signup" && password.length < 8)) return Alert.alert("Check your details", mode === "signup" ? "Enter an email and a password with at least eight characters." : "Enter your email and password.");
+    if (!email.trim() || !password || (mode === "signup" && password.length < 8)) return AppDialog.alert("Check your details", mode === "signup" ? "Enter an email and a password with at least eight characters." : "Enter your email and password.");
     setBusy(true);
     try {
     const response = mode === "signin"
@@ -180,21 +183,21 @@ function AuthScreen() {
           password,
           options: { data: { account_role: "student" }, emailRedirectTo: ExpoLinking.createURL("auth/callback") },
         });
-    if (response.error) return Alert.alert("Could not continue", response.error.message);
+    if (response.error) return AppDialog.alert("Could not continue", response.error.message);
     if (mode === "signup" && !response.data.session) {
-      Alert.alert(
+      AppDialog.alert(
         "Check your email",
         "Open the EcoLearn confirmation link on this device. EcoLearn will reopen, confirm your email, and sign you in automatically.",
       );
     }
     } catch {
-      Alert.alert("Could not connect", "Check your connection and try signing in again.");
+      AppDialog.alert("Could not connect", "Check your connection and try signing in again.");
     } finally { setBusy(false); }
   };
   const google = async () => {
     if (busy) return;
     if (usingExpoGo) {
-      Alert.alert(
+      AppDialog.alert(
         "Use email sign-in in Expo Go",
         "Google sign-in needs the EcoLearn development build because Expo Go cannot provide the stable OAuth callback URL Google requires.",
       );
@@ -213,7 +216,7 @@ function AuthScreen() {
       if (!access_token || !refresh_token) throw new Error("Google did not return a session. Add the mobile redirect URL to Supabase Auth and try again.");
       const { error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
       if (sessionError) throw sessionError;
-    } catch (error) { Alert.alert("Google sign-in needs setup", error instanceof Error ? error.message : "Try email sign-in or check the mobile redirect configuration."); }
+    } catch (error) { AppDialog.alert("Google sign-in needs setup", error instanceof Error ? error.message : "Try email sign-in or check the mobile redirect configuration."); }
     finally { setBusy(false); }
   };
   const apple = async () => {
@@ -247,12 +250,12 @@ function AuthScreen() {
             family_name: credential.fullName?.familyName,
           },
         });
-        if (profileError) Alert.alert("Signed in", "Your account is ready. You can add your display name in Profile.");
+        if (profileError) AppDialog.alert("Signed in", "Your account is ready. You can add your display name in Profile.");
       }
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
       if (code !== "ERR_REQUEST_CANCELED") {
-        Alert.alert("Apple sign-in unavailable", error instanceof Error ? error.message : "Please try again or use email sign-in.");
+        AppDialog.alert("Apple sign-in unavailable", error instanceof Error ? error.message : "Please try again or use email sign-in.");
       }
     } finally {
       setBusy(false);
@@ -260,16 +263,16 @@ function AuthScreen() {
   };
   const resetPassword = async () => {
     if (busy) return;
-    if (!email.trim()) return Alert.alert("Enter your email", "Enter the email address for your EcoLearn account first.");
+    if (!email.trim()) return AppDialog.alert("Enter your email", "Enter the email address for your EcoLearn account first.");
     setBusy(true);
     try {
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: ExpoLinking.createURL("auth/reset-password"),
     });
-    if (error) return Alert.alert("Could not send reset email", error.message);
-    Alert.alert("Check your email", "Open the EcoLearn password-reset link on this device to choose a new password.");
+    if (error) return AppDialog.alert("Could not send reset email", error.message);
+    AppDialog.alert("Check your email", "Open the EcoLearn password-reset link on this device to choose a new password.");
     } catch {
-      Alert.alert("Could not send reset email", "Check your connection and try again.");
+      AppDialog.alert("Could not send reset email", "Check your connection and try again.");
     } finally { setBusy(false); }
   };
   return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><Text style={styles.brandLarge}>ecolearn</Text><Text style={styles.pageTitle}>{mode === "signin" ? "Welcome back." : "Start your impact."}</Text><Text style={styles.body}>Save scans, learn sustainable habits, and build a more circular world.</Text>{Platform.OS === "ios" && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={13} style={extras.appleButton} onPress={() => void apple()} />}<Pressable onPress={() => void google()} disabled={busy} style={[styles.googleButton, Platform.OS === "ios" && extras.googleAfterApple, usingExpoGo && styles.disabled]}><Text style={styles.googleText}>{usingExpoGo ? "Google sign-in needs development build" : "Continue with Google"}</Text></Pressable>{usingExpoGo && <Text style={styles.helper}>For Expo Go testing, use email/password. Google works in the later EcoLearn development build.</Text>}<Text style={styles.or}>OR WITH EMAIL</Text>{mode === "signup" && <Text style={styles.helper}>New accounts start as students. Educators can request teacher access in Account settings after signing in.</Text>}<TextInput value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="Email address" style={styles.input} /><TextInput value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === "signin" ? "current-password" : "new-password"} placeholder="Password" style={styles.input} /><Pressable onPress={() => void submit()} disabled={busy} style={styles.primaryButton}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{mode === "signin" ? "Sign in" : "Create account"}</Text>}</Pressable>{mode === "signin" && <Pressable onPress={() => void resetPassword()} disabled={busy}><Text style={styles.link}>Forgot password?</Text></Pressable>}<Pressable onPress={() => setMode(mode === "signin" ? "signup" : "signin")}><Text style={styles.link}>{mode === "signin" ? "New to EcoLearn? Create an account" : "Already a member? Sign in"}</Text></Pressable><Text style={styles.legal}>By continuing, you agree to EcoLearn’s <Text style={styles.legalLink} onPress={() => void openPublicPage("/terms")}>Terms of Service</Text> and <Text style={styles.legalLink} onPress={() => void openPublicPage("/privacy")}>Privacy Policy</Text>.</Text>{mode === "signup" && <Text style={styles.legal}>Learners under 13 need a parent, guardian, or authorized school to create and manage their account.</Text>}</ScrollView></SafeAreaView>;
@@ -280,13 +283,13 @@ function PasswordRecoveryScreen({ onComplete }: { onComplete: () => void }) {
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const save = async () => {
-    if (password.length < 8) return Alert.alert("Use a stronger password", "Your new password must contain at least eight characters.");
-    if (password !== confirmation) return Alert.alert("Passwords do not match", "Enter the same new password twice.");
+    if (password.length < 8) return AppDialog.alert("Use a stronger password", "Your new password must contain at least eight characters.");
+    if (password !== confirmation) return AppDialog.alert("Passwords do not match", "Enter the same new password twice.");
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password });
     setBusy(false);
-    if (error) return Alert.alert("Could not update password", error.message);
-    Alert.alert("Password updated", "You can continue using EcoLearn with your new password.", [{ text: "Continue", onPress: onComplete }]);
+    if (error) return AppDialog.alert("Could not update password", error.message);
+    AppDialog.alert("Password updated", "You can continue using EcoLearn with your new password.", [{ text: "Continue", onPress: onComplete }]);
   };
   return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><Text style={styles.brandLarge}>ecolearn</Text><Text style={styles.pageTitle}>Choose a new password.</Text><Text style={styles.body}>Use at least eight characters and keep it private.</Text><TextInput value={password} onChangeText={setPassword} secureTextEntry autoComplete="new-password" placeholder="New password" style={styles.input} /><TextInput value={confirmation} onChangeText={setConfirmation} secureTextEntry autoComplete="new-password" placeholder="Confirm new password" style={styles.input} /><Pressable onPress={() => void save()} disabled={busy} style={styles.primaryButton}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Save new password</Text>}</Pressable></ScrollView></SafeAreaView>;
 }
@@ -349,7 +352,7 @@ function EcoLearnApp({ user }: { user: User }) {
   };
   const consumeMapSearchRequest = useCallback(() => setMapSearchRequest(null), []);
   useEffect(() => {
-    void syncPushDevice().catch((error: unknown) => Alert.alert("Could not sync notifications", error instanceof Error ? error.message : "Open Notifications to retry."));
+    void syncPushDevice().catch((error: unknown) => AppDialog.alert("Could not sync notifications", error instanceof Error ? error.message : "Open Notifications to retry."));
     const open = (response: Notifications.NotificationResponse) => {
       if (response.notification.request.content.data?.notificationId) setTab("Notifications");
     };
@@ -453,6 +456,11 @@ function achievementMetric(achievement: Achievement, progress: Progress | null) 
 
 function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promise<void>; onTools: () => void; onNearby: (item: string) => void }) {
   const [photo, setPhoto] = useState<Photo | null>(null); const [result, setResult] = useState<ScanResult | null>(null); const [busy, setBusy] = useState(false);
+  useEffect(() => () => {
+    if (photo?.uri && FileSystem.cacheDirectory && photo.uri.startsWith(FileSystem.cacheDirectory)) {
+      void FileSystem.deleteAsync(photo.uri, { idempotent: true }).catch(() => {});
+    }
+  }, [photo?.uri]);
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<DelawareSuggestion[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
@@ -470,7 +478,33 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
     if (error) throw error;
     await onRecorded();
   };
-  const choose = async (camera: boolean) => { const permission = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!permission.granted) return Alert.alert("Permission needed", `Allow ${camera ? "camera" : "photo library"} access to scan an item.`); const options: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.6, base64: true }; const picked = camera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options); if (!picked.canceled && picked.assets[0]) { requestId.current = newRequestId(); setPhoto(photoFromAsset(picked.assets[0])); setResult(null); } };
+  const choose = async (camera: boolean) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const permission = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        AppDialog.alert("Permission needed", `Allow ${camera ? "camera" : "photo library"} access to scan an item.`);
+        return;
+      }
+      const options: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.9 };
+      const picked = camera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
+      if (picked.canceled || !picked.assets[0]) return;
+      const asset = picked.assets[0];
+      const context = ImageManipulator.manipulate(asset.uri);
+      try {
+        if (Math.max(asset.width, asset.height) > 1600) context.resize(asset.width >= asset.height ? { width: 1600 } : { height: 1600 });
+        const rendered = await context.renderAsync();
+        try {
+          const prepared = await rendered.saveAsync({ compress: 0.8, format: SaveFormat.JPEG, base64: true });
+          requestId.current = newRequestId();
+          setPhoto({ uri: prepared.uri, name: "ecolearn-photo.jpg", mimeType: "image/jpeg", base64: prepared.base64 });
+          setResult(null);
+        } finally { rendered.release(); }
+      } finally { context.release(); }
+    } catch { AppDialog.alert("Could not open photo", "Try another photo or search by name."); }
+    finally { setBusy(false); }
+  };
   useEffect(() => {
     const query = searchQuery.trim();
     if (query.length < 2 || photo || result) { setSuggestions([]); setSuggestionsLoading(false); return; }
@@ -501,7 +535,7 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
       setResult(checked);
       if (guidance) await recordOfficial(checked);
     } catch (error) {
-      Alert.alert("Delaware catalog unavailable", await functionErrorMessage(error, "Try the catalog search again shortly."));
+      AppDialog.alert("Delaware catalog unavailable", await functionErrorMessage(error, "Try the catalog search again shortly."));
     } finally { setBusy(false); }
   };
   const scan = async () => {
@@ -516,12 +550,12 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
       const identified = data as VisionScanResponse;
       const guidance = identified.guidance;
       const scanResult: ScanResult = guidance
-        ? { item: identified.observedItem || guidance.title, recyclable: guidance.curbside, confidence: guidance.matchConfidence ?? identified.confidence, category: guidance.category, instructions: guidance.instructions, tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the complete official item protocol", "Use Delaware locations for nearby options"], imageStatus: identified.imageStatus, material: identified.material, visibleEvidence: identified.visibleEvidence, dnrec: guidance }
-        : { item: identified.observedItem ?? "Item not identified", recyclable: false, confidence: identified.confidence, category: identified.imageStatus === "multiple_items" ? "Multiple items detected" : "No official DNREC match", instructions: identified.message, tips: identified.nextSteps, imageStatus: identified.imageStatus, material: identified.material, visibleEvidence: identified.visibleEvidence, dnrec: null, categoryGuidance: identified.categoryGuidance ?? [] };
+        ? { item: identified.observedItem || guidance.title, recyclable: guidance.curbside, confidence: guidance.matchConfidence ?? identified.confidence, category: guidance.category, instructions: guidance.instructions, tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the complete official item protocol", "Use Delaware locations for nearby options"], objectClass: identified.objectClass, clarification: identified.clarification, needsAdultHelp: identified.needsAdultHelp, candidates: identified.candidates, imageStatus: identified.imageStatus, material: identified.material, visibleEvidence: identified.visibleEvidence, dnrec: guidance }
+        : { item: identified.observedItem ?? "Item not identified", recyclable: false, confidence: identified.confidence, category: identified.imageStatus === "multiple_items" ? "Multiple items detected" : "No official DNREC match", instructions: identified.message, tips: identified.nextSteps, objectClass: identified.objectClass, clarification: identified.clarification, needsAdultHelp: identified.needsAdultHelp, candidates: identified.candidates, imageStatus: identified.imageStatus, material: identified.material, visibleEvidence: identified.visibleEvidence, dnrec: null, categoryGuidance: identified.categoryGuidance ?? [] };
       setResult(scanResult);
       if (guidance) await recordOfficial(scanResult);
     } catch (error) {
-      Alert.alert("Visual item check unavailable", await functionErrorMessage(error));
+      AppDialog.alert("Visual item check unavailable", await functionErrorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -549,6 +583,7 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
     {photo && <Image source={{ uri: photo.uri }} style={styles.resultImage} />}
     <Text style={styles.kicker}>VISUAL IDENTIFICATION</Text>
     <Text style={styles.pageTitle}>{result.item}</Text>
+    <ScanReadingSupport result={result} onChoose={title => void searchCatalog(title, "suggestion")} busy={busy} />
     <View style={[styles.badge, styles.warnBadge]}><Text style={[styles.badgeText, styles.warnText]}>{result.categoryGuidance?.length ? 'DNREC category guidance' : result.category}{result.confidence > 0 ? ` · ${percent(result.confidence)}% confidence` : ''}</Text></View>
     {!!result.material && <Text style={styles.helper}>Likely material: {result.material}</Text>}
     <View style={styles.guidanceCard}>
@@ -570,6 +605,7 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
     {photo && <Image source={{ uri: photo.uri }} style={styles.resultImage} />}
     <Text style={styles.kicker}>OFFICIAL DELAWARE MATCH</Text>
     <Text style={styles.pageTitle}>{result.item}</Text>
+    <ScanReadingSupport result={result} onChoose={title => void searchCatalog(title, "suggestion")} busy={busy} />
     <View style={[styles.badge, official.curbside ? styles.goodBadge : styles.warnBadge]}><Text style={[styles.badgeText, official.curbside ? styles.goodText : styles.warnText]}>DNREC: {official.category} · {percent(result.confidence)}% confidence</Text></View>
     <View style={styles.guidanceCard}><Text style={styles.smallLabel}>DNREC: {official.title}</Text><Text style={styles.guidance}>{official.instructions}</Text><Pressable onPress={() => void Linking.openURL(official.sourceUrl)}><Text style={styles.link}>Open Delaware DNREC source</Text></Pressable></View>
     {relatedVideo && <Pressable style={styles.explainButton} onPress={() => void Linking.openURL(relatedVideo.url)}><Text style={styles.explainText}>{relatedVideo.title}</Text></Pressable>}
@@ -577,6 +613,20 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
     <Pressable style={styles.primaryButton} onPress={() => onNearby(official.title)} accessibilityLabel={`Search nearby locations for ${official.title}`}><Ionicons name="location" size={18} color="#fff" /><Text style={styles.primaryText}>Search nearby locations</Text></Pressable>
     <Pressable style={[styles.secondaryButton, styles.resultSecondaryButton]} onPress={resetScan}><Ionicons name="scan-outline" size={18} color="#286d3b" /><Text style={styles.secondaryText}>Scan another item</Text></Pressable>
   </>;
+}
+
+function ScanReadingSupport({ result, onChoose, busy }: { result: ScanResult; onChoose: (title: string) => void; busy: boolean }) {
+  const adult = result.needsAdultHelp || /hazardous|batter|electronic|sharp/i.test(`${result.category} ${result.dnrec?.title ?? ""}`);
+  return <View>
+    {result.objectClass && <Text style={styles.body}>Item type: {result.objectClass}</Text>}
+    {adult && <View style={[styles.guidanceCard, { backgroundColor: "#fff8e9" }]}><Text style={styles.sectionTitle}>Ask a grown-up for help</Text><Text style={styles.body}>Do not open, break, or empty this item. Read the official instructions together before moving it.</Text></View>}
+    <ListenButton text={[result.item, result.clarification, adult ? "Ask a grown-up for help. Do not open, break, or empty this item." : "", result.instructions, ...(result.categoryGuidance ?? []).map(g => `${g.title}. ${g.basis} ${g.instructions}`)].filter(Boolean).join(". ")} />
+    {!result.dnrec && (result.clarification || !!result.candidates?.length) && <View style={styles.guidanceCard}>
+      <Text style={styles.sectionTitle}>One more check</Text><Text style={styles.body}>{result.clarification || "Which description matches your item? Choose only if you are sure."}</Text>
+      <Text style={styles.helper}>Ask a grown-up if you are unsure. These choices are possible matches, not confirmed results.</Text>
+      {result.candidates?.map(candidate => <Pressable key={candidate.title} accessibilityRole="button" disabled={busy} style={[styles.secondaryButton, busy && styles.disabled]} onPress={() => onChoose(candidate.title)}><Text style={styles.secondaryText}>Check {candidate.title}</Text></Pressable>)}
+    </View>}
+  </View>;
 }
 
 function LearnScreen({ lessons, completed, onCompleted, initialLessonId }: { lessons: Lesson[]; completed: string[]; onCompleted: () => Promise<void>; initialLessonId?: string | null }) {
@@ -605,9 +655,9 @@ function LearnScreen({ lessons, completed, onCompleted, initialLessonId }: { les
       if (choice !== content.answer || saving) return;
       setSaving(true);
       const { error } = await supabase.rpc("complete_ecolearn_lesson", { ...learningSpace.params(), p_lesson_id: active.id, p_selected_answer: choice });
-      if (error) { setSaving(false); return Alert.alert("Could not save lesson", error.message); }
+      if (error) { setSaving(false); return AppDialog.alert("Could not save lesson", error.message); }
       await onCompleted(); setSaving(false);
-      Alert.alert(alreadyDone ? "Review complete" : "Lesson complete", alreadyDone ? "Your original progress remains saved." : `+${active.xp_reward} XP earned.`, [{ text: "Continue", onPress: closeLesson }]);
+      AppDialog.alert(alreadyDone ? "Review complete" : "Lesson complete", alreadyDone ? "Your original progress remains saved." : `+${active.xp_reward} XP earned.`, [{ text: "Continue", onPress: closeLesson }]);
     };
     return <>
       <Pressable onPress={closeLesson} style={styles.backButton}><Ionicons name="arrow-back" size={19} color="#286d3b" /><Text style={styles.backText}>All lessons</Text></Pressable>
@@ -620,7 +670,7 @@ function LearnScreen({ lessons, completed, onCompleted, initialLessonId }: { les
         <View style={styles.lessonHeroIcon}>{easy ? <Text accessible={false} style={{ fontSize: 36 }}>{simple?.symbol}</Text> : <Ionicons name={step === 0 ? "bulb-outline" : "leaf-outline"} size={30} color="#2f7b44" />}</View>
         <Text style={styles.lessonSectionTitle}>{step === 0 ? "Why this matters" : content.facts[step - 1].title}</Text>
         <Text style={[styles.lessonBody, easy && { fontSize: 20, lineHeight: 30 }]}>{step === 0 ? content.intro : content.facts[step - 1].body}</Text>
-        {!easy && step === 0 && lessonSources[active.id] && <Pressable accessibilityRole="link" style={{ minHeight: 48, justifyContent: "center", marginTop: 12 }} onPress={() => void Linking.openURL(lessonSources[active.id].url).catch(() => Alert.alert("Could not open the source", "Please try again when you have an internet connection."))}>
+        {!easy && step === 0 && lessonSources[active.id] && <Pressable accessibilityRole="link" style={{ minHeight: 48, justifyContent: "center", marginTop: 12 }} onPress={() => void Linking.openURL(lessonSources[active.id].url).catch(() => AppDialog.alert("Could not open the source", "Please try again when you have an internet connection."))}>
           <Text style={[styles.backText, { textDecorationLine: "underline" }]}>{lessonSources[active.id].title}</Text>
         </Pressable>}
       </View>}
@@ -677,8 +727,8 @@ function QuestsScreen({ progress, claims, achievements, earnedAchievementIds, on
   const claim = async (key: string) => {
     setClaiming(key);
     const { error } = await supabase.rpc("claim_ecolearn_reward", { ...learningSpace.params(), p_reward_key: key });
-    if (error) Alert.alert("Reward unavailable", error.message);
-    else { await onRefresh(); Alert.alert("Quest complete", "Your 15 XP reward was added to your progress."); }
+    if (error) AppDialog.alert("Reward unavailable", error.message);
+    else { await onRefresh(); AppDialog.alert("Quest complete", "Your 15 XP reward was added to your progress."); }
     setClaiming(null);
   };
   return <>
@@ -728,7 +778,7 @@ function ToolsScreen({ onBack }: { onBack: () => void }) {
   const lookupBarcode = async () => {
     const code = barcode.replace(/\D/g, "");
     if (code.length < 8 || code.length > 14) {
-      return Alert.alert("Enter a valid barcode", "Use the 8–14 digits below the bars.");
+      return AppDialog.alert("Enter a valid barcode", "Use the 8–14 digits below the bars.");
     }
     setBusyTool("barcode");
     setBarcodeResult(null);
@@ -742,7 +792,7 @@ function ToolsScreen({ onBack }: { onBack: () => void }) {
         guidance: typeof result?.guidance === "string" ? result.guidance : null,
       });
     } catch {
-      Alert.alert("Barcode lookup is unavailable", "Try again shortly or use item scanning.");
+      AppDialog.alert("Barcode lookup is unavailable", "Try again shortly or use item scanning.");
     } finally {
       setBusyTool(null);
     }
@@ -750,10 +800,10 @@ function ToolsScreen({ onBack }: { onBack: () => void }) {
 
   const readLabel = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return Alert.alert("Permission needed", "Allow photo access to read a label.");
+    if (!permission.granted) return AppDialog.alert("Permission needed", "Allow photo access to read a label.");
     const response = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
     if (response.canceled || !response.assets[0]) return;
-    Alert.alert(
+    AppDialog.alert(
       "Send label to AI?",
       "The image is used only to read its visible label and symbols. EcoLearn does not store it or use it for training.",
       [
@@ -780,7 +830,7 @@ function ToolsScreen({ onBack }: { onBack: () => void }) {
                   : [],
               });
             } catch {
-              Alert.alert("Could not read that label", "Use a clearer, well-lit photo and try again.");
+              AppDialog.alert("Could not read that label", "Use a clearer, well-lit photo and try again.");
             } finally {
               setBusyTool(null);
             }
@@ -792,7 +842,7 @@ function ToolsScreen({ onBack }: { onBack: () => void }) {
 
   const nearby = async () => {
     const permission = await Location.requestForegroundPermissionsAsync();
-    if (!permission.granted) return Alert.alert("Location permission needed", "Allow location access to see nearby disposal sites.");
+    if (!permission.granted) return AppDialog.alert("Location permission needed", "Allow location access to see nearby disposal sites.");
     setBusyTool("locations");
     setSites([]);
     setLocationNotice(null);
@@ -808,9 +858,9 @@ function ToolsScreen({ onBack }: { onBack: () => void }) {
       setSites(nextSites);
       setSelectedSiteId(null);
       setLocationNotice(data?.notice ?? null);
-      if (!nextSites.length) Alert.alert("No nearby matches", "Try another category or check the DSWA facility directory.");
+      if (!nextSites.length) AppDialog.alert("No nearby matches", "Try another category or check the DSWA facility directory.");
     } catch {
-      Alert.alert("Nearby search is unavailable", "Try again shortly.");
+      AppDialog.alert("Nearby search is unavailable", "Try again shortly.");
     } finally {
       setBusyTool(null);
     }
@@ -929,10 +979,10 @@ function ProfileScreen({ user, progress, achievements, earnedAchievementIds, onN
     ]);
     setSaving(false);
     if (settingError || authError) {
-      Alert.alert("Could not save profile", (settingError ?? authError)?.message);
+      AppDialog.alert("Could not save profile", (settingError ?? authError)?.message);
     } else {
       onNameSaved(clean);
-      Alert.alert("Profile updated", "Your display name is saved across EcoLearn.");
+      AppDialog.alert("Profile updated", "Your display name is saved across EcoLearn.");
     }
   };
 
@@ -944,9 +994,9 @@ function ProfileScreen({ user, progress, achievements, earnedAchievementIds, onN
       });
       if (error) throw error;
       await supabase.auth.signOut({ scope: "local" });
-      Alert.alert("Account deleted", "Your EcoLearn account and associated app data were deleted.");
+      AppDialog.alert("Account deleted", "Your EcoLearn account and associated app data were deleted.");
     } catch (error) {
-      Alert.alert(
+      AppDialog.alert(
         "Could not delete account",
         await functionErrorMessage(error, "EcoLearn could not delete your account. Please try again or use the deletion-help page."),
       );
@@ -956,7 +1006,7 @@ function ProfileScreen({ user, progress, achievements, earnedAchievementIds, onN
   };
 
   const confirmDeletion = () => {
-    Alert.alert(
+    AppDialog.alert(
       "Delete EcoLearn account?",
       "This permanently deletes your account, saved progress, settings, associated app activity, and spaces in Recently deleted that you own. This cannot be undone.",
       [
@@ -964,7 +1014,7 @@ function ProfileScreen({ user, progress, achievements, earnedAchievementIds, onN
         {
           text: "Continue",
           style: "destructive",
-          onPress: () => Alert.alert(
+          onPress: () => AppDialog.alert(
             "Permanently delete account",
             "Are you absolutely sure?",
             [
@@ -1006,7 +1056,7 @@ function ProfileScreen({ user, progress, achievements, earnedAchievementIds, onN
     <Pressable style={styles.dangerButton} onPress={confirmDeletion} disabled={saving || deleting}>
       {deleting ? <ActivityIndicator color="#a33c34" /> : <Text style={styles.dangerText}>Delete account</Text>}
     </Pressable>
-    <Pressable style={styles.signOut} onPress={() => { void (async () => { try { await unregisterPushDevice(); const { error } = await supabase.auth.signOut(); if (error) throw error; } catch (error) { Alert.alert("Could not sign out", error instanceof Error ? error.message : "Please retry."); } })(); }} disabled={deleting}>
+    <Pressable style={styles.signOut} onPress={() => { void (async () => { try { await unregisterPushDevice(); const { error } = await supabase.auth.signOut(); if (error) throw error; } catch (error) { AppDialog.alert("Could not sign out", error instanceof Error ? error.message : "Please retry."); } })(); }} disabled={deleting}>
       <Text style={styles.signOutText}>Sign out</Text>
     </Pressable>
   </>;

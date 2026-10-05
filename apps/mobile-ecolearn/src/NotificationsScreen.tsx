@@ -1,5 +1,6 @@
+import { AppDialog } from "./AppDialog";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, AppState, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, AppState, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -89,14 +90,14 @@ export function NotificationsScreen({ onOpen }: { onOpen: (path: string) => void
       if (prefs.push_enabled) await registerPushDevice(); else await unregisterPushDevice();
       const { error: problem } = await supabase.rpc("ecolearn_set_notification_preferences", { p_email: prefs.email_enabled, p_push: prefs.push_enabled, p_streak: prefs.streak_reminders, p_learning: prefs.learning_updates, p_community: prefs.community_updates, p_timezone: prefs.timezone, p_hour: prefs.reminder_hour });
       if (problem) throw new Error(problem.message);
-      setError(""); Alert.alert("Preferences saved");
-    } catch (problem) { Alert.alert("Could not save preferences", problem instanceof Error ? problem.message : "Try again."); }
+      setError(""); AppDialog.alert("Preferences saved");
+    } catch (problem) { AppDialog.alert("Could not save preferences", problem instanceof Error ? problem.message : "Try again."); }
     finally { setSaving(false); }
   };
   const mark = async (id: string | null) => {
     setSaving(true);
     const { error: problem } = await supabase.rpc("ecolearn_mark_notifications_read", { p_id: id });
-    if (problem) Alert.alert("Could not mark read", problem.message);
+    if (problem) AppDialog.alert("Could not mark read", problem.message);
     else setItems((current) => current.map((n) => !id || n.id === id ? { ...n, read_at: new Date().toISOString() } : n));
     setSaving(false);
   };

@@ -46,3 +46,72 @@ test('category results use only available official records and tolerate a missin
   assert.deepEqual(await dnrec.findDnrecCategoryGuidance(catalog([row('Paper')]), 'AirPods case'), []);
   assert.deepEqual(await dnrec.findDnrecCategoryGuidance(catalog([], new Error('offline')), 'Steno book'), []);
 });
+
+const families = [
+  ['Acme metal food tin', 'food can', ['pet food cans'], 'Pet food cans'],
+  ['BigBox shipping carton', 'corrugated box', ['corrugated cardboard'], 'Corrugated Cardboard'],
+  ['CampCo flask lid', 'metal bottle cap', ['bottle caps metal'], 'Bottle Caps - Metal'],
+  ['Bright brand desk calculator', 'calculator', ['calculator'], 'Calculator'],
+  ['HomeCo ceramic casserole', 'ceramic cookware', ['ceramic cookware'], 'Ceramic Cookware'],
+  ['Store-brand milk jug', 'milk jug', ['milk jugs'], 'Milk Jugs'],
+  ['FizzCo glass bottle', 'glass beverage bottle', ['glass bottles'], 'Glass Bottles'],
+  ['FreshCo peel', 'food scrap', ['food waste'], 'Food Waste'],
+  ['BrandX foliage', 'leaves', ['leaves'], 'Leaves'],
+  ['SoundCo receiver', 'stereo receiver', ['audio amplifiers'], 'Audio Amplifiers'],
+  ['BrightCo bulb', 'LED light bulb', ['LED light bulbs'], 'LED light bulbs'],
+  ['ArtCo coloring sticks', 'wax crayon', ['crayons'], 'Crayons'],
+  ['SportCo cycle', 'bicycle', ['bikes'], 'Bicycles'],
+  ['QuickCo brewer', 'coffee maker', ['coffee maker'], 'Coffee maker'],
+  ['Acme lotion pump bottle', 'plastic bottle', ['plastic bottles'], 'Plastic bottles'],
+  ['BookCo monthly issue', 'magazine', ['magazines'], 'Magazines'],
+  ['BrandCo snack wrapper', 'candy wrapper', ['candy wrappers'], 'Candy wrappers'],
+  ['GardenCo flexible tube', 'garden hose', ['garden hose'], 'Garden Hose'],
+];
+for (const [observedItem, catalogQuery, variants, title] of families) {
+  test(`generic classification and equivalents match ${title}`, async () => {
+    const official = { ...row(title), synonyms: title === 'Bicycles' ? [{synonym:'Bikes'}] : [] };
+    const queries = dnrec.buildDnrecIdentificationQueries({observedItem,catalogQuery,material:'',variants});
+    const result = await dnrec.findDelawareGuidance(catalog([official, row('Unrelated item',2)]), queries);
+    assert.equal(result.match?.row.title,title);
+    assert.equal(dnrec.hasUniqueDnrecMatch(result),true);
+  });
+}
+test('conflicting exact variants never select the alphabetical winner', () => {
+  const result=dnrec.lookupDnrecRows([row('Glass Bottles'),row('Glass Drinkware',2)],['glass bottles','glass drinkware']);
+  assert.equal(dnrec.hasUniqueDnrecMatch(result),false);
+});
+test('untrusted variants are bounded and broad category hints cannot invent advice', () => {
+  assert.deepEqual(dnrec.boundedNames('Paper'),[]);
+  assert.deepEqual(dnrec.boundedNames([null,{},'',' Paper ','Paper']),['Paper']);
+  assert.equal(dnrec.boundedNames(Array.from({length:100},(_,i)=>'x'.repeat(200)+i)).length,1);
+  const found=dnrec.relatedDnrecGuidance([row('Electronics'),row('Paper',2)],['Imaginary recyclable','Electronics']);
+  assert.deepEqual(found.map(g=>g.title),['Electronics']);
+  assert.equal(found[0].matchConfidence,0);
+});
+test('safety distinctions survive material and name normalization', () => {
+  for(const [name,target,hazard] of [
+    ['silicone protective phone cover','Cell Phones','none'],
+    ['full aerosol spray can','Aluminum cans','chemical'],
+    ['pesticide bottle','Plastic bottles','chemical'],
+    ['compostable plate','Paper Plates','none'],
+    ['ceramic glass-look jar','Glass Jars','none'],
+    ['greasy pizza box','Pizza Box Lids - Clean','none'],
+    ['motor oil container','Plastic bottles','chemical'],
+  ]) assert.equal(dnrec.compatibleDnrecItem(name,target,hazard),false,name);
+});
+test('missing condition, binding, or resin requires clarification', () => {
+  for(const [name,title] of [['spray can','Aerosol Cans - Empty'],['notebook','Spiral-bound notebooks'],['plastic cup','Plastic cups #5'],['pizza box','Pizza Box Lids - Clean']]) assert.ok(dnrec.dnrecClarification(name,row(title)),title);
+  assert.equal(dnrec.dnrecClarification('empty aerosol can',row('Aerosol Cans - Empty')),null);
+});
+test('catalog freshness is bounded and full official instructions are preserved', () => {
+  const now=Date.now();
+  assert.equal(dnrec.isFreshDnrecRecord({...row('Paper'),synced_at:new Date(now-1000).toISOString()},now),true);
+  for(const date of [undefined,'invalid',new Date(now+1000).toISOString(),new Date(now-49*3600000).toISOString()]) assert.equal(dnrec.isFreshDnrecRecord({...row('Paper'),synced_at:date},now),false);
+  const text='Official instructions. '.repeat(150)+'Keep the important final instruction.';
+  assert.equal(dnrec.toGuidancePayload({row:{...row('Paper'),content_text:text},score:1}).instructions,text);
+});
+
+test('an exact item title wins over a merely similar longer title',()=>{
+ const result=dnrec.lookupDnrecRows([row('Paper Cups'),row('Paper Coffee Cups',2)],'Paper Cups');
+ assert.equal(result.match.row.title,'Paper Cups');assert.equal(dnrec.hasUniqueDnrecMatch(result),true);
+});

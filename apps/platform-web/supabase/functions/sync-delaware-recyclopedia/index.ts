@@ -63,6 +63,8 @@ serve(async (request) => {
   );
   const payload = await request.json().catch(() => ({}));
   const force = payload?.force === true;
+  const offset = payload?.offset ?? 0;
+  if (!Number.isInteger(offset) || offset < 0 || offset > 10_000) return Response.json({ error: "Invalid offset" }, { status: 400, headers: cors });
   const { data: run, error: runError } = await admin
     .from("delaware_guidance_sync_runs")
     .insert({ status: "running" })
@@ -74,11 +76,14 @@ serve(async (request) => {
     const listing = await fetchJson<{ data: TopicSummary[] }>(
       `${DNREC_API_BASE}/topic?_with=tags,synonyms&_sort=topic&per_page=1000`,
     );
-    const topics = listing.data ?? [];
-    const { data: existing } = await admin
+    const allTopics = listing.data ?? [];
+    const topics = allTopics.slice(offset, offset + 32);
+    const nextOffset = offset + topics.length < allTopics.length ? offset + topics.length : null;
+    const { data: existing, error: existingError } = await admin
       .from("delaware_guidance_items")
       .select("source_topic_id,source_updated_at")
       .in("source_topic_id", topics.map((topic) => topic.topic_id));
+    if (existingError) throw existingError;
     const known = new Map((existing ?? []).map((item) => [item.source_topic_id, item.source_updated_at]));
     const needed = topics.filter((topic) => force || known.get(topic.topic_id) !== (topic.updated_at ?? null));
     const errors: string[] = [];
@@ -124,6 +129,15 @@ serve(async (request) => {
       if (error) throw error;
     }
 
+    // An unchanged record was still checked against today's official listing.
+    // Mark it fresh without downloading its detail again.
+    const unchanged = topics.filter(topic => !force && known.has(topic.topic_id) && known.get(topic.topic_id) === (topic.updated_at ?? null));
+    if (unchanged.length) {
+      const { error } = await admin.from("delaware_guidance_items")
+        .update({ synced_at: new Date().toISOString() }).in("source_topic_id", unchanged.map(topic => topic.topic_id));
+      if (error) throw error;
+    }
+
     await admin.from("delaware_guidance_sync_runs").update({
       // A few failed detail requests should not hide a successful import of the
       // remaining official records. The response retains those errors for review.
@@ -139,6 +153,8 @@ serve(async (request) => {
       source: "Delaware DNREC Recyclopedia",
       sourceUrl: DNREC_RECYLOPEDIA_URL,
       topicsSeen: topics.length,
+      totalTopics: allTopics.length,
+      nextOffset,
       updated: rows.length,
       skipped: topics.length - needed.length,
       errors: errors.slice(0, 25),

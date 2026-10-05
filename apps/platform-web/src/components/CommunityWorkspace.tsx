@@ -1,3 +1,4 @@
+import { appDialog } from "@/lib/app-dialog";
 import { StudentPreview } from "./StudentPreview";
 import { learningSpace } from "./LearningSpace";
 import {
@@ -782,21 +783,11 @@ function SafetyActions({
   action: Action;
 }) {
   if (!createdBy || createdBy === hub.user?.id) return null;
-  const report = () => {
-    const entered = window.prompt(
-      `Why are you reporting this ${targetType}?\n\nEnter: inappropriate, bullying, spam, privacy, or other`,
-      "inappropriate",
-    );
+  const report = async () => {
+    const entered = await appDialog.prompt(`Report this ${targetType}`, reportReasons.map(([value]) => value));
     if (!entered) return;
-    const reason = entered.trim().toLowerCase() as ModerationReport["reason"];
-    if (!reportReasons.some(([value]) => value === reason)) {
-      window.alert("Choose inappropriate, bullying, spam, privacy, or other.");
-      return;
-    }
-    const details = window.prompt(
-      "Add optional details for the community moderator (500 characters maximum).",
-      "",
-    );
+    const reason = entered as ModerationReport["reason"];
+    const details = await appDialog.prompt("Anything else the moderator should know?");
     if (details === null) return;
     void action(
       `report-${targetId}`,
@@ -804,9 +795,9 @@ function SafetyActions({
       "Report sent to the community moderator",
     );
   };
-  const block = () => {
+  const block = async () => {
     if (
-      !window.confirm(
+      !await appDialog.confirm(
         `Block ${creatorAlias}? Their announcements and events will disappear for you. You can unblock them from Safety & moderation.`,
       )
     )
@@ -1272,7 +1263,7 @@ function SchoolDetail({
                         <td>{student.scans}</td>
                         <td>{student.lessons}</td>
                         <td>{student.streak}d</td>
-                        <td><button className="text-xs underline" disabled={busy !== null} onClick={() => { if (window.confirm(`Remove ${student.alias} from this classroom? Their learning progress is kept.`)) void action("remove-member", () => hub.removeMember(selectedClassroom.id, student.user_id), "Member removed"); }}>Remove member</button></td>
+                        <td><button className="text-xs underline" disabled={busy !== null} onClick={async () => { if (await appDialog.confirm(`Remove ${student.alias} from this classroom? Their learning progress is kept.`, "Remove classroom member?", "Remove member", true)) void action("remove-member", () => hub.removeMember(selectedClassroom.id, student.user_id), "Member removed"); }}>Remove member</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1554,7 +1545,7 @@ function SpaceActions({ scope, space, canDelete, canLeave, hub, action, busy }: 
 }
 
 function DeleteContent({ kind, id, hub, busy, action }: { kind: "announcement" | "assignment" | "event"; id: string; hub: HubController; busy: string | null; action: Action }) {
-  return <button className={`${secondary} mt-3`} disabled={busy !== null} onClick={() => { if (window.confirm(`Delete this ${kind}? This cannot be undone.`)) void action(`delete-${id}`, () => hub.deleteContent(kind, id), `${kind} deleted`); }}>Delete {kind}</button>;
+  return <button className={`${secondary} mt-3`} disabled={busy !== null} onClick={async () => { if (await appDialog.confirm("This cannot be undone.", `Delete ${kind}?`, "Delete", true)) void action(`delete-${id}`, () => hub.deleteContent(kind, id), `${kind} deleted`); }}>Delete {kind}</button>;
 }
 
 function ClassroomAnnouncements({ classroom, hub, busy, action, canManage }: { classroom: Classroom; hub: HubController; busy: string | null; action: Action; canManage: boolean }) {

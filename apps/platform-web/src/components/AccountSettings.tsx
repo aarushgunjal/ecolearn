@@ -1,3 +1,4 @@
+import { appDialog } from "@/lib/app-dialog";
 import { useCallback, useEffect, useState } from "react";
 import { useCommunityHub } from "@/hooks/useCommunityHub";
 import { supabase } from "@/integrations/supabase/client";
@@ -246,9 +247,9 @@ export function AccountSettings() {
                       key={String(approve)}
                       disabled={busy}
                       className="mr-4 min-h-11 underline"
-                      onClick={() => {
+                      onClick={async () => {
                         if (
-                          window.confirm(
+                          await appDialog.confirm(
                             `${approve ? "Approve" : "Decline"} this teacher request for ${request.organization}?`,
                           )
                         )

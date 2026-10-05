@@ -1,10 +1,10 @@
+import { AppDialog } from "./AppDialog";
 import { StudentPreview } from "./StudentPreview";
 import { learningSpace } from "./LearningSpace";
 import { DeletedSpaces } from "./DeletedSpaces";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   KeyboardAvoidingView,
@@ -250,11 +250,11 @@ export function CommunityScreen({
       );
   }, [hub.classrooms, selectedClassroom]);
 
-  const deleteContent = (kind: "announcement" | "assignment" | "event", id: string) => Alert.alert(`Delete ${kind}?`, "This cannot be undone.", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => void run("ecolearn_delete_content", { p_kind: kind, p_id: id }, `${kind} deleted`) }]);
+  const deleteContent = (kind: "announcement" | "assignment" | "event", id: string) => AppDialog.alert(`Delete ${kind}?`, "This cannot be undone.", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => void run("ecolearn_delete_content", { p_kind: kind, p_id: id }, `${kind} deleted`) }]);
   const managesClass = (id: string) => hub.classrooms.some((room) => room.id === id && room.role === "teacher");
   const managesCommunity = (id: string) => hub.communities.some((community) => community.id === id && community.role !== "member");
   const confirmSpace = (scope: "community" | "classroom", id: string, name: string, remove: boolean) => {
-    Alert.alert(`${remove ? "Delete" : "Leave"} ${name}?`, remove ? `Hide this ${scope}${scope === "community" ? " and its classrooms" : ""}? You can restore it from Recently deleted for seven days. After that it is permanently removed. Individual learning progress is kept.` : "You will lose access to this space.", [
+    AppDialog.alert(`${remove ? "Delete" : "Leave"} ${name}?`, remove ? `Hide this ${scope}${scope === "community" ? " and its classrooms" : ""}? You can restore it from Recently deleted for seven days. After that it is permanently removed. Individual learning progress is kept.` : "You will lose access to this space.", [
       { text: "Cancel", style: "cancel" }, { text: remove ? "Delete" : "Leave", style: "destructive", onPress: () => void run(remove ? "ecolearn_delete_space" : "ecolearn_leave_space", { p_scope: scope, p_scope_id: id }, remove ? "Space deleted" : "You left the space") },
     ]);
   };
@@ -294,13 +294,13 @@ export function CommunityScreen({
       if (name === "ecolearn_create_announcement") { setClassTitle(""); setClassBody(""); setAnnouncementTitle(""); setAnnouncementBody(""); }
       if (name === "ecolearn_join_space") setJoinCode("");
       const code = data && typeof data === "object" && "join_code" in data ? String((data as { join_code: unknown }).join_code) : null;
-      Alert.alert(success, code ? `Share join code ${code} with the people you invite.` : "Your changes are saved.");
+      AppDialog.alert(success, code ? `Share join code ${code} with the people you invite.` : "Your changes are saved.");
       return true;
-    } catch (error) { Alert.alert("Could not save", error instanceof Error ? error.message : "Check your connection and retry."); return false; }
+    } catch (error) { AppDialog.alert("Could not save", error instanceof Error ? error.message : "Check your connection and retry."); return false; }
     finally { setSaving(false); }
   };
   const copyCode = (code?: string | null) =>
-    code && Alert.alert("Join code", code);
+    code && AppDialog.alert("Join code", code);
   const createTeacherInvite = async (classroomId: string) => {
     setSaving(true);
     const { data, error: requestError } = await supabase.rpc(
@@ -313,15 +313,15 @@ export function CommunityScreen({
     );
     setSaving(false);
     if (requestError)
-      return Alert.alert("Could not create invitation", requestError.message);
-    Alert.alert(
+      return AppDialog.alert("Could not create invitation", requestError.message);
+    AppDialog.alert(
       "Private teacher invitation",
       `Share ${String(data)} only with an authorized educator.`,
     );
   };
   const reportContent = (type: "announcement" | "event", id: string) => setReportDraft({ type, id, reason: "inappropriate", details: "" });
   const blockUser = (userId: string, name: string) =>
-    Alert.alert(
+    AppDialog.alert(
       `Block ${name}?`,
       "Their announcements and events will disappear for you. You can unblock them from Safety & moderation.",
       [
@@ -904,7 +904,7 @@ export function CommunityScreen({
                 </Text>
               </View>
               <Text style={s.xp}>{student.xp} XP</Text>
-              {managedClassroom && <Pressable disabled={saving} onPress={() => Alert.alert(`Remove ${student.alias}?`, "Remove classroom access? Learning progress is kept.", [{ text: "Cancel", style: "cancel" }, { text: "Remove", style: "destructive", onPress: () => void run("ecolearn_remove_classroom_member", { p_classroom_id: managedClassroom.id, p_user_id: student.user_id }, "Member removed") }])}><Text style={s.link}>Remove member</Text></Pressable>}
+              {managedClassroom && <Pressable disabled={saving} onPress={() => AppDialog.alert(`Remove ${student.alias}?`, "Remove classroom access? Learning progress is kept.", [{ text: "Cancel", style: "cancel" }, { text: "Remove", style: "destructive", onPress: () => void run("ecolearn_remove_classroom_member", { p_classroom_id: managedClassroom.id, p_user_id: student.user_id }, "Member removed") }])}><Text style={s.link}>Remove member</Text></Pressable>}
             </View>
           ))}
         </>
@@ -1083,7 +1083,7 @@ export function CommunityScreen({
                       style={s.removeButton}
                       disabled={saving}
                       onPress={() =>
-                        Alert.alert(
+                        AppDialog.alert(
                           "Remove this content?",
                           "It will immediately disappear for all members.",
                           [

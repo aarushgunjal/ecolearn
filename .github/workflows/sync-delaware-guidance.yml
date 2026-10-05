@@ -25,8 +25,20 @@ jobs:
         run: |
           test -n "$SUPABASE_FUNCTIONS_URL"
           test -n "$DNREC_SYNC_SECRET"
-          curl --fail-with-body --retry 3 --retry-all-errors --retry-delay 5 \
-            -X POST "$SUPABASE_FUNCTIONS_URL/sync-delaware-recyclopedia" \
-            -H "Content-Type: application/json" \
-            -H "x-dnrec-sync-secret: $DNREC_SYNC_SECRET" \
-            --data "{\"force\":$FORCE}"
+          offset=0
+          while true; do
+            response=$(curl --silent --show-error --fail-with-body --retry 3 --retry-all-errors --retry-delay 5 --max-time 140 \
+              -X POST "$SUPABASE_FUNCTIONS_URL/sync-delaware-recyclopedia" \
+              -H "Content-Type: application/json" \
+              -H "x-dnrec-sync-secret: $DNREC_SYNC_SECRET" \
+              --data "{\"force\":$FORCE,\"offset\":$offset}")
+            echo "$response" | jq '{topicsSeen,totalTopics,updated,skipped,nextOffset,errors}'
+            if [ "$(echo "$response" | jq '.errors | length')" -gt 0 ]; then
+              echo "Some official records could not be refreshed. Retry this job."
+              exit 1
+            fi
+            next=$(echo "$response" | jq -r '.nextOffset')
+            if [ "$next" = "null" ]; then break; fi
+            if ! [[ "$next" =~ ^[0-9]+$ ]] || [ "$next" -le "$offset" ]; then exit 1; fi
+            offset=$next
+          done

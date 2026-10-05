@@ -1,3 +1,4 @@
+import { ListenButton } from "@/components/LearningSupport";
 import { learningSpace } from "@/components/LearningSpace";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -26,6 +27,10 @@ import { DSWAVideoCard } from "@/components/DSWAVideoCard";
 import { videosForScan } from "@/data/dswaVideos";
 
 type ScanResult = {
+  objectClass?: string;
+  clarification?: string | null;
+  needsAdultHelp?: boolean;
+  candidates?: Array<{ title: string }>;
   item: string;
   recyclable: boolean;
   confidence: number;
@@ -40,6 +45,10 @@ type ScanResult = {
 };
 
 type VisionScanResponse = {
+  objectClass?: string;
+  clarification?: string | null;
+  needsAdultHelp?: boolean;
+  candidates?: Array<{ title: string }>;
   verified: boolean;
   categoryGuidance?: Array<DelawareGuidance & { basis: string }>;
   guidance: DelawareGuidance | null;
@@ -309,6 +318,10 @@ export default function Scanner() {
               "Follow the full official item protocol",
               "Use Delaware locations for nearby options",
             ],
+            objectClass: identified.objectClass,
+            clarification: identified.clarification,
+            needsAdultHelp: identified.needsAdultHelp,
+            candidates: identified.candidates,
             imageStatus: identified.imageStatus,
             material: identified.material,
             visibleEvidence: identified.visibleEvidence,
@@ -323,6 +336,10 @@ export default function Scanner() {
               : "No official DNREC match",
             instructions: identified.message,
             tips: identified.nextSteps,
+            objectClass: identified.objectClass,
+            clarification: identified.clarification,
+            needsAdultHelp: identified.needsAdultHelp,
+            candidates: identified.candidates,
             imageStatus: identified.imageStatus,
             material: identified.material,
             visibleEvidence: identified.visibleEvidence,
@@ -350,7 +367,7 @@ export default function Scanner() {
     setSuggestions([]);
     setResult(null);
     setIsScanning(true);
-    window.setTimeout(() => void lookup(searchQuery, "typed_search").then(finish), 550);
+    void lookup(searchQuery, "typed_search").then(finish);
   };
 
   const chooseSuggestion = (title: string) => {
@@ -360,7 +377,7 @@ export default function Scanner() {
     setSuggestions([]);
     setResult(null);
     setIsScanning(true);
-    window.setTimeout(() => void lookup(title, "suggestion").then(finish), 100);
+    void lookup(title, "suggestion").then(finish);
   };
 
   const reset = () => {
@@ -537,7 +554,7 @@ export default function Scanner() {
                   </p>
                 </div>
               )}
-              {result && <ResultCard result={result} reset={reset} imageUrl={uploadedImage} />}
+              {result && <ResultCard result={result} reset={reset} imageUrl={uploadedImage} onChoose={chooseSuggestion} />}
             </div>
           </div>
         </div>
@@ -603,10 +620,12 @@ function ResultCard({
   result,
   reset,
   imageUrl,
+  onChoose,
 }: {
   result: ScanResult;
   reset: () => void;
   imageUrl: string | null;
+  onChoose: (title: string) => void;
 }) {
   const good = Boolean(result.dnrec?.curbside);
   const multipleItems = result.imageStatus === "multiple_items";
@@ -632,7 +651,7 @@ function ResultCard({
           <div
             className={`grid aspect-square place-items-center rounded-2xl ${good ? "bg-[#e5f4df] text-[#307b43]" : "bg-[#fff0ed] text-[#d85f52]"}`}
           >
-            {good ? <Recycle size={51} /> : <Trash2 size={51} />}
+            {good ? <Recycle size={51} /> : <CircleHelp size={51} />}
           </div>
         )}
         <div>
@@ -646,7 +665,7 @@ function ResultCard({
           <div
             className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-bold ${good ? "bg-[#e5f4df] text-[#287540]" : "bg-[#fff0ed] text-[#c84c40]"}`}
           >
-            {good ? <Recycle size={16} /> : <Trash2 size={16} />}
+            {good ? <Recycle size={16} /> : <CircleHelp size={16} />}
             {result.dnrec
               ? "Official DNREC record"
               : multipleItems
@@ -655,6 +674,17 @@ function ResultCard({
           </div>
         </div>
       </div>
+      {result.objectClass && <p className="mt-4 text-base text-[#52665a]">Item type: {result.objectClass}</p>}
+      {(result.needsAdultHelp || /hazardous|batter|electronic|sharp/i.test(`${result.category} ${result.dnrec?.title ?? ""}`)) && <aside aria-label="Grown-up help" className="mt-4 rounded-2xl border border-[#e5ca9b] bg-[#fff8e9] p-5">
+        <h4 className="text-lg font-semibold">Ask a grown-up for help</h4><p className="mt-2 text-base leading-7">Do not open, break, or empty this item. Read the official instructions together before moving it.</p>
+      </aside>}
+      <ListenButton text={[result.item, result.clarification, result.needsAdultHelp ? "Ask a grown-up for help. Do not open, break, or empty this item." : "", result.instructions, ...(result.categoryGuidance ?? []).map(g => `${g.title}. ${g.basis} ${g.instructions}`)].filter(Boolean).join(". ")} />
+      {!result.dnrec && (result.clarification || !!result.candidates?.length) && <section aria-label="Check the item type" className="mt-4 rounded-2xl border border-[#cbdcc5] bg-white p-5">
+        <h4 className="text-lg font-semibold">One more check</h4>
+        <p className="mt-2 text-base leading-7">{result.clarification || "Which description matches your item? Choose only if you are sure."}</p>
+        <p className="mt-2 text-sm text-[#52665a]">Ask a grown-up if you are unsure. These choices are possible matches, not confirmed results.</p>
+        <div className="mt-4 flex flex-col gap-3">{result.candidates?.map(candidate => <button key={candidate.title} type="button" onClick={() => onChoose(candidate.title)} className="min-h-12 rounded-xl border border-[#bdd4b5] px-4 py-3 text-left font-semibold">Check {candidate.title}</button>)}</div>
+      </section>}
       <div className="mt-6 rounded-2xl border border-[#e4e9e1] bg-[#fafcf9] p-5">
         <p className="text-xs font-bold uppercase tracking-[.14em] text-[#7d8a80]">
           {result.dnrec ? `DNREC: ${result.dnrec.title}` : "What happens next"}

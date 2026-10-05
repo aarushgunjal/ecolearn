@@ -16,6 +16,7 @@ export type DelawareGuidanceRow = {
   search_terms: string[];
   source_updated_at: string | null;
   source_url: string;
+  synced_at?: string;
 };
 
 const singularizeDnrecToken = (token: string) => {
@@ -111,18 +112,76 @@ export async function findDnrecCategoryGuidance(client: SupabaseClient, item: st
   }));
 }
 
-export const buildDnrecIdentificationQueries = ({
-  observedItem,
-  catalogQuery,
-  material,
-}: {
-  observedItem: string;
-  catalogQuery: string;
-  material: string;
+// Only equivalent object names belong in exact matching. Broad classes are
+// checked separately and never become verified item matches.
+export const boundedNames = (value: unknown, limit = 6): string[] =>
+  Array.isArray(value) ? Array.from(new Set(value.filter((v): v is string => typeof v === "string")
+    .map(v => v.trim().slice(0, 100)).filter(Boolean))).slice(0, limit) : [];
+
+export const buildDnrecIdentificationQueries = ({ observedItem, catalogQuery, material, variants = [] }: {
+  observedItem: string; catalogQuery: string; material: string; variants?: unknown;
 }) => Array.from(new Set([
   ...buildDnrecCatalogQueries(catalogQuery || observedItem, material),
   ...buildDnrecCatalogQueries(observedItem, material),
-]));
+  ...boundedNames(variants).map(normalizeDnrecText),
+])).filter(Boolean);
+
+export const hasUniqueDnrecMatch = (lookup: { match: { row: DelawareGuidanceRow; score: number } | null; candidates: { row: DelawareGuidanceRow; score: number }[] }) => {
+  const best = lookup.match;
+  const next = lookup.candidates.find(entry => entry.row.source_topic_id !== best?.row.source_topic_id);
+  // Two exact aliases pointing at different records are still ambiguous.
+  return Boolean(best && best.score >= 0.84 && (!next || (best.score >= 0.96 ? next.score < 0.96 : best.score - next.score >= 0.12)));
+};
+
+// A candidate must retain visible safety distinctions, including on an exact
+// alias hit. A bottle/can's contents and a device's cover are different objects.
+export const compatibleDnrecItem = (name: string, query: string, possibleHazard = "none") => {
+  const observed = normalizeDnrecText(name);
+  const target = normalizeDnrecText(query);
+  const groups = [
+    /\b(protective|cover|sleeve)\b/, /\b(aerosol|spray can)\b/,
+    /\b(compostable|biodegradable)\b/, /\b(ceramic|porcelain)\b/,
+    /\b(laminated|waxed|plastic coated)\b/,
+    /\b(mirror)\b/, /\b(pesticide|herbicide)\b/, /\b(motor oil|engine oil)\b/,
+    /\b(paint)\b/, /\b(broken|shard)\b/,
+  ];
+  if (groups.some(group => group.test(observed) && !group.test(target))) return false;
+  if (/\b(full|liquid|filled)\b/.test(observed) && /\bempty\b/.test(target)) return false;
+  if (/\bempty\b/.test(observed) && /\bfull\b/.test(target)) return false;
+  if (/\b(greasy|soiled|dirty)\b/.test(observed) && /\bclean\b/.test(target)) return false;
+  // A hazardous item can never be reduced to a generic curbside material.
+  if (!["none", "unknown", ""].includes(possibleHazard) &&
+    /^(paper|cardboard|glass|plastic|metal|aluminum)( (can|bottle|jar|container|packaging))?$/.test(target)) return false;
+  return true;
+};
+
+export const dnrecClarification = (observed: string, row: DelawareGuidanceRow) => {
+  const name = normalizeDnrecText(observed);
+  const title = normalizeDnrecText(row.title);
+  const distinctions: [RegExp, string][] = [
+    [/\b(empty|full)\b/, "Is it empty or does it still have something inside? Do not open it to check."],
+    [/\b(clean|greasy)\b/, "Is the paper or cardboard clean, or does it have food or grease on it?"],
+    [/\b(latex|oil based)\b/, "What kind of paint does the label say? Ask a grown-up to check."],
+    [/\b(spiral|composition|hardcover|paperback)\b/, "What kind of binding or cover does the book have?"],
+  ];
+  for (const [pattern, question] of distinctions) if (pattern.test(title) && !pattern.test(name)) return question;
+  if (/plastic cup/.test(title) && /\b[1-7]\b/.test(title) && !/\b[1-7]\b/.test(name)) return "Can you see a number inside the recycling symbol? Ask a grown-up to check.";
+  return null;
+};
+
+export const relatedDnrecGuidance = (rows: DelawareGuidanceRow[], names: unknown) => {
+  const wanted = boundedNames(names, 3).map(normalizeDnrecText);
+  return rows.filter(row => wanted.some(name => termsFor(row).includes(name)) && row.content_text.trim())
+    .filter(row => !/acceptable to recycle curbside/i.test(row.title))
+    .slice(0, 3).map(row => ({ ...toGuidancePayload({ row, score: 0 }),
+      basis: `This may belong to the ${row.title} category. Check the item type and preparation details below with a grown-up if you need help.`,
+    }));
+};
+
+export const isFreshDnrecRecord = (row: DelawareGuidanceRow, now = Date.now()) => {
+  const age = now - Date.parse(row.synced_at ?? "");
+  return Number.isFinite(age) && age >= 0 && age < 48 * 60 * 60_000 && Boolean(row.content_text.trim());
+};
 
 export const stripHtml = (value: string) =>
   value
@@ -176,7 +235,7 @@ const scoreTerm = (query: string, term: string) => {
   );
 };
 
-const rankGuidance = (rows: DelawareGuidanceRow[], item: string | string[]) => {
+export const rankGuidance = (rows: DelawareGuidanceRow[], item: string | string[]) => {
   const queries = Array.from(new Set(
     (Array.isArray(item) ? item : buildDnrecCatalogQueries(item))
       .map(normalizeDnrecText)
@@ -209,14 +268,21 @@ export const guidanceCategory = (tags: DnrecTag[]) => {
 export const isCurbside = (tags: DnrecTag[]) =>
   tags.some((tag) => (tag.tag ?? "").toLowerCase().includes("acceptable to recycle curbside") && !(tag.tag ?? "").toLowerCase().includes("not acceptable"));
 
-export async function findDelawareGuidance(client: SupabaseClient, item: string | string[]) {
-  const { data, error } = await client
-    .from("delaware_guidance_items")
-    .select("source_topic_id,title,seo_name,content_text,tags,synonyms,search_terms,source_updated_at,source_url");
+export async function loadDnrecCatalog(client: SupabaseClient) {
+  const { data, error } = await client.from("delaware_guidance_items")
+    .select("source_topic_id,title,seo_name,content_text,tags,synonyms,search_terms,source_updated_at,source_url,synced_at");
   if (error) throw error;
-  const ranked = rankGuidance((data ?? []) as DelawareGuidanceRow[], item);
+  return (data ?? []) as DelawareGuidanceRow[];
+}
+
+export const lookupDnrecRows = (rows: DelawareGuidanceRow[], item: string | string[]) => {
+  const ranked = rankGuidance(rows, item);
   const best = ranked[0];
   return { match: best && best.score >= 0.72 ? best : null, candidates: ranked.slice(0, 5) };
+};
+
+export async function findDelawareGuidance(client: SupabaseClient, item: string | string[]) {
+  return lookupDnrecRows(await loadDnrecCatalog(client), item);
 }
 
 type LiveTopic = {
@@ -238,18 +304,26 @@ const fetchDnrecJson = async <T,>(url: string) => {
   return await response.json() as T;
 };
 
+let liveTopicsInFlight: Promise<LiveTopic[]> | null = null;
+const detailCache = new Map<number, { expiresAt: number; value: Promise<LiveTopic> }>();
+
 let liveTopicCache: { expiresAt: number; topics: LiveTopic[] } | null = null;
 
 const loadLiveTopics = async () => {
   if (liveTopicCache && liveTopicCache.expiresAt > Date.now()) {
     return liveTopicCache.topics;
   }
-  const listing = await fetchDnrecJson<{ data: LiveTopic[] }>(
-    `${DNREC_API_BASE}/topic?_with=tags,synonyms&_sort=topic&per_page=1000`,
-  );
-  const topics = listing.data ?? [];
-  liveTopicCache = { topics, expiresAt: Date.now() + 5 * 60_000 };
-  return topics;
+  if (!liveTopicsInFlight) {
+    liveTopicsInFlight = (async () => {
+      const listing = await fetchDnrecJson<{ data: LiveTopic[] }>(
+        `${DNREC_API_BASE}/topic?_with=tags,synonyms&_sort=topic&per_page=1000`,
+      );
+      const topics = listing.data ?? [];
+      liveTopicCache = { topics, expiresAt: Date.now() + 5 * 60_000 };
+      return topics;
+    })().finally(() => { liveTopicsInFlight = null; });
+  }
+  return liveTopicsInFlight;
 };
 
 const liveTopicToRow = (topic: LiveTopic): DelawareGuidanceRow => ({
@@ -265,6 +339,7 @@ const liveTopicToRow = (topic: LiveTopic): DelawareGuidanceRow => ({
     ...(topic.synonyms ?? []).map((entry) => entry.synonym ?? ""),
   ].map(normalizeDnrecText).filter(Boolean))),
   source_updated_at: topic.updated_at ?? null,
+  synced_at: new Date().toISOString(),
   source_url: `${DNREC_RECYLOPEDIA_URL}#/topic/${topic.seo_name}`,
 });
 
@@ -276,9 +351,18 @@ export async function findLiveDelawareGuidance(item: string | string[], includeD
   if (!best || best.score < 0.72) return { match: null, candidates: ranked.slice(0, 5) };
   if (!includeDetail) return { match: best, candidates: ranked.slice(0, 5) };
 
-  const detail = await fetchDnrecJson<LiveTopic>(
-    `${DNREC_API_BASE}/topic/${best.row.source_topic_id}?_with=tags,synonyms&_sort=tags.tag&tags-system-not=1`,
-  );
+  let cached = detailCache.get(best.row.source_topic_id);
+  if (!cached || cached.expiresAt <= Date.now()) {
+    // Public catalog records only. Photos, user identities, and model output
+    // are never cached. Failed requests are evicted so the next call can retry.
+    const id = best.row.source_topic_id;
+    const value = fetchDnrecJson<LiveTopic>(`${DNREC_API_BASE}/topic/${id}?_with=tags,synonyms&_sort=tags.tag&tags-system-not=1`)
+      .catch(error => { detailCache.delete(id); throw error; });
+    cached = { expiresAt: Date.now() + 5 * 60_000, value };
+    if (detailCache.size >= 128) detailCache.delete(detailCache.keys().next().value!);
+    detailCache.set(id, cached);
+  }
+  const detail = await cached.value;
   return {
     match: { row: liveTopicToRow(detail), score: best.score },
     candidates: ranked.slice(0, 5),
@@ -291,7 +375,7 @@ export const toGuidancePayload = (entry: { row: DelawareGuidanceRow; score: numb
   matchConfidence: Math.round(entry.score * 100),
   category: guidanceCategory(entry.row.tags ?? []),
   curbside: isCurbside(entry.row.tags ?? []),
-  instructions: entry.row.content_text.slice(0, 2_000),
+  instructions: entry.row.content_text,
   tags: (entry.row.tags ?? []).map((tag) => tag.tag).filter(Boolean),
   sourceName: "Delaware DNREC Recyclopedia",
   sourceUrl: entry.row.source_url || `${DNREC_RECYLOPEDIA_URL}#/topic/${entry.row.seo_name}`,

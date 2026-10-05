@@ -1,6 +1,6 @@
+import { AppDialog } from "./AppDialog";
 import { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -62,7 +62,7 @@ export function AccountSettings() {
       const r = await supabase.rpc(name, params);
       if (r.error) throw new Error(r.error.message);
       await refresh();
-      Alert.alert(success);
+      AppDialog.alert(success);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Please retry.");
     } finally {
@@ -141,7 +141,7 @@ export function AccountSettings() {
                       <Pressable
                         disabled={busy || managed > 0}
                         onPress={() =>
-                          Alert.alert(
+                          AppDialog.alert(
                             "Change to a student account?",
                             "Give up teacher access? Your personal learning progress is kept.",
                             [
@@ -231,7 +231,7 @@ export function AccountSettings() {
                             key={String(approve)}
                             disabled={busy}
                             onPress={() =>
-                              Alert.alert(
+                              AppDialog.alert(
                                 `${approve ? "Approve" : "Decline"} teacher access?`,
                                 r.organization,
                                 [

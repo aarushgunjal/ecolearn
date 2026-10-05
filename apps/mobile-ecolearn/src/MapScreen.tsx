@@ -1,7 +1,7 @@
+import { AppDialog } from "./AppDialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Pressable,
   StyleSheet,
@@ -71,7 +71,7 @@ export function MapScreen({
     const officialItem = (itemOverride ?? itemQuery).trim();
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted)
-      return Alert.alert(
+      return AppDialog.alert(
         "Location permission needed",
         "Allow location access to search for nearby Delaware disposal sites.",
       );
@@ -102,14 +102,14 @@ export function MapScreen({
       setSearchedFor(officialItem || categories.find(([value]) => value === siteType)?.[1] || "Recycling");
       setNotice(data?.notice ?? null);
       if (!results.length)
-        Alert.alert(
+        AppDialog.alert(
           "No nearby matches",
           officialItem
             ? `No mapped locations were returned for ${officialItem}. Review its official protocol or try a broader service category.`
             : "Try a different service or check the official DSWA facility directory.",
         );
     } catch {
-      Alert.alert(
+      AppDialog.alert(
         "Nearby search is unavailable",
         "EcoLearn could not load locations. Check your connection and try again.",
       );

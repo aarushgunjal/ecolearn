@@ -7,6 +7,8 @@ import {
   findDnrecCategoryGuidance,
   findLiveDelawareGuidance,
   toGuidancePayload,
+  hasUniqueDnrecMatch,
+  isFreshDnrecRecord,
 } from "../_shared/dnrec.ts";
 import { recordItemInteraction } from "../_shared/analytics.ts";
 
@@ -34,15 +36,16 @@ serve(async (request) => {
     }
 
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    // Query DNREC's live official catalog first. The local mirror is retained as
-    // a resilient fallback if the public catalog is temporarily unavailable.
     const catalogQueries = buildDnrecCatalogQueries(item.trim());
     let lookup: Awaited<ReturnType<typeof findDelawareGuidance>>;
     try {
-      lookup = await findLiveDelawareGuidance(catalogQueries, mode !== "suggestions");
-    } catch (liveError) {
-      console.warn("Live DNREC lookup unavailable; using mirrored official data", liveError);
       lookup = await findDelawareGuidance(admin, catalogQueries);
+      if (!lookup.match || !isFreshDnrecRecord(lookup.match.row)) {
+        try { lookup = await findLiveDelawareGuidance(catalogQueries, mode !== "suggestions"); }
+        catch { /* The official mirror remains usable during upstream outages. */ }
+      }
+    } catch {
+      lookup = await findLiveDelawareGuidance(catalogQueries, mode !== "suggestions");
     }
     if (mode === "suggestions") {
       return Response.json({
@@ -55,13 +58,7 @@ serve(async (request) => {
     }
 
     const candidate = lookup.match;
-    const runnerUp = lookup.candidates.find(
-      (entry) => entry.row.source_topic_id !== candidate?.row.source_topic_id,
-    );
-    const uniqueMatch = Boolean(
-      candidate &&
-      (candidate.score >= 0.96 || !runnerUp || candidate.score - runnerUp.score >= 0.12),
-    );
+    const uniqueMatch = hasUniqueDnrecMatch(lookup);
 
     await recordItemInteraction(admin, {
       eventKind: "search",

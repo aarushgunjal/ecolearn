@@ -277,3 +277,37 @@ test('home shows real activity and no fabricated impact chart', async ({ page })
   await expect(page.getByText('kg CO₂ avoided')).toHaveCount(0);
   await expect(page.getByText('Weekly impact')).toHaveCount(0);
 });
+
+
+test('scanner offers spoken guidance and clarification before a user confirms an item type', async ({ page }, info) => {
+  const {app,calls}=await signedIn(page,'student');
+  await page.route('**/functions/v1/explain-scan',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({verified:false,guidance:null,observedItem:'Spray can',objectClass:'Aerosol can',material:'metal',confidence:91,imageStatus:'single_item',needsAdultHelp:true,clarification:'Is it empty or does it still have something inside? Do not open it to check.',candidates:[{title:'Aerosol Cans - Empty'},{title:'Aerosol Cans - Full'}],nextSteps:['Ask a grown-up for help.'],message:'Check the item type before choosing instructions.'})}));
+  await page.route('**/functions/v1/delaware-guidance',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({verified:true,guidance:{title:'Aerosol Cans - Full',curbside:false,category:'Household hazardous waste',matchConfidence:100,instructions:'Official hazardous waste collection instructions.',tags:[],sourceUrl:'https://dnrec.delaware.gov/waste-hazardous/recycling/what/'}})}));
+  await app.openPrimarySection('Scan');
+  await page.locator('input[type="file"]').first().setInputFiles({name:'item.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jS1kAAAAASUVORK5CYII=','base64')});
+  await expect(page.getByRole('heading',{name:'Spray can',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Ask a grown-up for help'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Listen',exact:true})).toBeVisible();
+  await expect(page.getByRole('region',{name:'Check the item type'})).toContainText('Is it empty');
+  expect(calls.some(c=>c.name==='record_ecolearn_scan')).toBe(false);
+  await page.screenshot({path:`../../tmp/scanner-clarification-${info.project.name}.png`,fullPage:true});
+  await page.getByRole('button',{name:'Check Aerosol Cans - Full',exact:true}).click();
+  await expect.poll(()=>calls.find(c=>c.name==='record_ecolearn_scan')?.body).toMatchObject({p_item_name:'Aerosol Cans - Full'});
+});
+
+test('content deletion uses an accessible dialog with safe cancellation', async ({ page }, info) => {
+  const {app,calls}=await signedIn(page);
+  await page.route('**/rest/v1/rpc/ecolearn_get_classroom_dashboard', route => route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({students:[],assignments:[{id:'assignment1',title:'Compost assignment',completed_count:0,student_count:1}]})}));
+  await app.openPrimarySection('Community');
+  const remove=page.getByRole('button',{name:'Delete assignment',exact:true}).first();
+  await remove.click();
+  const dialog=page.getByRole('dialog',{name:'Delete assignment?',exact:true});
+  await expect(dialog.getByRole('button',{name:'Cancel',exact:true})).toBeFocused();
+  await page.screenshot({path:`../../tmp/scanner-dialog-${info.project.name}.png`});
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  expect(calls.some(c=>c.name==='ecolearn_delete_content')).toBe(false);
+  await remove.click();
+  await dialog.getByRole('button',{name:'Delete',exact:true}).click();
+  await expect.poll(()=>calls.filter(c=>c.name==='ecolearn_delete_content').length).toBe(1);
+});
