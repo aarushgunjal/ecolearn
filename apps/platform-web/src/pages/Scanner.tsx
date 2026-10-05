@@ -401,7 +401,7 @@ export default function Scanner() {
                 <div>
                   <h2 className="font-semibold">Item scanner</h2>
                   <p className="text-xs text-[#7b887d]">
-                    Powered by EcoLearn AI
+                    Photo and item-name lookup
                   </p>
                 </div>
               </div>

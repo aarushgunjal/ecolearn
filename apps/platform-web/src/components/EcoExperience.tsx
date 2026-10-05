@@ -1060,10 +1060,9 @@ export function AuthDialog({ close }: { close: () => void }) {
               ? "Use at least eight characters and keep your new password private."
               : "Track actions, build habits, and make a measurable difference."}
         </p>
-        {mode === "signup" && <label className="mb-4 block text-sm font-semibold">Account type
+        {mode === "signup" && <div className="my-4">
           <p className="text-sm text-[#58675d]">New accounts start as students. Educators can request teacher access in Account settings after signing in.</p>
-          <span className="mt-2 block text-xs font-normal">Using Google? Choose your account type in Community after signing in.</span>
-        </label>}
+        </div>}
         {(mode === "signup" || mode === "signin") && (
           <>
             <button
