@@ -6,9 +6,10 @@ const compile = async path => ts.transpileModule(await readFile(new URL(path,imp
 const sharedCode = await compile('../../supabase/functions/_shared/dnrec.ts');
 const edgeCode = await compile('../../supabase/functions/explain-scan/index.ts');
 const row = (title,id=1) => ({title,source_topic_id:id,seo_name:title.toLowerCase().replaceAll(' ','-'),content_text:'Official instructions only.',tags:[],synonyms:[],search_terms:[],source_url:'https://dnrec.delaware.gov/waste-hazardous/recycling/what/',source_updated_at:null,synced_at:new Date().toISOString()});
-function scanner(parsed, rows, { user=true }={}) {
+function scanner(parsed, rows, { user=true, privacyBlocked=false }={}) {
   let handler; const requests=[]; const writes=[];
   const fetcher=async (url,init)=>{requests.push({url,body:init?.body?JSON.parse(init.body):null});
+    if(url.includes('openrouter') && privacyBlocked) return Response.json({error:{message:'No endpoints found matching your data policy'}},{status:404});
     if(url.includes('openrouter'))return Response.json({choices:[{message:{content:JSON.stringify(parsed)}}]});
     throw new Error('Unexpected live request');
   };
@@ -61,4 +62,9 @@ test('concurrent live lookups share catalog and detail requests; failures can re
   fail=false;
   const found=await Promise.all([dnrec.findLiveDelawareGuidance('Glass bottles'),dnrec.findLiveDelawareGuidance('Glass bottles')]);
   assert.equal(listingCalls,1);assert.equal(detailCalls,2);assert.ok(found.every(f=>f.match.row.content_text==='Official instructions.'));
+});
+
+test('privacy-incompatible providers fail safely with a usable text-search alternative',async()=>{
+ const {status,body}=await scanner(identity,[row('Pet food cans')],{privacyBlocked:true}).run();
+ assert.equal(status,503);assert.equal(body.code,'AI_PRIVACY_MODEL_UNAVAILABLE');assert.match(body.error,/Search by item name/);
 });

@@ -257,6 +257,9 @@ Use single_item only for one clear primary object; multiple_items for piles, bin
     if (!providerResponse.ok) {
       const providerMessage = (await providerResponse.text()).slice(0, 400);
       console.error("OpenRouter identification failed", providerResponse.status, providerMessage);
+      if (providerResponse.status === 404 && /data policy/i.test(providerMessage)) {
+        return errorResponse("Photo checks are unavailable right now. Search by item name for official DNREC guidance.", 503, "AI_PRIVACY_MODEL_UNAVAILABLE");
+      }
       if (providerResponse.status === 429) {
         return errorResponse(
           "The visual identification service has reached its temporary limit. Use exact-item search or try again later.",

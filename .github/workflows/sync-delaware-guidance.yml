@@ -27,7 +27,7 @@ jobs:
           test -n "$DNREC_SYNC_SECRET"
           offset=0
           while true; do
-            response=$(curl --silent --show-error --fail-with-body --retry 3 --retry-all-errors --retry-delay 5 --max-time 140 \
+            response=$(curl --silent --show-error --fail --retry 3 --retry-all-errors --retry-delay 5 --max-time 140 \
               -X POST "$SUPABASE_FUNCTIONS_URL/sync-delaware-recyclopedia" \
               -H "Content-Type: application/json" \
               -H "x-dnrec-sync-secret: $DNREC_SYNC_SECRET" \

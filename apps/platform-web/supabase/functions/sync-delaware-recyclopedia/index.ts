@@ -26,13 +26,18 @@ type TopicDetail = TopicSummary & {
   synonyms?: { synonym?: string }[];
 };
 
-const fetchJson = async <T,>(url: string) => {
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!response.ok) throw new Error(`DNREC Recyclopedia returned ${response.status}`);
-  return await response.json() as T;
+const fetchJson = async <T,>(url: string): Promise<T> => {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!response.ok) throw new Error(`DNREC Recyclopedia returned ${response.status}`);
+      return await response.json() as T;
+    } catch (error) { if (attempt === 1) throw error; }
+  }
+  throw new Error("DNREC Recyclopedia is temporarily unavailable");
 };
 
 const mapWithConcurrency = async <T, R>(values: T[], concurrency: number, worker: (value: T) => Promise<R>) => {
@@ -85,7 +90,12 @@ serve(async (request) => {
       .in("source_topic_id", topics.map((topic) => topic.topic_id));
     if (existingError) throw existingError;
     const known = new Map((existing ?? []).map((item) => [item.source_topic_id, item.source_updated_at]));
-    const needed = topics.filter((topic) => force || known.get(topic.topic_id) !== (topic.updated_at ?? null));
+    // Missing upstream timestamps cannot prove a record is unchanged.
+    const unchanged = topics.filter(topic => !force && topic.updated_at && known.has(topic.topic_id)
+      && Number.isFinite(Date.parse(topic.updated_at))
+      && Date.parse(known.get(topic.topic_id) ?? "") === Date.parse(topic.updated_at));
+    const unchangedIds = new Set(unchanged.map(topic => topic.topic_id));
+    const needed = topics.filter(topic => !unchangedIds.has(topic.topic_id));
     const errors: string[] = [];
 
     const downloadedRows = await mapWithConcurrency(needed, 8, async (topic) => {
@@ -131,7 +141,6 @@ serve(async (request) => {
 
     // An unchanged record was still checked against today's official listing.
     // Mark it fresh without downloading its detail again.
-    const unchanged = topics.filter(topic => !force && known.has(topic.topic_id) && known.get(topic.topic_id) === (topic.updated_at ?? null));
     if (unchanged.length) {
       const { error } = await admin.from("delaware_guidance_items")
         .update({ synced_at: new Date().toISOString() }).in("source_topic_id", unchanged.map(topic => topic.topic_id));
