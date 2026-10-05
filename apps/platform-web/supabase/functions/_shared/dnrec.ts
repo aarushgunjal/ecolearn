@@ -68,8 +68,48 @@ export const buildDnrecCatalogQueries = (value: string, material = "") => {
     add("aluminum cans");
   }
 
+  // Normalize the object, not the printed brand. Do not confuse paper notebooks
+  // with notebook computers, or a protective cover with the device it covers.
+  if (/\bcomposition (?:book|notebook)\b/.test(normalizedValue)) add("Composition books");
+  if (/\bspiral(?: bound)? (?:notebook|book)\b/.test(normalizedValue) && !/\b(computer|laptop|electronic)\b/.test(normalizedValue)) add("Spiral-bound notebooks");
+
   return queries.filter(Boolean);
 };
+
+export const dnrecCategoryQueries = (item: string, material = "", hazard = "none") => {
+  const name = normalizeDnrecText(item);
+  const substance = normalizeDnrecText(material);
+  if (/\b(protective|silicone|silicon|rubber|leather)\b.*\b(case|cover|sleeve)\b/.test(name)
+    || /\b(case cover|cover|sleeve|packaging|box)$/.test(name)
+    || /\b(empty packaging|retail box|product box)\b/.test(name)) return [];
+  if (/\b(airpod|earbud|headphone|charging case|wireless charger|power bank|smartwatch|smart watch|electronic|laptop|computer|tablet|e reader|ereader)\b/.test(name)
+    || ["electronics", "battery"].includes(hazard) && /\b(device|charger|case|phone|camera|speaker)\b/.test(name)) return ["Electronics"];
+  if (/\b(battery|batterie)\b/.test(name) || hazard === 'battery') return ['Household Batteries'];
+  if (!['none','unknown',''].includes(hazard)) return [];
+  if (/\b(steno|stenography|notepad|writing pad|exercise book|notebook|journal)\b/.test(name)
+    && !/\b(computer|laptop|tablet|electronic|digital)\b/.test(name)
+    && (!substance || /\b(paper|cardboard|cardstock)\b/.test(substance))) return ['Paper'];
+  return [];
+};
+
+// Category guidance always retains its own label and source. It is never a
+// verified item match and cannot award scan XP or silently replace the item.
+export async function findDnrecCategoryGuidance(client: SupabaseClient, item: string, material = "", hazard = "none") {
+  const titles = dnrecCategoryQueries(item, material, hazard);
+  if (!titles.length) return [];
+  const { data, error } = await client.from('delaware_guidance_items')
+    .select('source_topic_id,title,seo_name,content_text,tags,synonyms,search_terms,source_updated_at,source_url').in('title', titles);
+  if (error) {
+    console.warn('Related DNREC guidance unavailable');
+    return [];
+  }
+  return ((data ?? []) as DelawareGuidanceRow[]).filter(row => titles.includes(row.title) && Boolean(row.content_text?.trim())).map(row => ({
+    ...toGuidancePayload({ row, score: 0 }),
+    basis: row.title === 'Paper'
+      ? 'This appears to be a paper notebook. Use the notebook or book instructions below; covers, bindings, and coatings can change how it should be prepared.'
+      : 'This appears to belong to this category. Confirm the type and condition with the collection program. Do not put electronics or batteries in curbside recycling.',
+  }));
+}
 
 export const buildDnrecIdentificationQueries = ({
   observedItem,

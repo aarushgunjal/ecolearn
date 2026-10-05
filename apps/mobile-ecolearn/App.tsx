@@ -1,4 +1,5 @@
-import { AdminSecurity } from "./src/AdminSecurity";
+import { LearningSpace, learningSpace } from "./src/LearningSpace";
+import { AccountSettings } from "./src/AccountSettings";
 import easyLessonData from "../../packages/learning/easy-reading.json";
 import { ListenButton, ReadingMode, useEasyReading } from "./src/LearningSupport";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -41,9 +42,9 @@ WebBrowser.maybeCompleteAuthSession();
 
 type Tab = "Home" | "Scan" | "Map" | "Learn" | "Community" | "Challenges" | "Profile" | "Notifications";
 type Photo = { uri: string; name: string; mimeType: string; base64?: string | null };
-type ScanResult = { item: string; recyclable: boolean; confidence: number; category: string; instructions: string; tips?: string[]; imageStatus?: "single_item" | "multiple_items" | "unclear"; material?: string | null; visibleEvidence?: string | null; dnrec?: DelawareGuidance | null };
+type ScanResult = { item: string; recyclable: boolean; confidence: number; category: string; instructions: string; tips?: string[]; imageStatus?: "single_item" | "multiple_items" | "unclear"; material?: string | null; visibleEvidence?: string | null; dnrec?: DelawareGuidance | null; categoryGuidance?: Array<DelawareGuidance & { basis: string }> };
 type DelawareGuidance = { title: string; category: string; curbside: boolean; instructions: string; sourceName: string; sourceUrl: string; matchConfidence?: number };
-type VisionScanResponse = { verified: boolean; guidance: DelawareGuidance | null; observedItem: string | null; material: string | null; confidence: number; imageStatus: "single_item" | "multiple_items" | "unclear"; visibleEvidence: string | null; nextSteps: string[]; message: string };
+type VisionScanResponse = { categoryGuidance?: Array<DelawareGuidance & { basis: string }>; verified: boolean; guidance: DelawareGuidance | null; observedItem: string | null; material: string | null; confidence: number; imageStatus: "single_item" | "multiple_items" | "unclear"; visibleEvidence: string | null; nextSteps: string[]; message: string };
 type Progress = { xp: number; level: number; total_scans: number; total_lessons_completed: number; streak_days: number; last_activity_date?: string | null };
 type Site = { id: string; name: string; type: string; latitude: number; longitude: number; distanceKm: number; address?: string; services?: string[]; sourceUrl?: string; provider?: string };
 const milesFromKm = (kilometers: number) => kilometers * 0.621371;
@@ -82,10 +83,7 @@ const functionErrorMessage = async (
     ? error.message
     : fallback;
 };
-const newRequestId = () => {
-  const part = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1);
-  return `${part()}${part()}-${part()}-4${part().slice(1)}-a${part().slice(1)}-${part()}${part()}${part()}`;
-};
+const newRequestId = () => Crypto.randomUUID();
 const extras = StyleSheet.create({
   appleButton: { width: "100%", height: 48, marginTop: 27 },
   googleAfterApple: { marginTop: 12 },
@@ -168,19 +166,20 @@ function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [accountRole, setAccountRole] = useState<"student" | "teacher">("student");
+
   const [busy, setBusy] = useState(false);
   const submit = async () => {
-    if (!email.trim() || password.length < 6) return Alert.alert("Check your details", "Enter an email and a password with at least six characters.");
+    if (busy) return;
+    if (!email.trim() || !password || (mode === "signup" && password.length < 8)) return Alert.alert("Check your details", mode === "signup" ? "Enter an email and a password with at least eight characters." : "Enter your email and password.");
     setBusy(true);
+    try {
     const response = mode === "signin"
       ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
       : await supabase.auth.signUp({
           email: email.trim(),
           password,
-          options: { data: { account_role: accountRole }, emailRedirectTo: ExpoLinking.createURL("auth/callback") },
+          options: { data: { account_role: "student" }, emailRedirectTo: ExpoLinking.createURL("auth/callback") },
         });
-    setBusy(false);
     if (response.error) return Alert.alert("Could not continue", response.error.message);
     if (mode === "signup" && !response.data.session) {
       Alert.alert(
@@ -188,8 +187,12 @@ function AuthScreen() {
         "Open the EcoLearn confirmation link on this device. EcoLearn will reopen, confirm your email, and sign you in automatically.",
       );
     }
+    } catch {
+      Alert.alert("Could not connect", "Check your connection and try signing in again.");
+    } finally { setBusy(false); }
   };
   const google = async () => {
+    if (busy) return;
     if (usingExpoGo) {
       Alert.alert(
         "Use email sign-in in Expo Go",
@@ -217,6 +220,7 @@ function AuthScreen() {
     if (busy) return;
     setBusy(true);
     try {
+      if (!await AppleAuthentication.isAvailableAsync()) throw new Error("Sign in with Apple is unavailable on this device. Please use email sign-in.");
       const rawNonce = Crypto.randomUUID();
       const state = Crypto.randomUUID();
       const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
@@ -243,7 +247,7 @@ function AuthScreen() {
             family_name: credential.fullName?.familyName,
           },
         });
-        if (profileError) throw profileError;
+        if (profileError) Alert.alert("Signed in", "Your account is ready. You can add your display name in Profile.");
       }
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
@@ -255,16 +259,20 @@ function AuthScreen() {
     }
   };
   const resetPassword = async () => {
+    if (busy) return;
     if (!email.trim()) return Alert.alert("Enter your email", "Enter the email address for your EcoLearn account first.");
     setBusy(true);
+    try {
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: ExpoLinking.createURL("auth/reset-password"),
     });
-    setBusy(false);
     if (error) return Alert.alert("Could not send reset email", error.message);
     Alert.alert("Check your email", "Open the EcoLearn password-reset link on this device to choose a new password.");
+    } catch {
+      Alert.alert("Could not send reset email", "Check your connection and try again.");
+    } finally { setBusy(false); }
   };
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><Text style={styles.brandLarge}>ecolearn</Text><Text style={styles.pageTitle}>{mode === "signin" ? "Welcome back." : "Start your impact."}</Text><Text style={styles.body}>Save scans, learn sustainable habits, and build a more circular world.</Text>{Platform.OS === "ios" && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={13} style={extras.appleButton} onPress={() => void apple()} />}<Pressable onPress={() => void google()} disabled={busy} style={[styles.googleButton, Platform.OS === "ios" && extras.googleAfterApple, usingExpoGo && styles.disabled]}><Text style={styles.googleText}>{usingExpoGo ? "Google sign-in needs development build" : "Continue with Google"}</Text></Pressable>{usingExpoGo && <Text style={styles.helper}>For Expo Go testing, use email/password. Google works in the later EcoLearn development build.</Text>}<Text style={styles.or}>OR WITH EMAIL</Text>{mode === "signup" && <View><Text style={styles.body}>Account type</Text><View style={{ flexDirection: "row", gap: 16 }}>{(["student", "teacher"] as const).map((role) => <Pressable key={role} accessibilityRole="radio" accessibilityState={{ checked: role === accountRole }} onPress={() => setAccountRole(role)}><Text style={styles.link}>{role === accountRole ? "● " : "○ "}{role === "teacher" ? "Teacher" : "Student"}</Text></Pressable>)}</View><Text style={styles.helper}>Using Google or Apple? Choose your account type in Community after signing in.</Text></View>}<TextInput value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="Email address" style={styles.input} /><TextInput value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === "signin" ? "current-password" : "new-password"} placeholder="Password" style={styles.input} /><Pressable onPress={() => void submit()} disabled={busy} style={styles.primaryButton}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{mode === "signin" ? "Sign in" : "Create account"}</Text>}</Pressable>{mode === "signin" && <Pressable onPress={() => void resetPassword()} disabled={busy}><Text style={styles.link}>Forgot password?</Text></Pressable>}<Pressable onPress={() => setMode(mode === "signin" ? "signup" : "signin")}><Text style={styles.link}>{mode === "signin" ? "New to EcoLearn? Create an account" : "Already a member? Sign in"}</Text></Pressable><Text style={styles.legal}>By continuing, you agree to EcoLearn’s <Text style={styles.legalLink} onPress={() => void openPublicPage("/terms")}>Terms of Service</Text> and <Text style={styles.legalLink} onPress={() => void openPublicPage("/privacy")}>Privacy Policy</Text>.</Text>{mode === "signup" && <Text style={styles.legal}>Learners under 13 need a parent, guardian, or authorized school to create and manage their account.</Text>}</ScrollView></SafeAreaView>;
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><Text style={styles.brandLarge}>ecolearn</Text><Text style={styles.pageTitle}>{mode === "signin" ? "Welcome back." : "Start your impact."}</Text><Text style={styles.body}>Save scans, learn sustainable habits, and build a more circular world.</Text>{Platform.OS === "ios" && <AppleAuthentication.AppleAuthenticationButton buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE} buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK} cornerRadius={13} style={extras.appleButton} onPress={() => void apple()} />}<Pressable onPress={() => void google()} disabled={busy} style={[styles.googleButton, Platform.OS === "ios" && extras.googleAfterApple, usingExpoGo && styles.disabled]}><Text style={styles.googleText}>{usingExpoGo ? "Google sign-in needs development build" : "Continue with Google"}</Text></Pressable>{usingExpoGo && <Text style={styles.helper}>For Expo Go testing, use email/password. Google works in the later EcoLearn development build.</Text>}<Text style={styles.or}>OR WITH EMAIL</Text>{mode === "signup" && <Text style={styles.helper}>New accounts start as students. Educators can request teacher access in Account settings after signing in.</Text>}<TextInput value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="Email address" style={styles.input} /><TextInput value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === "signin" ? "current-password" : "new-password"} placeholder="Password" style={styles.input} /><Pressable onPress={() => void submit()} disabled={busy} style={styles.primaryButton}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{mode === "signin" ? "Sign in" : "Create account"}</Text>}</Pressable>{mode === "signin" && <Pressable onPress={() => void resetPassword()} disabled={busy}><Text style={styles.link}>Forgot password?</Text></Pressable>}<Pressable onPress={() => setMode(mode === "signin" ? "signup" : "signin")}><Text style={styles.link}>{mode === "signin" ? "New to EcoLearn? Create an account" : "Already a member? Sign in"}</Text></Pressable><Text style={styles.legal}>By continuing, you agree to EcoLearn’s <Text style={styles.legalLink} onPress={() => void openPublicPage("/terms")}>Terms of Service</Text> and <Text style={styles.legalLink} onPress={() => void openPublicPage("/privacy")}>Privacy Policy</Text>.</Text>{mode === "signup" && <Text style={styles.legal}>Learners under 13 need a parent, guardian, or authorized school to create and manage their account.</Text>}</ScrollView></SafeAreaView>;
 }
 
 function PasswordRecoveryScreen({ onComplete }: { onComplete: () => void }) {
@@ -284,6 +292,7 @@ function PasswordRecoveryScreen({ onComplete }: { onComplete: () => void }) {
 }
 
 function EcoLearnApp({ user }: { user: User }) {
+  useEffect(() => { learningSpace.set(null); }, [user.id]);
   const [assignedLesson, setAssignedLesson] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("Home");
   const [showScanTools, setShowScanTools] = useState(false);
@@ -379,6 +388,7 @@ function EcoLearnApp({ user }: { user: User }) {
     </View>
     <ScrollView style={styles.scroll} contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refreshAll()} tintColor="#2f7a43" />} keyboardShouldPersistTaps="handled">
       {dataError && <View style={styles.notice}><Ionicons name="cloud-offline-outline" size={18} color="#8a5b17" /><Text style={styles.noticeText}>{dataError}</Text></View>}
+      {["Learn","Scan","Challenges"].includes(tab) && <LearningSpace key={tab} />}
       {screen}
     </ScrollView>
     <View style={extras.webNav}>{navItems.map(({ tab: item, icon, activeIcon, label }) => {
@@ -449,7 +459,7 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
   const requestId = useRef(newRequestId());
   const recordOfficial = async (verified: ScanResult) => {
     if (!verified.dnrec) return;
-    const { error } = await supabase.rpc("record_ecolearn_scan", {
+    const { error } = await supabase.rpc("record_ecolearn_scan", { ...learningSpace.params(),
       p_item_name: verified.dnrec.title,
       p_is_recyclable: verified.dnrec.curbside,
       p_confidence_score: verified.dnrec.matchConfidence ?? verified.confidence,
@@ -487,7 +497,7 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
       const guidance = data?.verified ? data.guidance as DelawareGuidance | null : null;
       const checked: ScanResult = guidance
         ? { item: guidance.title, recyclable: guidance.curbside, confidence: guidance.matchConfidence ?? 1, category: guidance.category, instructions: guidance.instructions, tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the complete official item protocol", "Use nearby locations for specialty items"], dnrec: guidance }
-        : { item, recyclable: false, confidence: 0, category: "No official DNREC match", instructions: "EcoLearn could not verify that name against the official Delaware catalog.", tips: ["Choose a suggested official item if one appears", "Try a simpler material or item name", "Use a clear one-item photo for visual identification"], dnrec: null };
+        : { item, recyclable: false, confidence: 0, category: "No official DNREC match", instructions: "EcoLearn could not verify that name against the official Delaware catalog.", tips: ["Choose a suggested official item if one appears", "Try a simpler material or item name", "Use a clear one-item photo for visual identification"], dnrec: null, categoryGuidance: data?.categoryGuidance ?? [] };
       setResult(checked);
       if (guidance) await recordOfficial(checked);
     } catch (error) {
@@ -506,8 +516,8 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
       const identified = data as VisionScanResponse;
       const guidance = identified.guidance;
       const scanResult: ScanResult = guidance
-        ? { item: guidance.title, recyclable: guidance.curbside, confidence: guidance.matchConfidence ?? identified.confidence, category: guidance.category, instructions: guidance.instructions, tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the complete official item protocol", "Use Delaware locations for nearby options"], imageStatus: identified.imageStatus, material: identified.material, visibleEvidence: identified.visibleEvidence, dnrec: guidance }
-        : { item: identified.observedItem ?? "Item not identified", recyclable: false, confidence: identified.confidence, category: identified.imageStatus === "multiple_items" ? "Multiple items detected" : "No official DNREC match", instructions: identified.message, tips: identified.nextSteps, imageStatus: identified.imageStatus, material: identified.material, visibleEvidence: identified.visibleEvidence, dnrec: null };
+        ? { item: identified.observedItem || guidance.title, recyclable: guidance.curbside, confidence: guidance.matchConfidence ?? identified.confidence, category: guidance.category, instructions: guidance.instructions, tips: ["Verified against Delaware DNREC Recyclopedia", "Follow the complete official item protocol", "Use Delaware locations for nearby options"], imageStatus: identified.imageStatus, material: identified.material, visibleEvidence: identified.visibleEvidence, dnrec: guidance }
+        : { item: identified.observedItem ?? "Item not identified", recyclable: false, confidence: identified.confidence, category: identified.imageStatus === "multiple_items" ? "Multiple items detected" : "No official DNREC match", instructions: identified.message, tips: identified.nextSteps, imageStatus: identified.imageStatus, material: identified.material, visibleEvidence: identified.visibleEvidence, dnrec: null, categoryGuidance: identified.categoryGuidance ?? [] };
       setResult(scanResult);
       if (guidance) await recordOfficial(scanResult);
     } catch (error) {
@@ -519,7 +529,7 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
   if (!result && !photo) return <>
     <Text style={styles.kicker}>OFFICIAL DELAWARE ITEM CHECK</Text>
     <Text style={styles.pageTitle}>Know where it goes.</Text>
-    <Text style={styles.body}>Use a photo or search by name. Disposal instructions appear only when EcoLearn finds a strong DNREC catalog match.</Text>
+    <Text style={styles.body}>Use a photo or search by name. EcoLearn matches the object type to DNREC guidance and labels related category advice separately.</Text>
     <View style={styles.scanPanel}>
       <View style={styles.scanIllustration}><Ionicons name="scan" size={36} color="#2e7a43" /></View>
       <Text style={styles.scanPanelTitle}>Identify one household item</Text>
@@ -539,23 +549,29 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
     {photo && <Image source={{ uri: photo.uri }} style={styles.resultImage} />}
     <Text style={styles.kicker}>VISUAL IDENTIFICATION</Text>
     <Text style={styles.pageTitle}>{result.item}</Text>
-    <View style={[styles.badge, styles.warnBadge]}><Text style={[styles.badgeText, styles.warnText]}>{result.category} · {percent(result.confidence)}% confidence</Text></View>
+    <View style={[styles.badge, styles.warnBadge]}><Text style={[styles.badgeText, styles.warnText]}>{result.categoryGuidance?.length ? 'DNREC category guidance' : result.category}{result.confidence > 0 ? ` · ${percent(result.confidence)}% confidence` : ''}</Text></View>
     {!!result.material && <Text style={styles.helper}>Likely material: {result.material}</Text>}
     <View style={styles.guidanceCard}>
-      <Text style={styles.smallLabel}>NO OFFICIAL DELAWARE MATCH</Text>
+      <Text style={styles.smallLabel}>{result.categoryGuidance?.length ? 'RELATED DISPOSAL GUIDANCE' : 'NO EXACT DNREC MATCH'}</Text>
       <Text style={styles.guidance}>{result.instructions}</Text>
       {!!result.visibleEvidence && <Text style={styles.helper}>Visible evidence: {result.visibleEvidence}</Text>}
       {(result.tips ?? []).map((tip) => <Text key={tip} style={styles.tip}>• {tip}</Text>)}
     </View>
-    <Text style={styles.helper}>These are safe next steps, not Delaware disposal instructions. Official guidance appears only after a DNREC catalog match.</Text>
+    {(result.categoryGuidance ?? []).map(g => <View key={g.title} style={styles.guidanceCard}>
+      <Text style={styles.smallLabel}>RELATED DNREC CATEGORY GUIDANCE</Text><Text style={styles.sectionTitle}>{g.title}</Text>
+      <Text style={styles.body}>{g.basis}</Text><Text style={styles.guidance}>{g.instructions}</Text>
+      <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(g.sourceUrl)}><Text style={styles.link}>Read DNREC {g.title} guidance</Text></Pressable>
+      <Text style={styles.helper}>This is category guidance, not an exact product match. No verified-scan XP is awarded.</Text>
+    </View>)}
+
     <Pressable style={styles.scanButton} onPress={resetScan}><Text style={styles.primaryText}>Try another photo</Text></Pressable>
   </>;
   return <>
     {photo && <Image source={{ uri: photo.uri }} style={styles.resultImage} />}
     <Text style={styles.kicker}>OFFICIAL DELAWARE MATCH</Text>
-    <Text style={styles.pageTitle}>{official.title}</Text>
+    <Text style={styles.pageTitle}>{result.item}</Text>
     <View style={[styles.badge, official.curbside ? styles.goodBadge : styles.warnBadge]}><Text style={[styles.badgeText, official.curbside ? styles.goodText : styles.warnText]}>DNREC: {official.category} · {percent(result.confidence)}% confidence</Text></View>
-    <View style={styles.guidanceCard}><Text style={styles.smallLabel}>OFFICIAL DELAWARE DNREC PROTOCOL</Text><Text style={styles.guidance}>{official.instructions}</Text><Pressable onPress={() => void Linking.openURL(official.sourceUrl)}><Text style={styles.link}>Open Delaware DNREC source</Text></Pressable></View>
+    <View style={styles.guidanceCard}><Text style={styles.smallLabel}>DNREC: {official.title}</Text><Text style={styles.guidance}>{official.instructions}</Text><Pressable onPress={() => void Linking.openURL(official.sourceUrl)}><Text style={styles.link}>Open Delaware DNREC source</Text></Pressable></View>
     {relatedVideo && <Pressable style={styles.explainButton} onPress={() => void Linking.openURL(relatedVideo.url)}><Text style={styles.explainText}>{relatedVideo.title}</Text></Pressable>}
     <Text style={styles.helper}>The image was used for this visual check only and is not stored or used for training.</Text>
     <Pressable style={styles.primaryButton} onPress={() => onNearby(official.title)} accessibilityLabel={`Search nearby locations for ${official.title}`}><Ionicons name="location" size={18} color="#fff" /><Text style={styles.primaryText}>Search nearby locations</Text></Pressable>
@@ -588,7 +604,7 @@ function LearnScreen({ lessons, completed, onCompleted, initialLessonId }: { les
     const complete = async () => {
       if (choice !== content.answer || saving) return;
       setSaving(true);
-      const { error } = await supabase.rpc("complete_ecolearn_lesson", { p_lesson_id: active.id, p_selected_answer: choice });
+      const { error } = await supabase.rpc("complete_ecolearn_lesson", { ...learningSpace.params(), p_lesson_id: active.id, p_selected_answer: choice });
       if (error) { setSaving(false); return Alert.alert("Could not save lesson", error.message); }
       await onCompleted(); setSaving(false);
       Alert.alert(alreadyDone ? "Review complete" : "Lesson complete", alreadyDone ? "Your original progress remains saved." : `+${active.xp_reward} XP earned.`, [{ text: "Continue", onPress: closeLesson }]);
@@ -660,7 +676,7 @@ function QuestsScreen({ progress, claims, achievements, earnedAchievementIds, on
   const metric = (name: "scans" | "lessons" | "streak") => name === "scans" ? progress?.total_scans ?? 0 : name === "lessons" ? progress?.total_lessons_completed ?? 0 : progress?.streak_days ?? 0;
   const claim = async (key: string) => {
     setClaiming(key);
-    const { error } = await supabase.rpc("claim_ecolearn_reward", { p_reward_key: key });
+    const { error } = await supabase.rpc("claim_ecolearn_reward", { ...learningSpace.params(), p_reward_key: key });
     if (error) Alert.alert("Reward unavailable", error.message);
     else { await onRefresh(); Alert.alert("Quest complete", "Your 15 XP reward was added to your progress."); }
     setClaiming(null);
@@ -977,7 +993,7 @@ function ProfileScreen({ user, progress, achievements, earnedAchievementIds, onN
     <Pressable style={styles.primaryButton} onPress={() => void save()} disabled={saving || deleting}>
       {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Save profile</Text>}
     </Pressable>
-    <AdminSecurity />
+    <AccountSettings />
     <Text style={styles.sectionTitle}>Help, privacy, and account</Text>
     <View style={styles.settingsCard}>
       <SettingLink icon="help-circle-outline" label="Support" onPress={() => void openPublicPage("/support")} />

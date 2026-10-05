@@ -4,6 +4,7 @@ import {
   buildDnrecCatalogQueries,
   DNREC_RECYLOPEDIA_URL,
   findDelawareGuidance,
+  findDnrecCategoryGuidance,
   findLiveDelawareGuidance,
   toGuidancePayload,
 } from "../_shared/dnrec.ts";
@@ -77,6 +78,7 @@ serve(async (request) => {
       query: item.trim(),
       verified: uniqueMatch,
       guidance: uniqueMatch && candidate ? toGuidancePayload(candidate) : null,
+      categoryGuidance: uniqueMatch ? [] : await findDnrecCategoryGuidance(admin, item.trim()),
       candidates: lookup.candidates.map(toGuidancePayload),
       sourceName: "Delaware DNREC Recyclopedia",
       sourceUrl: DNREC_RECYLOPEDIA_URL,

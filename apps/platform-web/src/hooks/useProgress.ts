@@ -1,3 +1,4 @@
+import { learningSpace } from "@/components/LearningSpace";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -53,7 +54,7 @@ export function useProgress() {
   }, [fetchProgress]);
 
   const claimReward = async (rewardKey: "daily_three_scans" | "weekend_reusable_cup") => {
-    const { error } = await supabase.rpc("claim_ecolearn_reward", {
+    const { error } = await supabase.rpc("claim_ecolearn_reward", { ...learningSpace.params(),
       p_reward_key: rewardKey,
     });
     if (!error) {

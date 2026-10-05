@@ -1,4 +1,5 @@
-import { AdminSecurity } from "./AdminSecurity";
+import { learningSpace } from "@/components/LearningSpace";
+import { AccountSettings } from "./AccountSettings";
 import { useEffect, useRef, useState } from "react";
 import easyLessons from "../../../../packages/learning/easy-reading.json";
 import additionalLessons from "../../../../packages/learning/additional-lessons.json";
@@ -443,7 +444,7 @@ export function Learn() {
       setActiveLesson(null);
       return;
     }
-    const { error } = await supabase.rpc("complete_ecolearn_lesson", {
+    const { error } = await supabase.rpc("complete_ecolearn_lesson", { ...learningSpace.params(),
       p_lesson_id: lesson.id,
       p_selected_answer: selectedAnswer,
     });
@@ -901,7 +902,7 @@ export function Profile() {
           ) : null}
         </div>
       </section>
-      <AdminSecurity />
+      <AccountSettings />
       <section className="mt-7 rounded-[1.5rem] border border-[#e0e7dc] bg-white p-6">
         <div className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#edf7e8] text-[#347e45]">
@@ -928,8 +929,7 @@ export function Profile() {
           <a href="/notifications" className="text-sm font-semibold underline">Manage notification preferences</a>
         </div>
         <p className="mt-3 text-xs leading-5 text-[#7c897f]">
-          Your sign-in stays private. Account notifications are off until EcoLearn
-          sends real account notifications.
+          Your sign-in stays private. Choose which updates you receive in notification preferences.
         </p>
         <button
           onClick={() => void saveSettings()}
@@ -962,7 +962,7 @@ export function AuthDialog({ close }: { close: () => void }) {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [remember, setRemember] = useState(true);
-  const [accountRole, setAccountRole] = useState<"student" | "teacher">("student");
+
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (recoveringPassword) setMode("recovery");
@@ -1017,7 +1017,7 @@ export function AuthDialog({ close }: { close: () => void }) {
     const { error } =
       mode === "signin"
         ? await signIn(email, password, remember)
-        : await signUp(email.trim(), password, remember, accountRole);
+        : await signUp(email.trim(), password, remember);
     setBusy(false);
     if (!error) {
       toast({
@@ -1061,10 +1061,7 @@ export function AuthDialog({ close }: { close: () => void }) {
               : "Track actions, build habits, and make a measurable difference."}
         </p>
         {mode === "signup" && <label className="mb-4 block text-sm font-semibold">Account type
-          <select aria-label="Account type" value={accountRole} onChange={(event) => setAccountRole(event.target.value as "student" | "teacher")} className="mt-2 w-full rounded-xl border p-3">
-            <option value="student">Student  -  join classes and learn</option>
-            <option value="teacher">Teacher  -  create and manage spaces</option>
-          </select>
+          <p className="text-sm text-[#58675d]">New accounts start as students. Educators can request teacher access in Account settings after signing in.</p>
           <span className="mt-2 block text-xs font-normal">Using Google? Choose your account type in Community after signing in.</span>
         </label>}
         {(mode === "signup" || mode === "signin") && (

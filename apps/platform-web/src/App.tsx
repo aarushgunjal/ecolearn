@@ -32,6 +32,7 @@ import {
 import { MapHub } from "@/components/MapHub";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdmin } from "@/hooks/useAdmin";
+import { LearningSpace, learningSpace } from "@/components/LearningSpace";
 import { useProgress } from "@/hooks/useProgress";
 
 const navigation = [
@@ -83,6 +84,7 @@ function AppShell() {
   const { user, recoveringPassword } = useAuth();
   const { isAdmin, loading: adminLoading } = useAdmin();
   const { progress } = useProgress();
+  useEffect(() => { learningSpace.set(null); }, [user?.id]);
 
   const navigate = useCallback((next: Section, replace = false) => {
     setActive(next);
@@ -200,6 +202,7 @@ function AppShell() {
         {sectionLinks.length > 0 && <nav aria-label="Section navigation" className="mb-7 flex flex-wrap gap-2 border-b border-[#dfe6dc] pb-4">
           {sectionLinks.map(([key, label]) => <button key={key} aria-current={active === key ? "page" : undefined} onClick={() => navigate(key)} className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${active === key ? "bg-[#173d2a] text-white" : "bg-white text-[#476151] hover:bg-[#e8f3df]"}`}>{label}</button>)}
         </nav>}
+        {(["Learn","Scan","Challenges"] as Section[]).includes(active) && <LearningSpace key={active} />}
         {active === "Home" && <Home />}
         {active === "Scan" && <Scanner />}
         {active === "Map" && <MapHub />}

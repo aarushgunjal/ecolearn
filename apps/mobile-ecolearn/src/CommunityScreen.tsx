@@ -1,4 +1,5 @@
-import { AdminSecurity } from "./AdminSecurity";
+import { StudentPreview } from "./StudentPreview";
+import { learningSpace } from "./LearningSpace";
 import { DeletedSpaces } from "./DeletedSpaces";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -133,12 +134,11 @@ export function CommunityScreen({
 }: {
   onOpenLesson: (lessonId: string) => void;
 }) {
+  const [previewClass, setPreviewClass] = useState<string | null>(null);
   const [hub, setHub] = useState<Hub>(emptyHub);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [roleChoice, setRoleChoice] = useState<"student" | "teacher">("student");
-  const [alias, setAlias] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [communityName, setCommunityName] = useState("");
   const [communityKind, setCommunityKind] = useState("neighborhood");
@@ -187,8 +187,6 @@ export function CommunityScreen({
     else if (data) {
       const next = data as unknown as Hub;
       setHub(next);
-      setAlias(next.profile.alias ?? "");
-      setRoleChoice(next.profile.role === "student" ? "student" : "teacher");
     }
     setLoading(false);
   }, []);
@@ -341,6 +339,7 @@ export function CommunityScreen({
       ],
     );
 
+  if (previewClass) return <StudentPreview classroomId={previewClass} onClose={() => setPreviewClass(null)} />;
   if (loading)
     return (
       <View style={s.center}>
@@ -350,7 +349,7 @@ export function CommunityScreen({
     );
   return (
     <>
-      <AdminSecurity promptOnly onVerified={() => void refresh()} />
+
       <Text style={s.kicker}>LEARN TOGETHER</Text>
       <Text style={s.title}>Your communities.</Text>
       <Text style={s.body}>
@@ -364,6 +363,7 @@ export function CommunityScreen({
         </View>
       )}
 
+      {managedClassroom && <Pressable accessibilityRole="button" style={s.profileCard} onPress={() => setPreviewClass(managedClassroom.id)}><Text style={s.link}>Student preview</Text></Pressable>}
       <DeletedSpaces revision={hub} onRestored={refresh} />
       <View style={s.profileCard}>
         <View style={s.row}>
@@ -383,33 +383,7 @@ export function CommunityScreen({
             </Text>
           </View>
         </View>
-        <TextInput
-          value={alias}
-          onChangeText={setAlias}
-          placeholder="Student-safe display name"
-          style={s.input}
-          maxLength={40}
-        />
-        <Text style={s.accessNote}>
-          Anyone can choose a teacher account. Access to another teacher’s classroom
-          requires its invitation code.
-        </Text>
-        <View style={s.row}>{(["student", "teacher"] as const).map((role) => <Pressable key={role} accessibilityRole="radio" accessibilityState={{ checked: roleChoice === role }} onPress={() => setRoleChoice(role)}><Text style={s.link}>{roleChoice === role ? "● " : "○ "}{role === "teacher" ? "Teacher" : "Student"}</Text></Pressable>)}</View>
-        <Pressable
-          disabled={saving}
-          onPress={() =>
-            void run(
-              "ecolearn_set_profile",
-              {
-                p_alias: alias || "Eco learner",
-                p_role: roleChoice,
-              },
-              "Profile saved",
-            )
-          }
-        >
-          <Text style={s.link}>Save profile</Text>
-        </Pressable>
+        <Text style={s.profileMeta}>Manage your account from Profile settings.</Text>
       </View>
 
       <View style={s.actions}>
@@ -941,7 +915,11 @@ export function CommunityScreen({
           <Text style={s.section}>Assignments</Text>
           {hub.assignments.map((item) => (
             <View key={item.id} style={s.card}>
-              <Pressable onPress={() => onOpenLesson(item.lesson_id)}>
+              <Pressable onPress={() => {
+                const classroom = hub.classrooms.find(c => c.id === item.classroom_id && c.role === 'student');
+                learningSpace.set(classroom ? { scope: 'classroom', id: classroom.id, name: `${classroom.school_name} / ${classroom.name}` } : null);
+                onOpenLesson(item.lesson_id);
+              }}>
               <Text style={s.cardTitle}>{item.title}</Text>
               <Text style={s.meta}>
                 {item.classroom_name} · {item.lesson_title}

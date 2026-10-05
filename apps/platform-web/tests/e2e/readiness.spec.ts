@@ -10,6 +10,56 @@ const schoolId = '00000000-0000-4000-8000-000000000010';
 const roomId = '00000000-0000-4000-8000-000000000011';
 const lessonId = '10000000-0000-4000-8000-000000000006';
 const noticeId = '00000000-0000-4000-8000-000000000012';
+
+test('teachers preview class content without changing role or earning XP', async ({ page }) => {
+  const { app, calls } = await signedIn(page);
+  await app.openPrimarySection('Community');
+  await page.getByRole('button', { name: 'Student preview', exact: true }).click();
+  const preview = page.getByRole('region', { name: 'Student preview', exact: true });
+  await expect(preview.getByRole('heading', { name: 'Your assignments' })).toBeVisible();
+  await expect(preview.getByText('Compost assignment', { exact: true })).toBeVisible();
+  expect(calls.find(c=>c.name==='ecolearn_preview_classroom')?.body).toEqual({p_classroom_id:roomId});
+  expect(calls.some(c=>['ecolearn_set_profile','complete_ecolearn_lesson','record_ecolearn_scan'].includes(c.name))).toBe(false);
+  await page.getByRole('button', { name: 'Exit preview' }).click();
+  await expect(page.getByRole('button', { name: 'Delete classroom', exact: true })).toBeVisible();
+});
+
+test('teacher requests require details and security stays collapsed in settings', async ({ page }) => {
+  const { app, calls } = await signedIn(page,'student');
+  await app.openMoreSection('Profile');
+  await expect(page.getByRole('button', { name:'Set up authenticator' })).toHaveCount(0);
+  await page.getByText('Teacher access', {exact:true}).click();
+  await expect(page.getByRole('button', {name:'Request teacher access'})).toBeDisabled();
+  await page.getByLabel('School or organization').fill('Test academy');
+  await page.getByLabel('Your teaching role').fill('I teach grade three science.');
+  await page.getByRole('button', {name:'Request teacher access'}).click();
+  await expect.poll(()=>calls.find(c=>c.name==='ecolearn_request_teacher_access')?.body).toEqual({p_organization:'Test academy',p_reason:'I teach grade three science.'});
+  expect(calls.some(c=>c.name==='ecolearn_set_profile')).toBe(false);
+});
+
+for (const [item,title] of [['Steno book','Paper'],['AirPods charging case','Electronics']]) {
+  test(`${item} displays attributed category advice without awarding verified XP`, async ({ page }) => {
+    const { app,calls } = await signedIn(page,'student');
+    await page.route('**/functions/v1/delaware-guidance', route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({verified:false,suggestions:[],categoryGuidance:[{title,matchConfidence:0,instructions:'Official category preparation instructions.',basis:`This item belongs to ${title}.`,sourceUrl:'https://dnrec.delaware.gov/waste-hazardous/recycling/what/',tags:[]}]})}));
+    await app.openPrimarySection('Scan');
+    await page.getByRole('textbox',{name:'Search official Delaware items'}).fill(item);
+    await page.getByRole('button',{name:'Check',exact:true}).click();
+    await expect(page.getByRole('heading',{name:item,exact:true})).toBeVisible();
+    await expect(page.getByRole('heading',{name:`DNREC: ${title}`})).toBeVisible();
+    await expect(page.getByRole('link',{name:`Read DNREC ${title} guidance`})).toHaveAttribute('href','https://dnrec.delaware.gov/waste-hazardous/recycling/what/');
+    expect(calls.some(c=>c.name==='record_ecolearn_scan')).toBe(false);
+  });
+}
+
+test('a verified scan attributes XP only to the selected learning space', async ({ page }) => {
+  const { app,calls }=await signedIn(page,'student');
+  await page.route('**/functions/v1/delaware-guidance',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({verified:true,suggestions:[],guidance:{title:'Composition books',matchConfidence:100,category:'Curbside recycling',curbside:true,instructions:'Keep paper clean and dry.',sourceUrl:'https://dnrec.delaware.gov/waste-hazardous/recycling/what/',tags:[]}})}));
+  await app.openPrimarySection('Scan');
+  await page.getByRole('combobox',{name:'Learning space'}).selectOption(roomId);
+  await page.getByRole('textbox',{name:'Search official Delaware items'}).fill('composition book');
+  await page.getByRole('button',{name:'Check',exact:true}).click();
+  await expect.poll(()=>calls.find(c=>c.name==='record_ecolearn_scan')?.body).toMatchObject({p_scope:'classroom',p_scope_id:roomId,p_item_name:'Composition books'});
+});
 test('signup stays scrollable and usable on short narrow screens', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 480 });
   const app = new EcoLearnPage(page); await app.goto(); await app.openAuthDialog();
@@ -38,6 +88,7 @@ async function signedIn(page: Page, role: 'student' | 'teacher' | 'admin' = 'tea
       const body = route.request().postDataJSON() ?? {};
       calls.push({ name, body });
       if (name === 'ecolearn_get_hub') result = state;
+      else if (name === 'ecolearn_preview_classroom') result = { name: 'Test classroom', school: 'Test school', grade: 'Grade 5', assignments: state.assignments, announcements: [], events: [] };
       else if (name === 'ecolearn_get_classroom_dashboard') result = { students: [], assignments: [] };
       else if (name === 'ecolearn_delete_space') { saved = state; deleted = [{ id: String(body.p_scope_id), scope: String(body.p_scope), name: body.p_scope === 'community' ? 'Test school' : 'Test classroom', delete_after: new Date(Date.now() + 7 * 86400000).toISOString() }]; state = { ...state, classrooms: [], ...(body.p_scope === 'community' ? { communities: [] } : {}) }; result = null; }
       else if (name === 'ecolearn_get_deleted_spaces') result = deleted;
@@ -74,18 +125,16 @@ async function signedIn(page: Page, role: 'student' | 'teacher' | 'admin' = 'tea
   return { app, calls };
 }
 
-for (const role of ['student', 'teacher'] as const) {
-  test(`${role} signup sends the selected account type`, async ({ page }) => {
+  test('signup starts with student access and no role switch', async ({ page }) => {
     let request: Record<string, unknown> | undefined;
-    await page.route('**/auth/v1/signup**', async (route) => { request = route.request().postDataJSON(); await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: userId, identities: [], user_metadata: { account_role: role } }) }); });
+    await page.route('**/auth/v1/signup**', async (route) => { request = route.request().postDataJSON(); await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: userId, identities: [], user_metadata: { account_role: 'student' } }) }); });
     const app = new EcoLearnPage(page); await app.goto(); await app.openAuthDialog();
-    await page.getByLabel('Account type', { exact: true }).selectOption(role);
+    await expect(page.getByLabel('Account type', { exact: true })).toHaveCount(0);
     await page.getByPlaceholder('Email address').fill('signup@example.test');
     await page.getByPlaceholder('Password', { exact: true }).fill('local-test-password');
     await page.getByRole('button', { name: 'Create free account', exact: true }).click();
-    await expect.poll(() => request).toMatchObject({ data: { account_role: role } });
+    await expect.poll(() => request).toMatchObject({ data: { account_role: 'student' } });
   });
-}
 
 test('teacher cannot rejoin own school or classroom from UI', async ({ page }) => {
   const { app, calls } = await signedIn(page); await app.openMoreSection('Schools');
@@ -144,6 +193,7 @@ test('administrator enrollment requires a valid code before management access ap
   const { app } = await signedIn(page, 'admin', false);
   await app.openMoreSection('Profile');
   await expect(page.getByRole('button', { name: 'Manage communities', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Security settings', exact: true }).click();
   await page.getByRole('button', { name: 'Set up authenticator', exact: true }).click();
   await expect(page.getByLabel('Authenticator setup key')).toHaveValue('LOCALTESTSECRET');
   await page.getByLabel('Authenticator code', { exact: true }).fill('000000');
@@ -160,6 +210,7 @@ test('administrator enrollment requires a valid code before management access ap
 test('cancelled authenticator setup removes only the pending factor', async ({ page }) => {
   const { app, calls } = await signedIn(page, 'admin', false);
   await app.openMoreSection('Profile');
+  await page.getByRole('button', { name: 'Security settings', exact: true }).click();
   await page.getByRole('button', { name: 'Set up authenticator', exact: true }).click();
   await page.getByRole('button', { name: 'Cancel setup', exact: true }).click();
   await expect(page.getByLabel('Authenticator setup key')).toHaveCount(0);
@@ -204,6 +255,7 @@ test('students have no management actions and can open their assigned lesson dir
   await page.getByRole('link', { name: 'Open assigned lesson' }).click();
   await expect(page).toHaveURL(new RegExp(`lesson=${lessonId}`));
   await expect(page.getByRole('heading', { name: 'Smarter compost habits' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Learning space' })).toHaveValue(roomId);
 });
 
 test('notification read state and opt-in preferences are saved through RPCs', async ({ page }) => {

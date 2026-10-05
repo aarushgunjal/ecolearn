@@ -4,6 +4,7 @@ import {
   buildDnrecIdentificationQueries,
   DNREC_RECYLOPEDIA_URL,
   findDelawareGuidance,
+  findDnrecCategoryGuidance,
   findLiveDelawareGuidance,
   toGuidancePayload,
 } from "../_shared/dnrec.ts";
@@ -231,7 +232,7 @@ serve(async (request) => {
         messages: [
           {
             role: "system",
-            content: `Identify what is visibly present in a household-item photo. Return JSON only with exactly these fields: {"image_status":"single_item"|"multiple_items"|"unclear","observed_item":string|null,"catalog_query":string|null,"material":string|null,"confidence":number,"possible_hazard":"battery"|"electronics"|"chemical"|"sharp"|"none"|"unknown","visible_evidence":string}. Use single_item only when one primary discrete item is clear. Use multiple_items for piles, bins, collages, or multiple separate objects. observed_item may include a visible brand when useful, but catalog_query must ignore brands and describe the material plus generic object class used by a municipal waste catalog. For example, a Pepsi can should use catalog_query "aluminum can", not "Pepsi can"; a branded water bottle should use "plastic beverage bottle". Confidence is 0 to 1. Describe only visible evidence. Never provide recycling, disposal, legal, or location guidance. Never identify people or transcribe private information.`,
+            content: `Identify what is visibly present in a household-item photo. Return JSON only with exactly these fields: {"image_status":"single_item"|"multiple_items"|"unclear","observed_item":string|null,"catalog_query":string|null,"material":string|null,"confidence":number,"possible_hazard":"battery"|"electronics"|"chemical"|"sharp"|"none"|"unknown","visible_evidence":string}. Use single_item only when one primary discrete item is clear. Use multiple_items for piles, bins, collages, or multiple separate objects. observed_item may include a visible brand when useful, but catalog_query must ignore brands and describe the material plus generic object class used by a municipal waste catalog. For example, a Pepsi can should use catalog_query "aluminum can", not "Pepsi can"; a branded water bottle should use "plastic beverage bottle". A Steno Book is a paper notebook, not a computer; include spiral-bound only if its binding is visible. An AirPods charging case is a battery-powered electronic device; distinguish it from an empty silicone protective cover. Product names, logos, and printed slogans are not object classes. Confidence is 0 to 1. Describe only visible evidence. Never provide recycling, disposal, legal, or location guidance. Never identify people or transcribe private information.`,
           },
           {
             role: "user",
@@ -355,6 +356,7 @@ serve(async (request) => {
       (candidate.score >= 0.96 || !runnerUp || candidate.score - runnerUp.score >= 0.12),
     );
     if (!candidate || !strongUniqueMatch) {
+      const categoryGuidance = await findDnrecCategoryGuidance(admin, observedItem, material, possibleHazard);
       await recordItemInteraction(admin, {
         eventKind: "scan",
         inputMethod: "photo",
@@ -368,7 +370,10 @@ serve(async (request) => {
       });
       return Response.json({
         ...baseResult,
-        message: `EcoLearn identified ${observedItem || "the item"}, but found no strong official DNREC catalog match.`,
+        categoryGuidance,
+        message: categoryGuidance.length
+          ? `Identified: ${observedItem}. DNREC covers this type of item under ${categoryGuidance.map(g => g.title).join(', ')}. Follow the related category instructions below and check any preparation requirements.`
+          : `EcoLearn identified ${observedItem || "the item"}, but found no strong official DNREC catalog match.`,
       }, { headers: { ...cors, "Cache-Control": "no-store" } });
     }
 

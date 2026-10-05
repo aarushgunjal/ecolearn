@@ -1,3 +1,5 @@
+import { StudentPreview } from "./StudentPreview";
+import { learningSpace } from "./LearningSpace";
 import {
   useCallback,
   useEffect,
@@ -12,7 +14,6 @@ import {
   BookOpen,
   Building2,
   CalendarDays,
-  Check,
   ClipboardCopy,
   Flag,
   GraduationCap,
@@ -25,12 +26,10 @@ import {
   Sparkles,
   Trophy,
   UserRoundCheck,
-  UserRoundCog,
   UserRoundX,
   Users,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { AdminSecurity } from "./AdminSecurity";
 import { DeletedSpaces } from "./DeletedSpaces";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -70,11 +69,10 @@ const secondary =
 
 export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "organization" }) {
   const hub = useCommunityHub();
+  const [previewClass, setPreviewClass] = useState<string | null>(null);
   const { toast } = useToast();
   const [busy, setBusy] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState("");
-  const [roleChoice, setRoleChoice] = useState<"student" | "teacher">("student");
-  const [alias, setAlias] = useState(hub.data.profile.alias);
   const [communityName, setCommunityName] = useState("");
   const [communityDescription, setCommunityDescription] = useState("");
   const [communityKind, setCommunityKind] = useState<Community["kind"]>(
@@ -140,7 +138,6 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "o
   const getClassroomDashboard = hub.getClassroomDashboard;
   const getModerationQueue = hub.getModerationQueue;
 
-  useEffect(() => { setAlias(hub.data.profile.alias); setRoleChoice(hub.data.profile.role === "student" ? "student" : "teacher"); }, [hub.data.profile]);
   useEffect(() => {
     if (!hub.user || !canTeach) return;
     void supabase
@@ -221,6 +218,7 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "o
       </div>
     );
 
+  if (previewClass) return <StudentPreview classroomId={previewClass} onClose={() => setPreviewClass(null)} />;
   return (
     <div className="animate-in fade-in duration-500">
       <header className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -249,7 +247,8 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "o
         <RolePill role={hub.data.profile.role} />
       </header>
 
-      <AdminSecurity promptOnly />
+
+      {selectedClassroom && canManageClassroom && <button className={`${secondary} mb-5`} onClick={() => setPreviewClass(selectedClassroom.id)}>Student preview</button>}
       <DeletedSpaces revision={hub.data} onRestored={hub.refresh} />
 
       {hub.error && (
@@ -263,54 +262,7 @@ export function CommunityWorkspace({ mode }: { mode: "community" | "school" | "o
 
       <div className="grid gap-5 xl:grid-cols-[.72fr_1.28fr]">
         <aside className="space-y-5">
-          <section className="rounded-2xl border border-[#dde6da] bg-white p-5">
-            <div className="flex items-center gap-3">
-              <UserRoundCog className="text-[#347d46]" />
-              <div>
-                <h2 className="font-semibold">Account settings</h2>
-                <p className="text-xs text-[#718076]">
-                  Choose how your name appears to other members.
-                </p>
-              </div>
-            </div>
-            <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-[#617067]">
-              Public alias
-            </label>
-            <input
-              className={`${field} mt-2`}
-              value={alias}
-              maxLength={40}
-              onChange={(event) => setAlias(event.target.value)}
-            />
-            <p className="mt-3 rounded-xl bg-[#f3f7f1] p-3 text-xs leading-5 text-[#627168]">
-              Teachers can create their own spaces. Joining another teacher’s classroom requires its invitation code.
-            </p>
-            <label className="mt-3 block text-sm">Account type
-              <select aria-label="Account type" className={field} value={roleChoice} onChange={(event) => setRoleChoice(event.target.value as "student" | "teacher")}><option value="student">Student</option><option value="teacher">Teacher</option></select>
-            </label>
-            <button
-              disabled={busy !== null}
-              className={`${primary} mt-3 w-full`}
-              onClick={() =>
-                void action(
-                  "profile",
-                  () =>
-                    hub.setProfile(
-                      alias,
-                      roleChoice,
-                    ),
-                  "Profile saved",
-                )
-              }
-            >
-              {busy === "profile" ? (
-                <LoaderCircle className="animate-spin" size={16} />
-              ) : (
-                <Check size={16} />
-              )}
-              Save profile
-            </button>
-          </section>
+          <a href="/profile" className="text-sm font-semibold underline">Account settings</a>
 
           <section className="rounded-2xl border border-[#dde6da] bg-white p-5">
             <h2 className="font-semibold">Join with a code</h2>
@@ -1426,7 +1378,7 @@ function StudentAssignments({ classroom, assignments }: { classroom: Classroom; 
                   ? ` · Due ${new Date(item.due_at).toLocaleString()}`
                   : ""}
               </p>
-              <a className="mt-3 inline-block font-semibold text-[#287440] underline" href={`/learn?lesson=${encodeURIComponent(item.lesson_id)}`}>{item.completed ? "Review lesson" : "Open assigned lesson"}</a>
+              <a className="mt-3 inline-block font-semibold text-[#287440] underline" onClick={() => learningSpace.set({ scope: "classroom", id: classroom.id, name: `${classroom.school_name} / ${classroom.name}` })} href={`/learn?lesson=${encodeURIComponent(item.lesson_id)}&classroom=${encodeURIComponent(classroom.id)}`}>{item.completed ? "Review lesson" : "Open assigned lesson"}</a>
             </div>
             {item.completed ? (
               <span className="rounded-full bg-[#dff0d8] px-2 py-1 text-xs font-bold text-[#2e7540]">

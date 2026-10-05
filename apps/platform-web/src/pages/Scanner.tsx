@@ -1,3 +1,4 @@
+import { learningSpace } from "@/components/LearningSpace";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -35,10 +36,12 @@ type ScanResult = {
   material?: string | null;
   visibleEvidence?: string | null;
   dnrec?: DelawareGuidance | null;
+  categoryGuidance?: Array<DelawareGuidance & { basis: string }>;
 };
 
 type VisionScanResponse = {
   verified: boolean;
+  categoryGuidance?: Array<DelawareGuidance & { basis: string }>;
   guidance: DelawareGuidance | null;
   observedItem: string | null;
   material: string | null;
@@ -124,12 +127,12 @@ const functionErrorMessage = async (error: unknown) => {
 
 const fallbackLookup = (query: string): ScanResult => {
   return {
-    item: "Official Delaware protocol unavailable",
+    item: query.trim() || "Item not identified",
     recyclable: false,
     confidence: 0,
     category: "Verification required",
-    instructions: "EcoLearn could not verify this as an official Delaware DNREC item. Take a clearer one-item photo or search for the exact item name.",
-    tips: ["No disposal advice is shown without a DNREC match", "Retake the photo with one item in good light", "Use the official DNREC Recyclopedia search"],
+    instructions: "No exact item match was found. Check related category guidance below, if available, or try a simpler item name.",
+    tips: ["Check any related DNREC category guidance below", "Retake the photo with one item in good light", "Use the official DNREC Recyclopedia search"],
   };
 };
 
@@ -144,7 +147,8 @@ const lookup = async (
     const { data, error } = await supabase.functions.invoke("delaware-guidance", {
       body: { item, inputMethod, clientPlatform: "web" },
     });
-    if (error || !data?.verified || !data.guidance) return fallbackLookup(item);
+    if (error || !data) return fallbackLookup(item);
+    if (!data.verified || !data.guidance) return { ...fallbackLookup(item), categoryGuidance: data.categoryGuidance ?? [], ...(data.categoryGuidance?.length ? { instructions: 'DNREC covers this type of item in the category guidance below. Check preparation requirements, including covers, bindings, and batteries where applicable.' } : {}) };
     const guidance = data.guidance as DelawareGuidance;
     return {
       item: guidance.title,
@@ -174,11 +178,6 @@ export default function Scanner() {
   const { user } = useAuth();
   const { progress, refreshProgress } = useProgress();
   const { toast } = useToast();
-  const avoidedKg = ((progress?.total_scans ?? 0) * 0.18).toFixed(1);
-  const communityRank = Math.max(
-    5,
-    50 - Math.min(progress?.total_scans ?? 0, 15) * 2,
-  );
 
   useEffect(
     () => () => {
@@ -216,8 +215,8 @@ export default function Scanner() {
   const saveScanToHistory = async (scanResult: ScanResult) => {
     if (!user || !scanResult.dnrec) return false;
     try {
-      const { error } = await supabase.rpc("record_ecolearn_scan", {
-        p_item_name: scanResult.item,
+      const { error } = await supabase.rpc("record_ecolearn_scan", { ...learningSpace.params(),
+        p_item_name: scanResult.dnrec.title,
         p_is_recyclable: scanResult.recyclable,
         p_confidence_score: scanResult.confidence,
         p_category: scanResult.category,
@@ -285,7 +284,7 @@ export default function Scanner() {
       () =>
         toast({
           title: "Still working…",
-          description: "The AI model may take a moment to wake up.",
+          description: "Identifying your item is taking longer than usual.",
         }),
       10000,
     );
@@ -300,7 +299,7 @@ export default function Scanner() {
       const guidance = identified.guidance;
       const scanResult: ScanResult = guidance
         ? {
-            item: guidance.title,
+            item: identified.observedItem || guidance.title,
             recyclable: guidance.curbside,
             confidence: guidance.matchConfidence,
             category: guidance.category,
@@ -328,6 +327,7 @@ export default function Scanner() {
             material: identified.material,
             visibleEvidence: identified.visibleEvidence,
             dnrec: null,
+            categoryGuidance: identified.categoryGuidance ?? [],
           };
       await finish(scanResult);
     } catch (error) {
@@ -548,7 +548,7 @@ export default function Scanner() {
                 <Flame className="text-[#f8c755]" fill="currentColor" />
               </span>
               <span className="text-sm font-medium text-white/55">
-                This week
+                Your activity
               </span>
             </div>
             <p className="mt-6 text-3xl font-semibold tracking-[-.05em]">
@@ -557,29 +557,22 @@ export default function Scanner() {
                 items scanned
               </span>
             </p>
-            <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/15">
-              <div className="h-full w-[42%] rounded-full bg-[#9bd487]" />
-            </div>
             <p className="mt-2 text-xs text-white/60">
-              {Math.max(0, 8 - (progress?.total_scans ?? 0))} more scans to
-              reach your weekly goal
+              Verified scans saved to your account
             </p>
           </div>
           <div className="rounded-[1.5rem] border border-[#dfe6dc] bg-white p-6">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold">Your impact</h2>
-              <button className="text-xs font-bold text-[#317a45]">
-                View all
-              </button>
             </div>
             <div className="mt-5 grid grid-cols-2 gap-3">
               <Stat value={`${progress?.xp ?? 0}`} label="XP earned" />
-              <Stat value={`${avoidedKg} kg`} label="CO₂ avoided" />
+              <Stat value={`${progress?.total_lessons_completed ?? 0}`} label="Lessons completed" />
               <Stat
                 value={`${progress?.streak_days ?? 0}`}
                 label="Day streak"
               />
-              <Stat value={`Top ${communityRank}%`} label="Community rank" />
+              <Stat value={`${progress?.level ?? 1}`} label="Level" />
             </div>
           </div>
           <div className="rounded-[1.5rem] border border-[#dfe6dc] bg-[#eff8eb] p-6">
@@ -658,13 +651,13 @@ function ResultCard({
               ? "Official DNREC record"
               : multipleItems
                 ? "Multiple items - retake photo"
-                : "No official DNREC match"}
+                : result.categoryGuidance?.length ? "DNREC category guidance" : "No exact DNREC match"}
           </div>
         </div>
       </div>
       <div className="mt-6 rounded-2xl border border-[#e4e9e1] bg-[#fafcf9] p-5">
         <p className="text-xs font-bold uppercase tracking-[.14em] text-[#7d8a80]">
-          {result.dnrec ? "Official Delaware protocol" : "What happens next"}
+          {result.dnrec ? `DNREC: ${result.dnrec.title}` : "What happens next"}
         </p>
         <p className="mt-2 font-medium leading-6 text-[#274033]">
           {result.instructions}
@@ -683,6 +676,14 @@ function ResultCard({
           ))}
         </div>
       </div>
+      {!result.dnrec && (result.categoryGuidance ?? []).map(guidance => <section key={guidance.title} aria-label="Related DNREC category guidance" className="mt-5 rounded-2xl border border-[#cbdcc5] bg-[#f4f8f1] p-5">
+        <p className="text-xs font-bold uppercase tracking-wider text-[#466b50]">No exact item match · Related category guidance</p>
+        <h4 className="mt-2 text-xl font-semibold">DNREC: {guidance.title}</h4>
+        <p className="mt-3 text-sm">{guidance.basis}</p>
+        <p className="mt-3 whitespace-pre-line leading-7">{guidance.instructions}</p>
+        <a href={guidance.sourceUrl} target="_blank" rel="noreferrer" className="mt-4 inline-block min-h-11 font-semibold underline">Read DNREC {guidance.title} guidance</a>
+        <p className="text-xs text-[#58675d]">Category guidance does not confirm this exact product or earn verified-scan XP.</p>
+      </section>)}
       {result.dnrec && (
         <div className="mt-4 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
           <button

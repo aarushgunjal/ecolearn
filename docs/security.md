@@ -8,7 +8,7 @@ Public learning catalogs are readable without signing in. Clients cannot write a
 
 ## Administrator authentication
 
-Administrator assignment is stored in a server-controlled table. Registration metadata and self-selected teacher status cannot create an administrator. Global administrator checks require the signed session claim `aal2`, established by Supabase after a valid authenticator challenge. The enrollment status endpoint reveals only the caller's assignment and verification state.
+Administrator assignment is stored in a server-controlled table. Registration metadata cannot grant teacher or administrator access. Teacher requests require approval by a verified administrator; private teacher invitations are another approved path. Global administrator checks require the signed session claim `aal2`, established by Supabase after a valid authenticator challenge. Authenticator controls are in Account settings. The enrollment status endpoint reveals only the caller's assignment and verification state.
 
 An administrator at `aal1` retains ordinary account capabilities, including management of spaces they legitimately own. They cannot use global administrator privileges. Changing frontend state, removing an authenticator, or signing in again does not bypass the server requirement. Backup authenticators support recovery without adding a weaker application-level bypass.
 

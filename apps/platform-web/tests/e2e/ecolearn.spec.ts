@@ -57,7 +57,7 @@ test.describe("EcoLearn guest journeys", () => {
     await page.getByRole("textbox", { name: "Search official Delaware items" }).fill("<script>alert('qa')</script>");
     await expect(check).toBeEnabled();
     await check.click();
-    await expect(page.getByText("No disposal advice is shown without a DNREC match")).toBeVisible();
+    await expect(page.getByText("No exact DNREC match", { exact: true })).toBeVisible();
     expect(dialogOpened).toBe(false);
   });
 

@@ -39,6 +39,7 @@ test('production memberships, RLS, learning, deletion, and notification delivery
   for (const [id, role] of [[teacher, 'teacher'], [student, 'student'], [stranger, 'admin'], [coteacher, 'teacher']]) {
     await db.query(`insert into auth.users values($1,$2,$3,now())`, [id, JSON.stringify({ account_role: role }), `${id}@example.test`]);
   }
+  await db.query("update public.ecolearn_profiles set account_role='teacher' where user_id in ($1,$2)", [teacher,coteacher]);
   const as = async (id, role = 'authenticated', aal = 'aal1') => { await db.exec(`reset role; set role ${role}`); await db.query(`select set_config('request.jwt.claim.sub',$1,false), set_config('request.jwt.claims',$2,false)`, [id ?? '', JSON.stringify({ aal })]); };
   const rpc = async (name, args = []) => (await db.query(`select public.${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) as result`, args)).rows[0].result;
   let school, room, event, assignment, teacherCode;
@@ -55,7 +56,7 @@ test('production memberships, RLS, learning, deletion, and notification delivery
     await assert.rejects(rpc('claim_next_training_batch'), /permission denied/);
     await assert.rejects(rpc('ecolearn_claim_deliveries'), /permission denied/);
   });
-  await t.test('teacher signup works; metadata cannot create administrators', async () => {
+  await t.test('approved teachers keep access; signup metadata cannot create administrators', async () => {
     await as(teacher); assert.equal(await rpc('ecolearn_effective_role'), 'teacher');
     await as(stranger); assert.equal(await rpc('ecolearn_effective_role'), 'student');
     await assert.rejects(rpc('ecolearn_create_community', ['Denied', 'school', '']), /Teacher access/);
@@ -77,7 +78,7 @@ test('production memberships, RLS, learning, deletion, and notification delivery
     await assert.rejects(rpc('ecolearn_get_school_standings', [school.id]), /membership/);
   });
   await t.test('profile choice never grants access to someone else’s classroom', async () => {
-    await as(stranger); await rpc('ecolearn_set_profile', ['New teacher', 'teacher']);
+    await as(stranger); await assert.rejects(rpc('ecolearn_set_profile', ['New teacher', 'teacher']), /requires an approved/);
     await assert.rejects(rpc('ecolearn_get_classroom_dashboard', [room.id]), /Teacher access/);
     await assert.rejects(rpc('ecolearn_delete_space', ['classroom', room.id]), /Only the classroom/);
     await assert.rejects(rpc('ecolearn_set_profile', ['Bad', 'admin']), /student or teacher/);
@@ -88,7 +89,7 @@ test('production memberships, RLS, learning, deletion, and notification delivery
     await assert.rejects(rpc('ecolearn_join_space', [room.join_code]), /already belong/);
     await assert.rejects(rpc('ecolearn_delete_space', ['classroom', room.id]), /Only the classroom/);
     await assert.rejects(rpc('ecolearn_leave_space', ['community', school.id]), /still teach/);
-    await assert.rejects(rpc('ecolearn_set_profile', ['Teacher', 'student']), /spaces you manage/);
+    await assert.rejects(rpc('ecolearn_set_profile', ['Teacher', 'student']), /active spaces you manage/);
   });
   await t.test('rotation revokes old codes', async () => {
     await as(teacher); const code = await rpc('ecolearn_rotate_join_code', ['classroom', room.id, 'student']);
@@ -128,7 +129,7 @@ test('production memberships, RLS, learning, deletion, and notification delivery
     await rpc('ecolearn_delete_space', ['community', managed.id]);
     assert.equal((await rpc('ecolearn_get_hub')).communities.some(c => c.id === managed.id), false);
     await as(admin);
-    await assert.rejects(rpc('ecolearn_restore_space', ['community', managed.id]), /Only the owner/);
+    await assert.rejects(rpc('ecolearn_restore_space', ['community', managed.id]), /Only the owner|Teacher access/);
     await as(student, 'authenticated', 'aal2');
     assert.equal(await rpc('is_app_admin'), false);
     await as(teacher);
@@ -250,7 +251,7 @@ test('production memberships, RLS, learning, deletion, and notification delivery
     await assert.rejects(rpc('ecolearn_create_announcement', ['classroom', second.id, 'Hidden', 'Hidden']), /Teacher access/);
     await as(student);
     assert.equal((await rpc('ecolearn_get_deleted_spaces')).length, 0);
-    await assert.rejects(rpc('ecolearn_restore_space', ['community', parent.id]), /Only the owner/);
+    await assert.rejects(rpc('ecolearn_restore_space', ['community', parent.id]), /Only the owner|Teacher access/);
     assert.ok(!(await rpc('ecolearn_get_hub')).assignments.some(a => a.classroom_id === second.id));
     assert.equal((await db.query('select * from ecolearn_assignments where classroom_id=$1', [second.id])).rows.length, 0);
     assert.equal((await db.query('select * from notifications where classroom_id=$1', [second.id])).rows.length, 0);
@@ -275,6 +276,7 @@ test('production memberships, RLS, learning, deletion, and notification delivery
   await t.test('account deletion purges owned trash but refuses active spaces', async () => {
     const id = '00000000-0000-4000-8000-000000000088';
     await db.exec('reset role'); await db.query(`insert into auth.users(id,raw_user_meta_data) values($1,'{"account_role":"teacher"}')`, [id]);
+    await db.query("update public.ecolearn_profiles set account_role='teacher' where user_id=$1",[id]);
     await as(id); const parent = await rpc('ecolearn_create_community', ['Account recovery test', 'school', '']);
     const child = await rpc('ecolearn_create_classroom', [parent.id, 'Owned class', '']);
     await assert.rejects(rpc('ecolearn_prepare_account_deletion', [id]), /permission denied/);
@@ -315,10 +317,106 @@ test('production memberships, RLS, learning, deletion, and notification delivery
       assert.equal(dashboard.assignments.find((item) => item.id === assignmentId).completed_count, 1);
     }
   });
+  await t.test('teacher access requires reviewed approval or invitation, never signup metadata', async () => {
+    const applicant='00000000-0000-4000-8000-000000000071';
+    await db.exec('reset role'); await db.query(`insert into auth.users(id,raw_user_meta_data) values($1,'{"account_role":"teacher"}')`,[applicant]);
+    await as(applicant); assert.equal(await rpc('ecolearn_effective_role'),'student');
+    await assert.rejects(rpc('ecolearn_set_profile',['Educator','teacher']),/requires an approved/);
+    await rpc('ecolearn_request_teacher_access',['Test academy','I teach science in grade five.']);
+    await assert.rejects(rpc('ecolearn_request_teacher_access',['Duplicate','I teach science in grade five.']),/already awaiting/);
+    await assert.rejects(rpc('ecolearn_review_teacher_access',[applicant,true]),/Verified administrator/);
+    await as(stranger); assert.equal((await db.query('select * from ecolearn_teacher_requests')).rows.length,0);
+    await as('00000000-0000-4000-8000-000000000099');
+    await assert.rejects(rpc('ecolearn_review_teacher_access',[applicant,true]),/Verified administrator/);
+    await as('00000000-0000-4000-8000-000000000099','authenticated','aal2');
+    await rpc('ecolearn_review_teacher_access',[applicant,true]);
+    await assert.rejects(rpc('ecolearn_review_teacher_access',[applicant,true]),/no longer pending/);
+    await as(applicant); assert.equal(await rpc('ecolearn_effective_role'),'teacher');
+    const owned=await rpc('ecolearn_create_community',['Approval school','school','']);
+    const child=await rpc('ecolearn_create_classroom',[owned.id,'Owned class','Grade 2']);
+    await assert.rejects(rpc('ecolearn_set_profile',['Educator','student']),/active spaces/);
+    await rpc('ecolearn_delete_space',['community',owned.id]);
+    await rpc('ecolearn_set_profile',['Learner','student']);
+    assert.equal(await rpc('ecolearn_effective_role'),'student');
+    await assert.rejects(rpc('ecolearn_restore_space',['community',owned.id]),/Teacher access/);
+    await assert.rejects(rpc('ecolearn_set_profile',['Educator','teacher']),/requires an approved/);
+    assert.ok((await rpc('ecolearn_get_deleted_spaces')).some(x=>x.id===owned.id));
+    await rpc('ecolearn_request_teacher_access',['Test academy','I need to teach my class again.']);
+    await as('00000000-0000-4000-8000-000000000099','authenticated','aal2');
+    await rpc('ecolearn_review_teacher_access',[applicant,false]);
+    await rpc('ecolearn_restore_space',['community',owned.id]);
+    await as(applicant); assert.equal(await rpc('ecolearn_effective_role'),'student');
+    assert.equal(await rpc('ecolearn_can_manage_classroom',[child.id]),false);
+    assert.equal(await rpc('ecolearn_can_manage_community',[owned.id]),false);
+    await rpc('ecolearn_set_profile',['Still a learner','student']);
+    await assert.rejects(rpc('ecolearn_preview_classroom',[child.id]),/Teacher access/);
+    await as(teacher);
+  });
+  await t.test('each community and classroom earns only explicitly scoped new activity', async () => {
+    const learner='00000000-0000-4000-8000-000000000072';
+    await as(teacher);
+    const a=await rpc('ecolearn_create_community',['Scoped school A','school','']);
+    const b=await rpc('ecolearn_create_community',['Scoped school B','school','']);
+    const ca=await rpc('ecolearn_create_classroom',[a.id,'Class A','Grade 3']);
+    const cb=await rpc('ecolearn_create_classroom',[b.id,'Class B','Grade 3']);
+    await db.exec('reset role'); await db.query('insert into auth.users(id) values($1)',[learner]);
+    const keys=(await db.query('select l.id,l.xp_reward,k.correct_answer from lessons l join lesson_answer_keys k on k.lesson_id=l.id order by l.sort_order')).rows;
+    await as(learner);
+    await rpc('complete_ecolearn_lesson',[keys[0].id,keys[0].correct_answer]);
+    await rpc('ecolearn_join_space',[ca.join_code]); await rpc('ecolearn_join_space',[cb.join_code]);
+    let h=await rpc('ecolearn_get_hub'); assert.ok(h.communities.every(x=>x.total_xp===0));
+    await assert.rejects(rpc('complete_ecolearn_lesson',[keys[1].id,keys[1].correct_answer,'community',school.id]),/unavailable/);
+    await rpc('complete_ecolearn_lesson',[keys[1].id,keys[1].correct_answer,'classroom',ca.id]);
+    await rpc('complete_ecolearn_lesson',[keys[1].id,keys[1].correct_answer,'classroom',cb.id]);
+    h=await rpc('ecolearn_get_hub'); assert.equal(h.communities.find(x=>x.id===a.id).total_xp,keys[1].xp_reward); assert.equal(h.communities.find(x=>x.id===b.id).total_xp,0);
+    assert.equal(h.classrooms.find(x=>x.id===ca.id).total_xp,keys[1].xp_reward);
+    await rpc('complete_ecolearn_lesson',[keys[2].id,keys[2].correct_answer,'community',b.id]);
+    h=await rpc('ecolearn_get_hub'); assert.equal(h.classrooms.find(x=>x.id===cb.id).total_xp,0); assert.equal(h.communities.find(x=>x.id===b.id).total_xp,keys[2].xp_reward);
+    await assert.rejects(db.query('insert into ecolearn_space_activity(user_id,community_id,xp) values($1,$2,999)',[learner,b.id]),/permission denied/);
+    await assert.rejects(rpc('ecolearn_activity_scope',['community',a.id]),/permission denied/);
+    await as(teacher);
+    const dash=await rpc('ecolearn_get_classroom_dashboard',[ca.id]); assert.equal(dash.students[0].xp,keys[1].xp_reward); assert.equal(dash.students[0].lessons,1);
+    const standing=await rpc('ecolearn_get_school_standings',[a.id]);assert.equal(standing[0].total_xp,keys[1].xp_reward);
+    await db.exec('reset role');
+    await db.query(`insert into delaware_guidance_items(source_topic_id,title,seo_name,content_text,tags,source_url) values (999,'Fixture paper','fixture-paper','Keep it clean.','[{"tag":"Acceptable to Recycle Curbside"}]','https://dnrec.delaware.gov/')`);
+    await as(learner);
+    for(let i=1;i<=3;i++) {
+      const id=`00000000-0000-4000-8000-00000000008${i}`;
+      await rpc('record_ecolearn_scan',['Fixture paper',false,100,'untrusted','untrusted',id,'classroom',ca.id]);
+      await rpc('record_ecolearn_scan',['Fixture paper',false,100,'untrusted','untrusted',id,'classroom',cb.id]);
+    }
+    await rpc('claim_ecolearn_reward',['daily_three_scans','classroom',ca.id]);
+    await rpc('claim_ecolearn_reward',['daily_three_scans','classroom',cb.id]);
+    h=await rpc('ecolearn_get_hub');
+    assert.equal(h.classrooms.find(x=>x.id===ca.id).total_xp,keys[1].xp_reward+45);
+    assert.equal(h.classrooms.find(x=>x.id===cb.id).total_xp,0);
+    const scans=(await db.query('select is_recyclable,instructions from scan_history where user_id=$1',[learner])).rows;
+    assert.equal(scans.length,3);assert.ok(scans.every(s=>s.is_recyclable && s.instructions==='Keep it clean.'));
+    await as(teacher);
+    await rpc('ecolearn_delete_space',['community',a.id]);
+    await as(learner);await assert.rejects(rpc('complete_ecolearn_lesson',[keys[3].id,keys[3].correct_answer,'classroom',ca.id]),/unavailable/);
+    await rpc('ecolearn_leave_space',['classroom',cb.id]);
+    await assert.rejects(rpc('complete_ecolearn_lesson',[keys[3].id,keys[3].correct_answer,'classroom',cb.id]),/unavailable/);
+    await db.exec('reset role');await db.query('update user_progress set last_activity_date=current_date-1,streak_days=4 where user_id=$1',[learner]);
+    await as(learner);await rpc('complete_ecolearn_lesson',[keys[3].id,keys[3].correct_answer]);
+    const result=(await db.query('select xp,streak_days from user_progress where user_id=$1',[learner])).rows[0]; assert.equal(result.streak_days,5);
+    await rpc('complete_ecolearn_lesson',[keys[3].id,keys[3].correct_answer]);
+    const repeat=(await db.query('select xp,streak_days from user_progress where user_id=$1',[learner])).rows[0];assert.deepEqual(repeat,result);
+    await as(teacher);
+  });
+  await t.test('teacher preview is read-only, scoped, and never includes student identities or join codes', async () => {
+    await as(teacher); const before=(await db.query('select xp from user_progress where user_id=$1',[teacher])).rows;
+    const preview=await rpc('ecolearn_preview_classroom',[room.id]);assert.equal(preview.name,'Test class');assert.ok(preview.assignments.length>0);
+    assert.equal('students' in preview,false);assert.equal('join_code' in preview,false);
+    assert.deepEqual((await db.query('select xp from user_progress where user_id=$1',[teacher])).rows,before);
+    await as(student);await assert.rejects(rpc('ecolearn_preview_classroom',[room.id]),/Teacher access/);
+    await as(stranger);await assert.rejects(rpc('ecolearn_preview_classroom',[room.id]),/Teacher access/);
+    await as(teacher);
+  });
   await t.test('deleting spaces hides content without erasing earned progress', async () => {
     await as(student); await assert.rejects(rpc('ecolearn_delete_space', ['community', school.id]), /Only the community owner/);
     await as(teacher); await rpc('ecolearn_delete_space', ['classroom', room.id]);
-    assert.equal((await rpc('ecolearn_get_hub')).classrooms.length, 0);
+    assert.equal((await rpc('ecolearn_get_hub')).classrooms.some(c=>c.id===room.id), false);
     await rpc('ecolearn_delete_space', ['community', school.id]);
     await as(student); assert.equal((await rpc('ecolearn_get_hub')).communities.length, 0);
     assert.ok((await db.query('select xp from user_progress')).rows[0].xp > 0);

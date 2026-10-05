@@ -19,11 +19,13 @@ flowchart LR
 
 ## Learning and item identification
 
-Lesson completion and rewards are checked on the server. Clients cannot directly change XP or award achievements. The item identification service describes a user-selected image, then matches the description against a local mirror of official Delaware DNREC guidance. Disposal instructions require an official match. Images are not collected for a feedback or training workflow.
+Lesson completion and rewards are checked on the server. Clients cannot directly change XP or award achievements. The item identification service describes a user-selected image, then matches the description against a local mirror of official Delaware DNREC guidance. Branded names are normalized to object types. If there is no reliable item match, supported object types can receive separately labeled official category guidance. Category guidance does not award verified-scan XP. Images are not collected for a feedback or training workflow.
 
 ## Communities and classrooms
 
-Students and teachers select their account type during registration. Teacher status permits creating managed spaces; it does not grant access to unrelated communities. Community owners, managers, classroom teachers, and ordinary members have distinct capabilities. Invite codes establish memberships, and rotation invalidates earlier codes.
+New accounts start as students. A verified administrator approves teacher requests, or a school owner issues a private teacher invitation. Existing teachers retain access. Teacher status permits creating managed spaces; it does not grant access to unrelated communities. Community owners, managers, classroom teachers, and ordinary members have distinct capabilities. Invite codes establish memberships, and rotation invalidates earlier codes. Teachers can read a student preview without impersonating a student or recording progress.
+
+The selected learning space determines where new activity contributes XP. The server checks current membership before recording activity. Classroom activity also contributes to its parent community, but never to unrelated memberships. Personal progress remains independent. Existing lifetime XP is not backfilled into spaces because it has no reliable attribution. Retried scans, lesson completions, and rewards cannot allocate the same XP again in another space.
 
 Administrators are assigned separately. Global administrative privileges require a verified TOTP session. Both clients offer enrollment, challenge verification, and backup authenticator setup.
 
