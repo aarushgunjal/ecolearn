@@ -8,7 +8,6 @@ import {
   findLiveDelawareGuidance,
   toGuidancePayload,
   hasUniqueDnrecMatch,
-  isFreshDnrecRecord,
 } from "../_shared/dnrec.ts";
 import { recordItemInteraction } from "../_shared/analytics.ts";
 
@@ -40,7 +39,7 @@ serve(async (request) => {
     let lookup: Awaited<ReturnType<typeof findDelawareGuidance>>;
     try {
       lookup = await findDelawareGuidance(admin, catalogQueries);
-      if (!lookup.match || !isFreshDnrecRecord(lookup.match.row)) {
+      if (!lookup.match && mode !== "suggestions") {
         try { lookup = await findLiveDelawareGuidance(catalogQueries, mode !== "suggestions"); }
         catch { /* The official mirror remains usable during upstream outages. */ }
       }

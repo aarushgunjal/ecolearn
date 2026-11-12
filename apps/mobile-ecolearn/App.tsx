@@ -44,7 +44,7 @@ WebBrowser.maybeCompleteAuthSession();
 type Tab = "Home" | "Scan" | "Map" | "Learn" | "Community" | "Challenges" | "Profile" | "Notifications";
 type Photo = { uri: string; name: string; mimeType: string; base64?: string | null };
 type ScanResult = { objectClass?: string; clarification?: string | null; needsAdultHelp?: boolean; candidates?: Array<{ title: string }>; item: string; recyclable: boolean; confidence: number; category: string; instructions: string; tips?: string[]; imageStatus?: "single_item" | "multiple_items" | "unclear"; material?: string | null; visibleEvidence?: string | null; dnrec?: DelawareGuidance | null; categoryGuidance?: Array<DelawareGuidance & { basis: string }> };
-type DelawareGuidance = { title: string; category: string; curbside: boolean; instructions: string; sourceName: string; sourceUrl: string; matchConfidence?: number };
+type DelawareGuidance = { title: string; category: string; curbside: boolean; instructions: string; sourceName: string; sourceUrl: string; sourceNotice?: string | null; matchConfidence?: number };
 type VisionScanResponse = { objectClass?: string; clarification?: string | null; needsAdultHelp?: boolean; candidates?: Array<{ title: string }>; categoryGuidance?: Array<DelawareGuidance & { basis: string }>; verified: boolean; guidance: DelawareGuidance | null; observedItem: string | null; material: string | null; confidence: number; imageStatus: "single_item" | "multiple_items" | "unclear"; visibleEvidence: string | null; nextSteps: string[]; message: string };
 type Progress = { xp: number; level: number; total_scans: number; total_lessons_completed: number; streak_days: number; last_activity_date?: string | null };
 type Site = { id: string; name: string; type: string; latitude: number; longitude: number; distanceKm: number; address?: string; services?: string[]; sourceUrl?: string; provider?: string };
@@ -594,7 +594,7 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
     </View>
     {(result.categoryGuidance ?? []).map(g => <View key={g.title} style={styles.guidanceCard}>
       <Text style={styles.smallLabel}>RELATED DNREC CATEGORY GUIDANCE</Text><Text style={styles.sectionTitle}>{g.title}</Text>
-      <Text style={styles.body}>{g.basis}</Text><Text style={styles.guidance}>{g.instructions}</Text>
+      <Text style={styles.body}>{g.basis}</Text><Text style={styles.guidance}>{g.instructions}</Text>{!!g.sourceNotice && <Text style={styles.helper}>{g.sourceNotice}</Text>}
       <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(g.sourceUrl)}><Text style={styles.link}>Read DNREC {g.title} guidance</Text></Pressable>
       <Text style={styles.helper}>This is category guidance, not an exact product match. No verified-scan XP is awarded.</Text>
     </View>)}
@@ -607,7 +607,7 @@ function ScanScreen({ onRecorded, onTools, onNearby }: { onRecorded: () => Promi
     <Text style={styles.pageTitle}>{result.item}</Text>
     <ScanReadingSupport result={result} onChoose={title => void searchCatalog(title, "suggestion")} busy={busy} />
     <View style={[styles.badge, official.curbside ? styles.goodBadge : styles.warnBadge]}><Text style={[styles.badgeText, official.curbside ? styles.goodText : styles.warnText]}>DNREC: {official.category} · {percent(result.confidence)}% confidence</Text></View>
-    <View style={styles.guidanceCard}><Text style={styles.smallLabel}>DNREC: {official.title}</Text><Text style={styles.guidance}>{official.instructions}</Text><Pressable onPress={() => void Linking.openURL(official.sourceUrl)}><Text style={styles.link}>Open Delaware DNREC source</Text></Pressable></View>
+    <View style={styles.guidanceCard}><Text style={styles.smallLabel}>DNREC: {official.title}</Text><Text style={styles.guidance}>{official.instructions}</Text>{!!official.sourceNotice && <Text style={styles.helper}>{official.sourceNotice}</Text>}<Pressable onPress={() => void Linking.openURL(official.sourceUrl)}><Text style={styles.link}>Open Delaware DNREC source</Text></Pressable></View>
     {relatedVideo && <Pressable style={styles.explainButton} onPress={() => void Linking.openURL(relatedVideo.url)}><Text style={styles.explainText}>{relatedVideo.title}</Text></Pressable>}
     <Text style={styles.helper}>The image was used for this visual check only and is not stored or used for training.</Text>
     <Pressable style={styles.primaryButton} onPress={() => onNearby(official.title)} accessibilityLabel={`Search nearby locations for ${official.title}`}><Ionicons name="location" size={18} color="#fff" /><Text style={styles.primaryText}>Search nearby locations</Text></Pressable>
@@ -620,7 +620,7 @@ function ScanReadingSupport({ result, onChoose, busy }: { result: ScanResult; on
   return <View>
     {result.objectClass && <Text style={styles.body}>Item type: {result.objectClass}</Text>}
     {adult && <View style={[styles.guidanceCard, { backgroundColor: "#fff8e9" }]}><Text style={styles.sectionTitle}>Ask a grown-up for help</Text><Text style={styles.body}>Do not open, break, or empty this item. Read the official instructions together before moving it.</Text></View>}
-    <ListenButton text={[result.item, result.clarification, adult ? "Ask a grown-up for help. Do not open, break, or empty this item." : "", result.instructions, ...(result.categoryGuidance ?? []).map(g => `${g.title}. ${g.basis} ${g.instructions}`)].filter(Boolean).join(". ")} />
+    <ListenButton text={[result.item, result.clarification, adult ? "Ask a grown-up for help. Do not open, break, or empty this item." : "", result.instructions, result.dnrec?.sourceNotice, ...(result.categoryGuidance ?? []).map(g => `${g.title}. ${g.basis} ${g.instructions} ${g.sourceNotice ?? ""}`)].filter(Boolean).join(". ")} />
     {!result.dnrec && (result.clarification || !!result.candidates?.length) && <View style={styles.guidanceCard}>
       <Text style={styles.sectionTitle}>One more check</Text><Text style={styles.body}>{result.clarification || "Which description matches your item? Choose only if you are sure."}</Text>
       <Text style={styles.helper}>Ask a grown-up if you are unsure. These choices are possible matches, not confirmed results.</Text>

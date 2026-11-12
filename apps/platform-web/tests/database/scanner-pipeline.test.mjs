@@ -5,8 +5,9 @@ import ts from 'typescript';
 const compile = async path => ts.transpileModule(await readFile(new URL(path,import.meta.url),'utf8'), {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
 const sharedCode = await compile('../../supabase/functions/_shared/dnrec.ts');
 const edgeCode = await compile('../../supabase/functions/explain-scan/index.ts');
+const budgetCode = await compile('../../supabase/functions/_shared/visual-budget.ts');
 const row = (title,id=1) => ({title,source_topic_id:id,seo_name:title.toLowerCase().replaceAll(' ','-'),content_text:'Official instructions only.',tags:[],synonyms:[],search_terms:[],source_url:'https://dnrec.delaware.gov/waste-hazardous/recycling/what/',source_updated_at:null,synced_at:new Date().toISOString()});
-function scanner(parsed, rows, { user=true, privacyBlocked=false }={}) {
+function scanner(parsed, rows, { user=true, privacyBlocked=false, budgetAllowed=true, budgetError=false }={}) {
   let handler; const requests=[]; const writes=[];
   const fetcher=async (url,init)=>{requests.push({url,body:init?.body?JSON.parse(init.body):null});
     if(url.includes('openrouter') && privacyBlocked) return Response.json({error:{message:'No endpoints found matching your data policy'}},{status:404});
@@ -14,10 +15,11 @@ function scanner(parsed, rows, { user=true, privacyBlocked=false }={}) {
     throw new Error('Unexpected live request');
   };
   const dnrec={}; new Function('exports','fetch',sharedCode)(dnrec,fetcher);
-  const db={auth:{getUser:async()=>({data:{user:user?{id:'test-user'}:null}})},from:table=>{
+  const db={rpc:async(name,args)=>{writes.push({table:'ai_request_log',value:args});return {data:budgetError?null:{allowed:budgetAllowed,code:'RATE_LIMITED'},error:budgetError?{message:'offline'}:null};},auth:{getUser:async()=>({data:{user:user?{id:'test-user'}:null}})},from:table=>{
     const chain={select:()=>chain,eq:()=>chain,gte:()=>chain,in:(_,titles)=>Promise.resolve({data:rows.filter(r=>titles.includes(r.title)),error:null}),insert:value=>{writes.push({table,value});return Promise.resolve({error:null});},then:resolve=>Promise.resolve({data:table==='delaware_guidance_items'?rows:[],count:0,error:null}).then(resolve)};return chain;
   }};
-  const require=name=>name.includes('dnrec')?dnrec:name.includes('analytics')?{recordItemInteraction:async()=>{}}:name.includes('supabase')?{createClient:()=>db}:{serve:fn=>{handler=fn;}};
+  const budget={};new Function('exports','Deno',budgetCode)(budget,{env:{get:()=>undefined}});
+  const require=name=>name.includes('visual-budget')?budget:name.includes('dnrec')?dnrec:name.includes('analytics')?{recordItemInteraction:async()=>{}}:name.includes('supabase')?{createClient:()=>db}:{serve:fn=>{handler=fn;}};
   new Function('exports','require','Deno','fetch',edgeCode)({},require,{env:{get:key=>({SUPABASE_URL:'https://test.invalid',OPENROUTER_API_KEY:'fixture',OPENROUTER_EXPLAIN_MODEL:'fixture-model'}[key])}},fetcher);
   return {requests,writes,run:async()=>{const response=await handler(new Request('https://test.invalid/scan',{method:'POST',headers:{Authorization:'Bearer test','Content-Type':'application/json'},body:JSON.stringify({image:'data:image/jpeg;base64,Zml4dHVyZQ=='})}));return {status:response.status,body:await response.json()};}};
 }
@@ -67,4 +69,26 @@ test('concurrent live lookups share catalog and detail requests; failures can re
 test('privacy-incompatible providers fail safely with a usable text-search alternative',async()=>{
  const {status,body}=await scanner(identity,[row('Pet food cans')],{privacyBlocked:true}).run();
  assert.equal(status,503);assert.equal(body.code,'AI_PRIVACY_MODEL_UNAVAILABLE');assert.match(body.error,/Search by item name/);
+});
+
+test('photo limits and reservation failures stop requests before the provider',async()=>{
+  for(const options of [{budgetAllowed:false},{budgetError:true}]) {
+    const s=scanner(identity,[row('Pet food cans')],options);
+    assert.equal((await s.run()).status,options.budgetError?503:429);
+    assert.equal(s.requests.length,0);
+  }
+});
+
+test('saved official records stay fast during an outage and disclose their age',async()=>{
+  const s=scanner(identity,[{...row('Pet food cans'),synced_at:'2026-01-01T12:00:00Z'}]);
+  const {body}=await s.run();assert.equal(body.verified,true);assert.equal(s.requests.length,1);
+  assert.match(body.guidance.sourceNotice,/last checked 2026-01-01/);
+  assert.equal(body.guidance.sourceCheckedAt,'2026-01-01T12:00:00Z');
+});
+
+test('failed upstream listings back off instead of retrying on every search',async()=>{
+  let calls=0;const dnrec={};new Function('exports','fetch',sharedCode)(dnrec,async()=>{calls++;throw new Error('offline');});
+  await assert.rejects(()=>dnrec.findLiveDelawareGuidance('glass bottles'));
+  await assert.rejects(()=>dnrec.findLiveDelawareGuidance('glass bottles'));
+  assert.equal(calls,1);
 });

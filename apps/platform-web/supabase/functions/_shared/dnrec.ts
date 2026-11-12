@@ -99,7 +99,7 @@ export async function findDnrecCategoryGuidance(client: SupabaseClient, item: st
   const titles = dnrecCategoryQueries(item, material, hazard);
   if (!titles.length) return [];
   const { data, error } = await client.from('delaware_guidance_items')
-    .select('source_topic_id,title,seo_name,content_text,tags,synonyms,search_terms,source_updated_at,source_url').in('title', titles);
+    .select('source_topic_id,title,seo_name,content_text,tags,synonyms,search_terms,source_updated_at,source_url,synced_at').in('title', titles);
   if (error) {
     console.warn('Related DNREC guidance unavailable');
     return [];
@@ -301,12 +301,13 @@ type LiveTopic = {
 const fetchDnrecJson = async <T,>(url: string) => {
   const response = await fetch(url, {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(2_500),
   });
   if (!response.ok) throw new Error(`DNREC Recyclopedia returned ${response.status}`);
   return await response.json() as T;
 };
 
+let liveTopicsRetryAt = 0;
 let liveTopicsInFlight: Promise<LiveTopic[]> | null = null;
 const detailCache = new Map<number, { expiresAt: number; value: Promise<LiveTopic> }>();
 
@@ -316,6 +317,7 @@ const loadLiveTopics = async () => {
   if (liveTopicCache && liveTopicCache.expiresAt > Date.now()) {
     return liveTopicCache.topics;
   }
+  if (Date.now() < liveTopicsRetryAt) throw new Error("DNREC catalog temporarily unavailable");
   if (!liveTopicsInFlight) {
     liveTopicsInFlight = (async () => {
       const listing = await fetchDnrecJson<{ data: LiveTopic[] }>(
@@ -324,7 +326,8 @@ const loadLiveTopics = async () => {
       const topics = listing.data ?? [];
       liveTopicCache = { topics, expiresAt: Date.now() + 5 * 60_000 };
       return topics;
-    })().finally(() => { liveTopicsInFlight = null; });
+    })().catch(error => { liveTopicsRetryAt = Date.now() + 60_000; throw error; })
+      .finally(() => { liveTopicsInFlight = null; });
   }
   return liveTopicsInFlight;
 };
@@ -383,4 +386,9 @@ export const toGuidancePayload = (entry: { row: DelawareGuidanceRow; score: numb
   sourceName: "Delaware DNREC Recyclopedia",
   sourceUrl: entry.row.source_url || `${DNREC_RECYLOPEDIA_URL}#/topic/${entry.row.seo_name}`,
   sourceUpdatedAt: entry.row.source_updated_at,
+  sourceCheckedAt: entry.row.synced_at ?? null,
+  sourceNotice: isFreshDnrecRecord(entry.row) ? null
+    : Number.isFinite(Date.parse(entry.row.synced_at ?? ""))
+      ? `Saved DNREC guidance, last checked ${new Date(entry.row.synced_at!).toISOString().slice(0, 10)}. Check current requirements with the collection program before disposal.`
+      : "Saved DNREC guidance. Check current requirements with the collection program before disposal.",
 });

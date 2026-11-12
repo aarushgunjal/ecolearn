@@ -8,18 +8,18 @@
     "@supabase/supabase-js": "^2.111.0",
     "expo": "~57.0.22",
     "expo-apple-authentication": "~57.0.2",
-    "expo-constants": "~57.0.17",
-    "expo-crypto": "~57.0.3",
-    "expo-dev-client": "~57.0.19",
+    "expo-constants": "~57.0.23",
+    "expo-crypto": "~57.0.4",
+    "expo-dev-client": "~57.0.21",
     "expo-file-system": "~57.0.7",
     "expo-font": "~57.0.4",
-    "expo-image-manipulator": "~57.0.20",
-    "expo-image-picker": "~57.0.17",
-    "expo-linking": "~57.0.10",
-    "expo-location": "~57.0.17",
-    "expo-notifications": "~57.0.18",
+    "expo-image-manipulator": "~57.0.22",
+    "expo-image-picker": "~57.0.21",
+    "expo-linking": "~57.0.13",
+    "expo-location": "~57.0.23",
+    "expo-notifications": "~57.0.25",
     "expo-speech": "~57.0.3",
-    "expo-splash-screen": "~57.0.9",
+    "expo-splash-screen": "~57.0.11",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
     "expo-web-browser": "~57.0.3",
@@ -47,6 +47,11 @@
     "eas:ios:simulator": "npx eas-cli@latest build --platform ios --profile ios-simulator"
   },
   "overrides": {
+    "expo": "$expo",
+    "@expo/fingerprint": {
+      "glob": "^14.0.5",
+      "minimatch": "^11.0.8"
+    },
     "xcode": {
       "uuid": "^11.1.1"
     }

@@ -311,3 +311,21 @@ test('content deletion uses an accessible dialog with safe cancellation', async 
   await dialog.getByRole('button',{name:'Delete',exact:true}).click();
   await expect.poll(()=>calls.filter(c=>c.name==='ecolearn_delete_content').length).toBe(1);
 });
+
+test('catalog outages show a retryable error without claiming no match or awarding XP', async ({page}, info) => {
+  const {app,calls}=await signedIn(page,'student');
+  await page.route('**/functions/v1/delaware-guidance',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Catalog unavailable'})}));
+  await app.openPrimarySection('Scan');
+  const search=page.getByRole('textbox',{name:'Search official Delaware items'});
+  await search.fill('glass bottles');await search.press('Enter');
+  await expect(page.getByText('Item search unavailable',{exact:true})).toBeVisible();
+  await expect(search).toBeEnabled();
+  await expect(page.getByText('No exact item match was found.',{exact:false})).toHaveCount(0);
+  expect(calls.some(c=>c.name==='record_ecolearn_scan')).toBe(false);
+  const notice='Saved DNREC guidance, last checked 2026-11-02. Check current requirements with the collection program before disposal.';
+  await page.route('**/functions/v1/delaware-guidance',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({verified:true,guidance:{title:'Glass Bottles',curbside:true,category:'Curbside recycling',matchConfidence:100,instructions:'Empty and rinse. Leave caps on.',sourceUrl:'https://dnrec.delaware.gov/waste-hazardous/recycling/what/',sourceNotice:notice}})}));
+  await search.press('Enter');
+  await expect(page.getByText(notice,{exact:true})).toBeVisible();
+  await expect.poll(()=>calls.filter(c=>c.name==='record_ecolearn_scan').length).toBe(1);
+  await page.screenshot({path:`../../tmp/nov-saved-guidance-${info.project.name}.png`,fullPage:true});
+});

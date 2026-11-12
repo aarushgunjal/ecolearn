@@ -422,5 +422,19 @@ test('production memberships, RLS, learning, deletion, and notification delivery
     assert.ok((await db.query('select xp from user_progress')).rows[0].xp > 0);
     assert.equal((await db.query("select * from notifications where kind <> 'streak'")).rows.length, 0);
   });
+  await t.test('photo and label reservations share atomic limits with server-only access', async () => {
+    await as(student);
+    await assert.rejects(rpc('ecolearn_reserve_visual_request',[student,'label_read',2,3]), /permission denied/);
+    await as(null,'service_role');
+    await assert.rejects(rpc('ecolearn_reserve_visual_request',[student,'anything',2,3]), /Invalid visual request/);
+    await assert.rejects(rpc('ecolearn_reserve_visual_request',[student,'label_read',null,3]), /Invalid visual request/);
+    assert.equal((await rpc('ecolearn_reserve_visual_request',[student,'delaware_catalog_match',2,3])).allowed,true);
+    assert.equal((await rpc('ecolearn_reserve_visual_request',[student,'label_read',2,3])).allowed,true);
+    assert.equal((await rpc('ecolearn_reserve_visual_request',[student,'label_read',2,3])).code,'RATE_LIMITED');
+    assert.equal((await rpc('ecolearn_reserve_visual_request',[teacher,'label_read',2,3])).allowed,true);
+    assert.equal((await rpc('ecolearn_reserve_visual_request',[stranger,'delaware_catalog_match',2,3])).code,'GLOBAL_DAILY_LIMIT_REACHED');
+    assert.equal((await db.query('select count(*)::int as n from ai_request_log')).rows[0].n,3);
+    await as(student);await assert.rejects(db.query('select * from ai_request_log'),/permission denied/);
+  });
   await db.close();
 });

@@ -9,12 +9,12 @@ import {
   compatibleDnrecItem,
   dnrecClarification,
   hasUniqueDnrecMatch,
-  isFreshDnrecRecord,
   relatedDnrecGuidance,
   findDnrecCategoryGuidance,
   findLiveDelawareGuidance,
   toGuidancePayload,
 } from "../_shared/dnrec.ts";
+import { reserveVisualRequest } from "../_shared/visual-budget.ts";
 import { recordItemInteraction } from "../_shared/analytics.ts";
 
 const cors = {
@@ -64,11 +64,6 @@ const confidencePercent = (value: unknown) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
   return Math.round(Math.max(0, Math.min(1, numeric)) * 100);
-};
-
-const positiveIntegerEnv = (name: string, fallback: number) => {
-  const value = Number(Deno.env.get(name));
-  return Number.isInteger(value) && value > 0 ? value : fallback;
 };
 
 const safeNextSteps = (status: ImageStatus, possibleHazard: Hazard, observedItem: string) => {
@@ -143,51 +138,7 @@ serve(async (request) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
-    const userHourlyLimit = positiveIntegerEnv("AI_USER_REQUESTS_PER_HOUR", 10);
-    // The conservative default leaves a small reserve below OpenRouter's
-    // current free-account allowance. Raise this only after funding a paid key.
-    const globalDailyLimit = positiveIntegerEnv("AI_GLOBAL_REQUESTS_PER_DAY", 45);
-    const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const [userUsage, globalUsage, catalogRows] = await Promise.all([
-      admin
-        .from("ai_request_log")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("request_kind", "delaware_catalog_match")
-        .gte("created_at", hourAgo),
-      admin
-        .from("ai_request_log")
-        .select("id", { count: "exact", head: true })
-        .eq("request_kind", "delaware_catalog_match")
-        .gte("created_at", dayAgo),
-      loadDnrecCatalog(admin),
-    ]);
-    const requestLogError = userUsage.error ?? globalUsage.error;
-    if (requestLogError) {
-      console.error("AI request log unavailable", requestLogError);
-      return errorResponse(
-        "EcoLearn's secure scanner setup is incomplete. Apply the latest platform migration.",
-        503,
-        "DATABASE_NOT_READY",
-      );
-    }
-    if ((globalUsage.count ?? 0) >= globalDailyLimit) {
-      return errorResponse(
-        "EcoLearn's daily visual-check budget has been reached. Use exact-item search or try again later.",
-        429,
-        "GLOBAL_DAILY_LIMIT_REACHED",
-        "3600",
-      );
-    }
-    if ((userUsage.count ?? 0) >= userHourlyLimit) {
-      return errorResponse(
-        `Visual item checks are limited to ${userHourlyLimit} per hour. Try again later or use exact-item search.`,
-        429,
-        "RATE_LIMITED",
-        "3600",
-      );
-    }
+    const catalogRows = await loadDnrecCatalog(admin);
 
     if (!catalogRows.length) return errorResponse("The Delaware catalog is temporarily unavailable. Please try again shortly.", 503, "CATALOG_NOT_SYNCED");
 
@@ -203,18 +154,11 @@ serve(async (request) => {
       );
     }
 
-    const { error: requestInsertError } = await admin.from("ai_request_log").insert({
-      user_id: user.id,
-      request_kind: "delaware_catalog_match",
-    });
-    if (requestInsertError) {
-      console.error("Could not record AI request", requestInsertError);
-      return errorResponse(
-        "EcoLearn could not start a secure visual check.",
-        503,
-        "REQUEST_LOG_FAILED",
-      );
-    }
+    const reservation = await reserveVisualRequest(admin, user.id, "delaware_catalog_match");
+    if (!reservation.allowed) return errorResponse(
+      "Visual checks have reached a temporary limit. Search by item name or try again later.",
+      429, reservation.code ?? "RATE_LIMITED", "3600",
+    );
 
     const providerResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -381,13 +325,7 @@ Use single_item only for one clear primary object; multiple_items for piles, bin
       }, { headers: { ...cors, "Cache-Control": "no-store" } });
     }
 
-    let verifiedMatch = candidate;
-    try {
-      const liveLookup = isFreshDnrecRecord(candidate.row) ? null : await findLiveDelawareGuidance(candidate.row.title);
-      if (liveLookup?.match?.row.title === candidate.row.title) verifiedMatch = liveLookup.match;
-    } catch (liveError) {
-      console.warn("Live DNREC lookup unavailable; using the synced official record", liveError);
-    }
+    const verifiedMatch = candidate;
 
     await recordItemInteraction(admin, {
       eventKind: "scan",

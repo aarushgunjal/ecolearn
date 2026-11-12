@@ -72,6 +72,7 @@ type DelawareGuidance = {
   sourceName: string;
   sourceUrl: string;
   sourceUpdatedAt?: string | null;
+  sourceNotice?: string | null;
 };
 
 type DelawareSuggestion = { title: string; category: string };
@@ -156,7 +157,7 @@ const lookup = async (
     const { data, error } = await supabase.functions.invoke("delaware-guidance", {
       body: { item, inputMethod, clientPlatform: "web" },
     });
-    if (error || !data) return fallbackLookup(item);
+    if (error || !data || data.error) throw new Error("The catalog could not be reached. Please try again.");
     if (!data.verified || !data.guidance) return { ...fallbackLookup(item), categoryGuidance: data.categoryGuidance ?? [], ...(data.categoryGuidance?.length ? { instructions: 'DNREC covers this type of item in the category guidance below. Check preparation requirements, including covers, bindings, and batteries where applicable.' } : {}) };
     const guidance = data.guidance as DelawareGuidance;
     return {
@@ -169,7 +170,7 @@ const lookup = async (
       dnrec: guidance,
     };
   } catch {
-    return fallbackLookup(item);
+    throw new Error("The catalog could not be reached. Please try again.");
   }
 };
 
@@ -361,13 +362,19 @@ export default function Scanner() {
     }
   };
 
+  const runLookup = async (query: string, method: "typed_search" | "suggestion") => {
+    try { await finish(await lookup(query, method)); }
+    catch { toast({ title: "Item search unavailable", description: "The catalog could not be reached. Please try again.", variant: "destructive" }); }
+    finally { setIsScanning(false); }
+  };
+
   const handleSearch = () => {
     if (!searchQuery.trim() || isScanning) return;
     scanRequestIdRef.current = crypto.randomUUID();
     setSuggestions([]);
     setResult(null);
     setIsScanning(true);
-    void lookup(searchQuery, "typed_search").then(finish);
+    void runLookup(searchQuery, "typed_search");
   };
 
   const chooseSuggestion = (title: string) => {
@@ -377,7 +384,7 @@ export default function Scanner() {
     setSuggestions([]);
     setResult(null);
     setIsScanning(true);
-    void lookup(title, "suggestion").then(finish);
+    void runLookup(title, "suggestion");
   };
 
   const reset = () => {
@@ -678,7 +685,7 @@ function ResultCard({
       {(result.needsAdultHelp || /hazardous|batter|electronic|sharp/i.test(`${result.category} ${result.dnrec?.title ?? ""}`)) && <aside aria-label="Grown-up help" className="mt-4 rounded-2xl border border-[#e5ca9b] bg-[#fff8e9] p-5">
         <h4 className="text-lg font-semibold">Ask a grown-up for help</h4><p className="mt-2 text-base leading-7">Do not open, break, or empty this item. Read the official instructions together before moving it.</p>
       </aside>}
-      <ListenButton text={[result.item, result.clarification, result.needsAdultHelp ? "Ask a grown-up for help. Do not open, break, or empty this item." : "", result.instructions, ...(result.categoryGuidance ?? []).map(g => `${g.title}. ${g.basis} ${g.instructions}`)].filter(Boolean).join(". ")} />
+      <ListenButton text={[result.item, result.clarification, result.needsAdultHelp ? "Ask a grown-up for help. Do not open, break, or empty this item." : "", result.instructions, result.dnrec?.sourceNotice, ...(result.categoryGuidance ?? []).map(g => `${g.title}. ${g.basis} ${g.instructions} ${g.sourceNotice ?? ""}`)].filter(Boolean).join(". ")} />
       {!result.dnrec && (result.clarification || !!result.candidates?.length) && <section aria-label="Check the item type" className="mt-4 rounded-2xl border border-[#cbdcc5] bg-white p-5">
         <h4 className="text-lg font-semibold">One more check</h4>
         <p className="mt-2 text-base leading-7">{result.clarification || "Which description matches your item? Choose only if you are sure."}</p>
@@ -692,6 +699,7 @@ function ResultCard({
         <p className="mt-2 font-medium leading-6 text-[#274033]">
           {result.instructions}
         </p>
+        {result.dnrec?.sourceNotice && <p className="mt-3 text-sm leading-6 text-[#52665a]">{result.dnrec.sourceNotice}</p>}
         {!result.dnrec && result.visibleEvidence && (
           <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm leading-6 text-[#617166]">
             Visible evidence: {result.visibleEvidence}
@@ -711,6 +719,7 @@ function ResultCard({
         <h4 className="mt-2 text-xl font-semibold">DNREC: {guidance.title}</h4>
         <p className="mt-3 text-sm">{guidance.basis}</p>
         <p className="mt-3 whitespace-pre-line leading-7">{guidance.instructions}</p>
+        {guidance.sourceNotice && <p className="mt-3 text-sm leading-6">{guidance.sourceNotice}</p>}
         <a href={guidance.sourceUrl} target="_blank" rel="noreferrer" className="mt-4 inline-block min-h-11 font-semibold underline">Read DNREC {guidance.title} guidance</a>
         <p className="text-xs text-[#58675d]">Category guidance does not confirm this exact product or earn verified-scan XP.</p>
       </section>)}

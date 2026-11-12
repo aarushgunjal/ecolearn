@@ -163,7 +163,7 @@ const relatedLocationTags = (item: string, tags: Array<{ tag?: string }>) => {
     .slice(0, 6).map(({ tag }) => tag);
 };
 
-const fetchOfficialOrganizations = async (latitude: number, longitude: number, tag: string) => {
+const fetchOfficialOrganizations = async (latitude: number, longitude: number, tag: string, signal = AbortSignal.timeout(2_500)) => {
   const url = new URL(`${DNREC_API_BASE}/organization`);
   url.searchParams.set("_with", "tags");
   url.searchParams.set("latitude", String(latitude));
@@ -173,7 +173,7 @@ const fetchOfficialOrganizations = async (latitude: number, longitude: number, t
   url.searchParams.set("_sort", "distance");
   url.searchParams.set("null", "visitor_role_id");
   url.searchParams.set("per_page", "30");
-  const response = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12_000) });
+  const response = await fetch(url, { headers: { Accept: "application/json" }, signal });
   if (!response.ok) throw new Error(`DNREC map service returned ${response.status}`);
   const body = await response.json() as { data?: Record<string, unknown>[] };
   return (body.data ?? []).filter(physical);
@@ -200,6 +200,19 @@ const dswaSitesFor = (type: LocationType, latitude: number, longitude: number): 
     ...facility,
     distanceKm: distanceKm(latitude, longitude, facility.latitude, facility.longitude),
   }));
+const dswaCategoryFor = (item: string): LocationType | null => {
+  // Do not substitute yard-waste sites for food scraps, household-battery
+  // programs for car batteries, or general recycling for special glass items.
+  const supported: Partial<Record<LocationType, string[]>> = {
+    recycling: ["Aluminum cans", "Glass Bottles", "Cardboard Boxes"],
+    battery: ["Household Batteries", "Rechargeable Batteries"],
+    electronics: ["Electronics", "Computer Equipment"],
+    hazardous: ["Household Hazardous Waste"],
+    compost: ["Yard Waste"],
+  };
+  return (Object.keys(supported) as LocationType[]).find(type =>
+    supported[type]?.some(tag => normalizeDnrecText(tag) === normalizeDnrecText(item))) ?? null;
+};
 const fetchDnrecTypeSites = async (type: LocationType, latitude: number, longitude: number) => {
   const results = await Promise.allSettled(dnrecTypeTags[type].map((tag) => fetchOfficialOrganizations(latitude, longitude, tag)));
   const organizations = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
@@ -207,14 +220,15 @@ const fetchDnrecTypeSites = async (type: LocationType, latitude: number, longitu
 };
 
 const fetchOpenStreetMapSites = async (type: LocationType, latitude: number, longitude: number): Promise<DisposalSite[]> => {
-  const query = `[out:json][timeout:18];(node(around:30000,${latitude},${longitude})${overpassFilters[type]};way(around:30000,${latitude},${longitude})${overpassFilters[type]};);out center tags 60;`;
+  const signal = AbortSignal.timeout(4_000);
+  const query = `[out:json][timeout:3];(node(around:30000,${latitude},${longitude})${overpassFilters[type]};way(around:30000,${latitude},${longitude})${overpassFilters[type]};);out center tags 60;`;
   let lastError: unknown;
   for (const endpoint of ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]) {
     try {
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "EcoLearn/1.0 (+https://ecolearn.dev)" },
-        body: new URLSearchParams({ data: query }), signal: AbortSignal.timeout(20_000),
+        body: new URLSearchParams({ data: query }), signal,
       });
       if (!response.ok) throw new Error(`Map service returned ${response.status}`);
       const body = await response.json() as { elements?: Record<string, unknown>[] };
@@ -231,7 +245,7 @@ const fetchOpenStreetMapSites = async (type: LocationType, latitude: number, lon
           sourceUrl: `https://www.openstreetmap.org/${element.type}/${element.id}`,
         } satisfies DisposalSite;
       }).filter((site) => Number.isFinite(site.latitude) && Number.isFinite(site.longitude));
-    } catch (error) { lastError = error; }
+    } catch (error) { lastError = error; if (signal.aborted) break; }
   }
   console.warn("OpenStreetMap lookup unavailable", lastError);
   return [];
@@ -269,20 +283,32 @@ serve(async (request) => {
 
     const officialItem = typeof item === "string" ? item.trim().slice(0, 120) : "";
     if (officialItem) {
-      let organizations = await fetchOfficialOrganizations(latitude, longitude, officialItem);
+      const signal = AbortSignal.timeout(4_000);
+      let upstreamUnavailable = false;
+      let organizations: Record<string, unknown>[] = [];
+      try { organizations = await fetchOfficialOrganizations(latitude, longitude, officialItem, signal); }
+      catch { upstreamUnavailable = true; }
       let matchedTag = officialItem;
       let sourceUrl = `${DNREC_RECYLOPEDIA_URL}#/topic/${encodeURIComponent(officialItem.toLowerCase().replace(/\s+/g, "-"))}`;
-      if (!organizations.length) {
-        const guidance = await findLiveDelawareGuidance(officialItem, true);
+      if (!organizations.length && !upstreamUnavailable) {
+        try {
+        const guidance = await findLiveDelawareGuidance(officialItem, false);
         if (guidance.match) {
           sourceUrl = guidance.match.row.source_url;
-          for (const tag of relatedLocationTags(officialItem, guidance.match.row.tags ?? [])) {
-            const related = await fetchOfficialOrganizations(latitude, longitude, tag);
-            if (related.length) { organizations = related; matchedTag = tag; break; }
+          const tags = relatedLocationTags(officialItem, guidance.match.row.tags ?? []);
+          const related = await Promise.allSettled(tags.map(tag => fetchOfficialOrganizations(latitude, longitude, tag, signal)));
+          const first = related.findIndex(result => result.status === "fulfilled" && result.value.length > 0);
+          if (first >= 0) {
+            organizations = (related[first] as PromiseFulfilledResult<Record<string, unknown>[]>).value;
+            matchedTag = tags[first];
           }
+          upstreamUnavailable = related.some(result => result.status === "rejected");
         }
+        } catch { upstreamUnavailable = true; }
       }
-      const matchedType = locationTypeFor(matchedTag);
+      // Use only explicitly supported category names for the saved facilities.
+      // "Glass" in an unknown product must not imply facility acceptance.
+      const matchedType = dswaCategoryFor(matchedTag);
       const dnrecSites = mapDnrecOrganizations(organizations, latitude, longitude, sourceUrl);
       const dswaSites = matchedType ? dswaSitesFor(matchedType, latitude, longitude) : [];
       const sites = sortedSites([...dnrecSites, ...dswaSites]);
@@ -290,14 +316,18 @@ serve(async (request) => {
         sites,
         sourceName: dswaSites.length ? "Delaware DNREC Recyclopedia and DSWA" : "Delaware DNREC Recyclopedia",
         sourceUrl, matchedTag,
-        notice: sites.length
+        notice: upstreamUnavailable
+          ? sites.length
+            ? "DNREC location search is temporarily unavailable. Showing saved DSWA facilities for this category. Confirm your exact item and current hours with the facility before visiting."
+            : "DNREC location search is temporarily unavailable. A missing listing does not mean no disposal option exists. Check the official item guidance or contact DSWA."
+          : sites.length
           ? "Facility services and schedules can change. Verify accepted materials and current hours before visiting."
           : "DNREC has no mapped location for this item. Review the official item protocol for curbside, event, or other solutions.",
       }, { headers: { ...cors, "Cache-Control": "private, max-age=300" } });
     }
 
     const requestedType = String(type ?? "recycling") as LocationType;
-    if (!(requestedType in typeLabels)) return Response.json({ error: "Choose a supported location type." }, { status: 400, headers: cors });
+    if (!Object.hasOwn(typeLabels, requestedType)) return Response.json({ error: "Choose a supported location type." }, { status: 400, headers: cors });
     const [dnrecSites, osmSites] = await Promise.all([
       fetchDnrecTypeSites(requestedType, latitude, longitude),
       fetchOpenStreetMapSites(requestedType, latitude, longitude),
