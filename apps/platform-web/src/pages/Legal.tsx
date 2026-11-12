@@ -165,8 +165,12 @@ function PrivacyContent() {
           </li>
           <li>
             <b>Photos:</b> a photo you select is processed to provide the scan
-            or package-label result you request. The current scanner does not
-            store those photos or use them for model training.
+            or package-label result you request. EcoLearn does not save these
+            photos or use them for model training. Photos are sent through
+            OpenRouter to a model provider with training disabled. OpenRouter
+            or the provider may retain content for safety review or legal
+            requirements. Avoid photos containing faces, names, addresses,
+            or other personal information.
           </li>
           <li>
             <b>Location:</b> EcoLearn requests precise location only when you

@@ -505,6 +505,9 @@ export default function Scanner() {
                   <p className="rounded-xl bg-[#fff8e8] px-3 py-2 text-xs leading-5 text-[#725c24]">
                     Student-safe scanning: photograph the item only. Do not include people, faces, names, schoolwork, or personal information.
                   </p>
+                  <p className="text-xs leading-5 text-[#52665a]">
+                    Choosing a photo sends it through OpenRouter to a photo identification provider. EcoLearn does not save it or use it for training. The provider may retain it for safety review. You can search by name without sharing a photo.
+                  </p>
                   <div className="relative flex items-center">
                     <div className="h-px flex-1 bg-[#e9ece7]" />
                     <span className="px-3 text-xs font-medium uppercase tracking-wider text-[#9aa39b]">
@@ -762,7 +765,7 @@ function ResultCard({
       )}
       <p className="mt-4 text-[11px] leading-4 text-[#758277]">
         The image is used for this visual check only. EcoLearn does not store it
-        or use it for training.
+        or use it for training. The photo provider may retain it for safety review.
       </p>
       <button
         onClick={reset}

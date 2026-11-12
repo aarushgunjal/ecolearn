@@ -319,7 +319,8 @@ export function ScanUtilities({
             className="mt-0.5 h-4 w-4 accent-[#347e45]"
           />{" "}
           I agree to send this one label photo to EcoLearn’s AI provider for
-          reading. It is not stored or used for model training.
+          reading. EcoLearn does not save it or use it for model training.
+          The provider may retain it for safety review.
         </label>
         <input
           ref={labelInput}
